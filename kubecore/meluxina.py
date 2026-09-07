@@ -262,8 +262,26 @@ def tok():
     return os.environ['SLURM_TOKEN'].strip()
 
 
+def hpc_identity():
+    """The project's HPC identity from the pipeline context (PRD-HPC-1231
+    CON-05): user, account, scratch root and home. Never literals — one
+    project's twin must never submit as another project's user. Missing
+    identity = the platform did not publish the tenancy; fail loudly."""
+    ident = {k: (os.environ.get(v) or '') for k, v in (
+        ('user', 'HPC_USER'), ('account', 'HPC_ACCOUNT'),
+        ('scratch', 'HPC_SCRATCH'), ('home', 'HPC_HOME'))}
+    missing = [k for k, val in ident.items() if not val]
+    if missing:
+        print('HPC identity missing from the pipeline context:', missing,
+              '- the KubeProject is not bound to an HPC tenancy (PRD-HPC-1231)',
+              flush=True)
+        sys.exit(2)
+    return ident
+
+
 def hdrs():
-    return {'X-SLURM-USER-NAME': 'u104378', 'X-SLURM-USER-TOKEN': tok(),
+    return {'X-SLURM-USER-NAME': hpc_identity()['user'],
+            'X-SLURM-USER-TOKEN': tok(),
             'Content-Type': 'application/json'}
 
 
@@ -330,6 +348,7 @@ def submit():
     except Exception as e:
         print('no registry token from metadata server (anonymous pull):', e,
               flush=True)
+    ident = hpc_identity()
     batch = '\n'.join([
         '#!/bin/bash -l',
         'set +e',
@@ -341,7 +360,7 @@ def submit():
         ' [ -r "$f" ] && source "$f" && break; done',
         'module load Apptainer 2>/dev/null || module load apptainer 2>/dev/null',
         'command -v apptainer >/dev/null || fail 210',
-        'SCR=/project/scratch/p201342',
+        'SCR=' + ident['scratch'],
         'export APPTAINER_CACHEDIR=$SCR/kaos-apptainer-cache'
         ' APPTAINER_TMPDIR=$SCR/kaos-tmp',
         'mkdir -p $APPTAINER_CACHEDIR $APPTAINER_TMPDIR $SCR/sif-cache',
@@ -395,8 +414,8 @@ def submit():
         '[ $rc -ne 0 ] && fail $rc',
         'exit 0',
     ])
-    env = ['PATH=/usr/bin:/bin:/usr/local/bin', 'HOME=/home/users/u104378',
-           'USER=u104378', 'IMAGE_REF=' + img, 'REG_TOKEN=' + reg,
+    env = ['PATH=/usr/bin:/bin:/usr/local/bin', 'HOME=' + ident['home'],
+           'USER=' + ident['user'], 'IMAGE_REF=' + img, 'REG_TOKEN=' + reg,
            'HPC_GPUS=' + str(HPC.get('gpus') or 0),
            'STEP_CMD=' + cmd, 'STEP_WORKDIR=' + fetch_workdir(img, reg),
            'WF_UID=' + (os.environ.get('WF_UID') or ''),
@@ -424,10 +443,10 @@ def submit():
                     'STAGEOUT_B64='
                     + base64.b64encode(STAGEOUT.encode()).decode()]
     body = {'job': {'name': jobname, 'partition': HPC['partition'],
-                    'account': os.environ.get('HPC_ACCOUNT') or 'p201342',
+                    'account': ident['account'],
                     'qos': HPC.get('qos') or 'default',
                     'time_limit': int(os.environ.get('SLURM_TIME_LIMIT') or 240),
-                    'current_working_directory': '/home/users/u104378',
+                    'current_working_directory': ident['home'],
                     'environment': env, 'tasks': 1, 'nodes': '1'},
             'script': batch}
     req = urllib.request.Request(API + '/job/submit',
@@ -869,7 +888,13 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "STEP_OUTPUTS", "value": "{{inputs.parameters.step-outputs}}"},
                 {"name": "HPC_CLASS", "value": "{{inputs.parameters.hpc-class}}"},
                 {"name": "HPC_CLASSES_JSON", "value": json.dumps(classes, separators=(",", ":"))},
+                # PRD-HPC-1231: the PROJECT's HPC identity and filesystem layout,
+                # published by the operator into pipeline-context hpc.* — the
+                # runner carries no literal user/account/path (CON-05).
                 {"name": "HPC_ACCOUNT", "value": str((ctx.get("hpc") or {}).get("account") or "")},
+                {"name": "HPC_USER", "value": str((ctx.get("hpc") or {}).get("user") or "")},
+                {"name": "HPC_SCRATCH", "value": str((ctx.get("hpc") or {}).get("scratch") or "")},
+                {"name": "HPC_HOME", "value": str((ctx.get("hpc") or {}).get("home") or "")},
                 {"name": "ZITADEL_MACHINE_KEY_FILE",
                  "value": "/etc/mlflow-svc/ZITADEL_MACHINE_KEY"},
                 {"name": "ZITADEL_DOMAIN",

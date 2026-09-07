@@ -109,9 +109,14 @@ computeClasses:
 hpc:
   enabled: true
   provider: "meluxina"
-  # account + classes are published by the k8smlapp composition from the
-  # pool's HPC bridge; placeholder shape only.
+  # account/user/scratch/home + classes are published by the k8smlapp
+  # composition from the KubeProject's HPC tenancy (PRD-HPC-1231): the
+  # project's own MeluXina user, the provider filesystem layout, and the
+  # classes the operator DISCOVERED for that user. Placeholder shape only.
   account: "PLACEHOLDER-account"
+  user: "PLACEHOLDER-user"
+  scratch: "/project/scratch/PLACEHOLDER-account"
+  home: "/home/users/PLACEHOLDER-user"
   classes:
   - name: meluxina-gpu
     tier: gpu
