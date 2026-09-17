@@ -4,7 +4,7 @@ This is the payoff. You open a web page, set a few fields, and press Submit. The
 
 ## Step 1. Open the run page
 
-Your Novelcore contact will give you a link to the Argo web page. This page is run by a tool called Argo Workflows. You do not need to learn it. Open the link in your browser. This is where pipelines are run.
+Your platform contact will give you a link to the Argo web page. This page is run by a tool called Argo Workflows. You do not need to learn it. Open the link in your browser. This is where pipelines are run.
 
 Find your pipeline in the list. It is named after your project, with `-pipeline` on the end. Click it, then look for the **Submit** button.
 

@@ -38,7 +38,7 @@ Click the red box in the run view. It opens the log for that step. The log shows
 
 ## I am stuck and the message does not help
 
-That happens. Copy the message, note what you were doing, and send it to your Novelcore contact. A clear description and the exact message is all they need to help fast.
+That happens. Copy the message, note what you were doing, and send it to your platform contact. A clear description and the exact message is all they need to help fast.
 
 ## A short checklist before you push
 
