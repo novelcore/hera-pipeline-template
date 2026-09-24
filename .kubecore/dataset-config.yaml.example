@@ -1,0 +1,14 @@
+# Example dataset upload config.
+#
+# Copy this file to .kubecore/dataset-config.yaml and fill in the values your
+# Novelcore contact gives you for your project. Once it exists, the upload tool
+# reads it automatically, so you can run:
+#
+#     python3 scripts/upload-dataset.py /path/to/your-dataset
+#
+# without passing --url or --repo. If you prefer, skip this file and pass those
+# two flags on the command line instead.
+
+lakefsUrl: https://lakefs-<project>.<your-domain>   # your project's lakeFS link
+repo: <your-lakefs-repo>                             # your project's lakeFS repo
+branch: main                                         # the data-ref you train on
