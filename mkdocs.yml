@@ -91,6 +91,7 @@ nav:
   - Ship it:
       - Send your change in: send-it-in.md
       - Go live: go-live.md
+      - Upload your data: upload-data.md
       - Run your pipeline: run-it.md
   - Help:
       - When something breaks: troubleshooting.md
