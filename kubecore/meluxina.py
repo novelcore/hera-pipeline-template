@@ -778,7 +778,10 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
         }
         if task.get("depends"):
             twin["depends"] = task["depends"]
-        tasks.append(twin)
+        # Right after its in-cluster task, not at the end: the Argo UI's
+        # template graph needs every dependency listed above its dependent,
+        # and later steps depend on both twins (crashes reading 'genre').
+        tasks.insert(tasks.index(task) + 1, twin)
         routed.append(task["name"])
 
     if not routed:
