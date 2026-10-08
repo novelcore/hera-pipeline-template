@@ -88,6 +88,7 @@ nav:
       - Add a step: add-a-step.md
       - Remove a step: remove-a-step.md
       - Change a setting: change-a-setting.md
+      - Use your own data: use-your-data.md
   - Ship it:
       - Send your change in: send-it-in.md
       - Go live: go-live.md
