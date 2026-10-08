@@ -1,4 +1,4 @@
-# Use your own data
+# Upload to lakeFS
 
 Your steps can read a dataset from lakeFS, the project's data storage. This page shows you how to put a folder of files there, and how a step reads it back. Any kind of files works: images, CSV, text.
 
