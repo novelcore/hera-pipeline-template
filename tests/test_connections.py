@@ -148,3 +148,13 @@ def test_no_connections_identical():
 def test_envfrom_no_yaml_aliases():
     out = yaml.safe_dump(_enhanced(_ctx(CONNS)), sort_keys=False, default_flow_style=False)
     assert "&id" not in out and "*id" not in out
+
+
+def test_null_or_non_list_envfrom_treated_as_absent():
+    for bad in (None, "oops", {"configMapRef": {"name": "x"}}):
+        raw = _raw()
+        for t in raw["spec"]["templates"]:
+            if "container" in t:
+                t["container"]["envFrom"] = copy.deepcopy(bad)
+        users = _users(_enhanced(_ctx(CONNS), raw))
+        assert users and all(t["container"]["envFrom"] == WANT for t in users), bad

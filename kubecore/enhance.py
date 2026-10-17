@@ -48,7 +48,8 @@ release-gate rule):
   platform.kubecore.io/hpc            future MeluXina leg (accepted,
                                       not acted on)
 
-connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every developer step, never on meluxina-run.
+connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every
+developer step, never on meluxina-run.
 
 This file deals in plain dicts (parsed with pyyaml), not Hera objects. The
 enhancer runs at CI render time, after Hera has already produced Argo-native
@@ -957,10 +958,11 @@ def enhance_connections(step: dict, ctx: dict) -> None:
     if not refs:
         return
     container = step["container"]
-    if "envFrom" not in container:
+    existing = container.get("envFrom")
+    if not isinstance(existing, list):  # absent, null or malformed: treat as absent
         container["envFrom"] = refs
         return
-    existing = container["envFrom"]  # developer entries stay first
+    # developer entries stay first
     have = {
         (e.get("configMapRef") or {}).get("name")
         for e in existing
