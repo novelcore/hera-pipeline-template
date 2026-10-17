@@ -48,6 +48,8 @@ release-gate rule):
   platform.kubecore.io/hpc            future MeluXina leg (accepted,
                                       not acted on)
 
+connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every developer step, never on meluxina-run.
+
 This file deals in plain dicts (parsed with pyyaml), not Hera objects. The
 enhancer runs at CI render time, after Hera has already produced Argo-native
 YAML, so it has no reason to depend on Hera at all — this is what keeps the
@@ -924,6 +926,51 @@ def enhance_pipeline_info(spec: dict, ctx: dict, steps: list) -> None:
     )
 
 
+def connection_env_from(ctx: dict) -> list:
+    """Optional envFrom refs for the app connections in the pipeline context.
+
+    Mirrors render-wft's `_connection_env_from`: entries without a configMapName
+    are skipped, duplicate configMapNames collapse, and an entry carrying a
+    non-empty `environment` is kept only when it equals ctx mlEnvironment.name.
+    Always returns fresh dicts (shared objects would make yaml.dump emit aliases).
+    """
+    env_name = (ctx.get("mlEnvironment") or {}).get("name") or ""
+    out = []
+    seen = set()
+    for c in ctx.get("connections") or []:
+        if not isinstance(c, dict):
+            continue
+        cm = c.get("configMapName")
+        if not isinstance(cm, str) or not cm.strip():
+            continue
+        if c.get("environment") and c.get("environment") != env_name:
+            continue
+        if cm in seen:
+            continue
+        seen.add(cm)
+        out.append({"configMapRef": {"name": cm, "optional": True}})
+    return out
+
+
+def enhance_connections(step: dict, ctx: dict) -> None:
+    refs = connection_env_from(ctx)
+    if not refs:
+        return
+    container = step["container"]
+    if "envFrom" not in container:
+        container["envFrom"] = refs
+        return
+    existing = container["envFrom"]  # developer entries stay first
+    have = {
+        (e.get("configMapRef") or {}).get("name")
+        for e in existing
+        if isinstance(e, dict) and e.get("configMapRef")
+    }
+    for ref in refs:
+        if ref["configMapRef"]["name"] not in have:
+            existing.append(ref)
+
+
 # ---------------------------------------------------------------------- main
 
 
@@ -955,6 +1002,7 @@ def enhance(wft: dict, ctx: dict, catalog: dict = None) -> dict:
         # the full gpu-tier picture.
         enhance_gpu_routing(spec, step, ctx, annots)
         enhance_volumes(step, annots, ctx)
+        enhance_connections(step, ctx)
     enhance_workspace_pvc(spec, steps)
     enhance_platform_group(steps, ctx)
     enhance_dynamic_enums(spec, ctx, catalog or {})
