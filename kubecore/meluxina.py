@@ -451,12 +451,14 @@ def submit():
            'STEP_CMD=' + cmd, 'STEP_WORKDIR=' + fetch_workdir(img, reg),
            'WF_UID=' + (os.environ.get('WF_UID') or ''),
            'STEP_NAME=' + (os.environ.get('STEP_NAME') or ''),
-           'STEP_OUTPUTS=' + (os.environ.get('STEP_OUTPUTS') or ''),
-           # Same checkpoint location + run id as the in-cluster copy; without
-           # them training fell back to {ref}/checkpoints/ on the dataset branch.
-           'CHECKPOINT_BUCKET=' + (os.environ.get('CHECKPOINT_BUCKET') or ''),
-           'CHECKPOINT_PREFIX=' + (os.environ.get('CHECKPOINT_PREFIX') or ''),
-           'KUBECORE_RUN_ID=' + (os.environ.get('KUBECORE_RUN_ID') or '')]
+           'STEP_OUTPUTS=' + (os.environ.get('STEP_OUTPUTS') or '')]
+    # Same checkpoint location + run id as the in-cluster copy; without them
+    # training fell back to {ref}/checkpoints/ on the dataset branch. Only when
+    # set: step code reads os.environ.get(..., default), so an empty value
+    # would override its own default.
+    env += [k + '=' + os.environ[k] for k in
+            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID')
+            if os.environ.get(k)]
     global WALLET, WALLET_EXP
     wallet = WALLET = mint_wallet()
     WALLET_EXP = wallet_exp(wallet)

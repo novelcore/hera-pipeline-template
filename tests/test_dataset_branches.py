@@ -157,3 +157,11 @@ def test_no_outputs_branch_keeps_todays_hand_off():
     ctx["lakefs"].pop("outputsBranch", None)
     mr = next(t for t in enhance(_raw(), ctx)["spec"]["templates"] if t["name"] == "meluxina-run")
     assert {e["name"]: e.get("value") for e in mr["container"]["env"]}["OUTPUTS_BRANCH"] == ""
+
+
+def test_slurm_env_omits_unset_checkpoint_settings():
+    """Step code reads os.environ.get(KEY, default): an empty value would beat
+    its default (old code then uploaded to bucket '')."""
+    src = MELUXINA_SUBMIT_CODE
+    assert "'CHECKPOINT_BUCKET=' +" not in src
+    assert "if os.environ.get(k)]" in src
