@@ -1,7 +1,7 @@
 [project]
 name = "kubecore-dataset"
-version = "1.2.0"
-description = "Log in, validate, and incrementally sync YOLO-pose datasets to lakeFS for the KAOS ML pipeline dropdown."
+version = "1.3.0"
+description = "Log in, validate, and incrementally sync YOLO-pose datasets to lakeFS for the KAOS ML pipeline."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

@@ -2,17 +2,16 @@
 
 Every ML app is different (its own lakeFS instance, repo, namespace). The CLI
 must never assume a specific URL. Instead the platform writes a per-app config
-file into the app repo at render time, and the CLI discovers it:
+file into the app repo when the app is created, and the CLI discovers it:
 
-    .kubecore/dataset-config.yaml     (rendered by render-wft / the reconciler)
+    .kubecore/dataset-config.yaml     (written by the platform's k8smlapp composition)
         lakefsUrl:  https://lakefs-<project>.<baseDns>   # EXTERNAL ingress
         repo:       <project>
         namespace:  ml-<project>
-        probeCron:  <app>-dataset-catalog-probe
 
 Resolution precedence for every value: explicit CLI flag > environment variable
 > this config file (searched upward from the dataset dir and CWD) > None. So a
-developer just runs `kubecore-dataset upload ./data <branch>` inside their app
+developer just runs `kubecore-dataset upload ./data --branch <name>` inside their app
 clone and everything is filled in — nothing hardcoded, works for any instance.
 """
 from __future__ import annotations

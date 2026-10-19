@@ -38,6 +38,14 @@ python3 scripts/upload-dataset.py /path/to/your-folder my-data-v1
 !!! warning "Same name replaces"
     Uploading again with a name you already used makes that dataset match your folder. Files you do not have on your computer are removed from it. The tool shows you which files and asks before it removes anything. To keep the old one, pick a new name.
 
+A new name starts as a copy of `main` (or of the dataset you name with `--from`), so when your folder is a variant of an existing dataset only the changed files upload:
+
+```bash
+python3 scripts/upload-dataset.py /path/to/your-folder my-data-v2 --from my-data-v1
+```
+
+To see every dataset you have, run `kubecore-dataset list`.
+
 ## Step 3. Add the dataset fields to the run page
 
 Create `config/data.yaml`:
@@ -45,7 +53,6 @@ Create `config/data.yaml`:
 ```yaml
 data:
   ref: "main"      # which dataset: the name you uploaded with
-  version: ""      # leave empty, unless you uploaded with --data-version
 ```
 
 Then add `- data` to the list in `config/config.yaml`, under `- experiment`:
@@ -58,7 +65,7 @@ defaults:
   - platform: live
 ```
 
-The run page now has a `data-ref` field and a `data-version` field.
+The run page now has a `data-ref` field.
 
 ## Step 4. Read the data in a step
 
@@ -68,7 +75,7 @@ Give the step `reads=["data"]` in `pipeline.py`:
 reader = step("read-data", reads=["data"], needs=[hello])
 ```
 
-In the step's `entry.py`, the dataset is at one place in lakeFS. The platform hands every step the address and keys, so you only build the path:
+In the step's `entry.py`, the dataset is at `<data-ref>/dataset/` in your lakeFS repository. The platform hands every step the address and keys, so you only build the path:
 
 ```python
 import argparse
@@ -86,8 +93,7 @@ def main() -> None:
 
     repo = cfg["platform"]["lakefs"]["repository"]
     ref = cfg["data"]["ref"]
-    version = cfg["data"]["version"] or ref
-    prefix = f"{ref}/dataset/{version}/"
+    prefix = f"{ref}/dataset/"
 
     s3 = boto3.client(
         "s3",
@@ -109,8 +115,11 @@ Add `boto3` to that step's Dockerfile: `RUN pip install --no-cache-dir PyYAML bo
 
 Send the change in as usual ([Send your change in](send-it-in.md)). When you run, set `data-ref` to the name you uploaded with.
 
+!!! note "One snapshot per run"
+    Reading by name reads the dataset as it is at that moment. If several steps read it, or uploads may happen while a run is going, resolve the name to its commit once in your first data step and hand the commit to the later steps; `s3://<repo>/<commit>/dataset/` never changes. The YOLO template's `dataset-loading` step shows how.
+
 ## If something goes wrong
 
 - **The browser sign-in fails or never opens.** Copy the link the tool printed into your browser. If it still fails, sign in the guided way with `kubecore-dataset login --paste`, then run the upload again.
 - **`externally-managed-environment`.** Install inside the virtual environment, as in Step 1.
-- **The step lists no files.** Check `data-ref` on the run page is the name you uploaded with (`main` if you gave none), and `data-version` is empty.
+- **The step lists no files.** Check `data-ref` on the run page is the name you uploaded with (`main` if you gave none); `kubecore-dataset list` shows the names that exist. A dataset uploaded before this layout sits one level deeper, at `<name>/dataset/<name>/`; upload it again to move it.

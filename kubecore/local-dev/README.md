@@ -7,8 +7,6 @@ versions:
 - `pipeline-context.yaml` — the platform API the enhancer consumes (compute
   classes, MLflow/lakeFS endpoints, secret names, checkpoints). In CI it comes
   from your project's `{app}-pipeline-context` ConfigMap.
-- `dataset-catalog.yaml` — stand-in for the `ml-dataset-catalog-probe` output
-  (the lakeFS refs that become the `data-ref` dropdown).
 
 The values here are **non-functional placeholders** (`PLACEHOLDER-*`,
 `*.internal.invalid`). Real endpoints, secret names, and OIDC ids are
