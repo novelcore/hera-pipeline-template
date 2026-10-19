@@ -17,7 +17,6 @@ sys.path.insert(0, str(ROOT))
 from kubecore import enhance  # noqa: E402
 
 CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
-CATALOG = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "dataset-catalog.yaml").read_text())
 
 CONNS = [
     {"name": "inference", "envPrefix": "INFERENCE", "configMapName": "cm-inference", "environment": "runtime"},
@@ -55,7 +54,7 @@ def _raw_container_names():
 
 
 def _enhanced(ctx, raw=None):
-    return enhance.enhance(copy.deepcopy(raw) if raw is not None else _raw(), ctx, CATALOG)
+    return enhance.enhance(copy.deepcopy(raw) if raw is not None else _raw(), ctx)
 
 
 def _users(out):
@@ -140,8 +139,8 @@ def test_developer_envfrom_kept():
 def test_no_connections_identical():
     raw = _raw()
     dump = lambda w: yaml.safe_dump(w, sort_keys=False, default_flow_style=False)
-    a = dump(enhance.enhance(copy.deepcopy(raw), _ctx(None), CATALOG))
-    b = dump(enhance.enhance(copy.deepcopy(raw), _ctx([]), CATALOG))
+    a = dump(enhance.enhance(copy.deepcopy(raw), _ctx(None)))
+    b = dump(enhance.enhance(copy.deepcopy(raw), _ctx([])))
     assert a == b and "envFrom" not in a
 
 

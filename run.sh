@@ -22,7 +22,6 @@ PYTHONPATH="$PWD" .venv/bin/python pipeline.py
 PYTHONPATH="$PWD" .venv/bin/python -m kubecore.enhance \
   --raw out/raw-workflow-template.yaml \
   --context kubecore/local-dev/pipeline-context.yaml \
-  --catalog kubecore/local-dev/dataset-catalog.yaml \
   --output out/workflow-template.yaml
 PYTHONPATH="$PWD" .venv/bin/python -m kubecore.compose --output out/params.yaml
 

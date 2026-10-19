@@ -7,9 +7,8 @@ and injects everything the developer never had to think about: namespace,
 service account, secrets, compute-class routing, node scheduling, image
 supply-chain wiring, per-run sizing knobs ({step}-cpu/{step}-mem/{step}-disk via
 podSpecPatch), per-step compute-class dropdowns ({step}-class, matching the
-live render-wft), dynamic enum dropdowns (compute classes from the pool,
-dataset refs from the dataset-catalog probe), and the read-only pipeline-info
-form parameter.
+live render-wft, listing the pool's compute classes), and the read-only
+pipeline-info form parameter.
 
 Golden rule: only fill ABSENT keys. If a developer already set a field (a
 nodeSelector, an env var, a memory request) we leave it alone. The one
@@ -472,11 +471,13 @@ def enhance_env(step: dict, ctx: dict, annots: dict) -> None:
             }
         )
     # checkpoint bucket/prefix (the live WFT injects these; step code derives
-    # checkpoint locations from them). Only when the context declares them.
+    # checkpoint locations from them), plus the run id that keeps one run's
+    # checkpoints from overwriting another's. Only when the context declares them.
     checkpoints = ctx.get("checkpoints")
     if checkpoints:
         add({"name": "CHECKPOINT_BUCKET", "value": str(checkpoints.get("bucket", ""))})
         add({"name": "CHECKPOINT_PREFIX", "value": str(checkpoints.get("prefix", ""))})
+        add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
 
 
 # How long a step may sit Pending before the platform calls it unschedulable.
@@ -824,28 +825,6 @@ def enhance_workspace_pvc(spec: dict, steps: list) -> None:
         )
 
 
-# ------------------------------------------------------------- dynamic enums
-
-
-def enhance_dynamic_enums(spec: dict, ctx: dict, catalog: dict) -> None:
-    """Decorate specific parameters with live enum values the developer
-    could never know at authoring time. Only fills absent `enum` keys, so
-    a static Choice enum derived from the config tree wins over the platform."""
-    by_name = {p["name"]: p for p in spec["arguments"]["parameters"]}
-
-    def set_enum(param_name: str, values: list) -> None:
-        param = by_name.get(param_name)
-        if param is None or "enum" in param:
-            return
-        default = param.get("default") or param.get("value")
-        if default and default not in values:
-            values = [default] + values
-        param["enum"] = values
-
-    if catalog:
-        set_enum("data-ref", list(catalog.get("refs", [])))
-
-
 def enhance_platform_group(steps: list, ctx: dict) -> None:
     """Inject the REAL platform config values into the compose step's overrides.
 
@@ -976,7 +955,7 @@ def enhance_connections(step: dict, ctx: dict) -> None:
 # ---------------------------------------------------------------------- main
 
 
-def enhance(wft: dict, ctx: dict, catalog: dict = None) -> dict:
+def enhance(wft: dict, ctx: dict) -> dict:
     enhance_metadata(wft, ctx)
     spec = wft["spec"]
     enhance_spec_top_level(spec, ctx)
@@ -1007,7 +986,6 @@ def enhance(wft: dict, ctx: dict, catalog: dict = None) -> dict:
         enhance_connections(step, ctx)
     enhance_workspace_pvc(spec, steps)
     enhance_platform_group(steps, ctx)
-    enhance_dynamic_enums(spec, ctx, catalog or {})
     enhance_pipeline_info(spec, ctx, steps)
     # PRD-1016: the MeluXina leg — must run LAST (twin tasks copy each routed
     # step's FINAL container image/command, and the depends rewrite needs the
@@ -1020,17 +998,17 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Enhance a raw Hera WorkflowTemplate with platform wiring.")
     parser.add_argument("--raw", required=True, help="Path to the raw WorkflowTemplate YAML (from pipeline.py).")
     parser.add_argument("--context", required=True, help="Path to pipeline-context.yaml.")
-    parser.add_argument("--catalog", default="", help="Optional path to the dataset-catalog probe output.")
+    # Ignored: data-ref is free text (datasets are listed by `kubecore-dataset
+    # list` and config-validation). Still accepted so a CI that passes it keeps
+    # rendering.
+    parser.add_argument("--catalog", default="", help=argparse.SUPPRESS)
     parser.add_argument("--output", required=True, help="Path to write the enhanced WorkflowTemplate YAML.")
     args = parser.parse_args(argv)
 
     raw = yaml.safe_load(Path(args.raw).read_text())
     ctx = yaml.safe_load(Path(args.context).read_text())
-    catalog = {}
-    if args.catalog and Path(args.catalog).exists():
-        catalog = yaml.safe_load(Path(args.catalog).read_text()) or {}
 
-    enhanced = enhance(raw, ctx, catalog)
+    enhanced = enhance(raw, ctx)
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(yaml.safe_dump(enhanced, sort_keys=False, default_flow_style=False))

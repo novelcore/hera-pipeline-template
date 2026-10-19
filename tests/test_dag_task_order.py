@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT))
 from kubecore import enhance  # noqa: E402
 
 CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
-CATALOG = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "dataset-catalog.yaml").read_text())
 
 _STATUS = r"Succeeded|Failed|Errored|Skipped|Omitted|Daemoned|AnySucceeded|AllFailed"
 
@@ -34,7 +33,7 @@ def _depends_on(expr):
 def _dag_tasks():
     import runpy
     ns = runpy.run_path(str(ROOT / "pipeline.py"), run_name="__pipeline__")
-    spec = enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), CONTEXT, CATALOG)["spec"]
+    spec = enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), CONTEXT)["spec"]
     entry = next(t for t in spec["templates"] if t["name"] == spec["entrypoint"])
     return entry["dag"]["tasks"]
 
