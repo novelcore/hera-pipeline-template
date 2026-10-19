@@ -13,8 +13,10 @@ keep working. It reuses the cached browser session if present; if a
 
 Old env vars: LAKEFS_URL, LAKEFS_REPO, LAKEFS_BRANCH, LOCAL_DIR,
               LAKEFS_COOKIE (optional), CONCURRENCY (optional),
-              LAKEFS_DATA_VERSION (optional; default = LAKEFS_BRANCH),
-              UPLOAD_PREFIX (optional; overrides the standard dataset/<version>).
+              UPLOAD_PREFIX (optional; overrides the standard dataset/),
+              LAKEFS_SYNC_YES=1 (optional; delete remote files that are not in
+              LOCAL_DIR without asking — otherwise you are asked first).
+LAKEFS_DATA_VERSION was removed: a dataset lives at <branch>/dataset/.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ import sys
 
 from dataset_cli.lakefs_client import LakeFSClient
 from dataset_cli.login import Credential, login as do_login, save_session
-from dataset_cli.sync import dataset_prefix, sync as do_sync
+from dataset_cli.sync import check_branch_name, dataset_prefix, open_branch, sync as do_sync
 
 
 def main() -> None:
@@ -35,10 +37,13 @@ def main() -> None:
     if not (url and repo and local):
         sys.exit("ERROR: LAKEFS_URL, LAKEFS_REPO and LOCAL_DIR are required.")
     concurrency = int(os.environ.get("CONCURRENCY", "16"))
-    # Platform standard: <branch>/dataset/<data-version>/, the path the pipeline
-    # reads. UPLOAD_PREFIX still overrides it for the rare custom layout.
-    version = os.environ.get("LAKEFS_DATA_VERSION") or branch
-    prefix = os.environ.get("UPLOAD_PREFIX", "").strip("/") or dataset_prefix(version)
+    if os.environ.get("LAKEFS_DATA_VERSION"):
+        sys.exit("ERROR: LAKEFS_DATA_VERSION was removed — a dataset now lives at "
+                 "<branch>/dataset/. Keep each version on its own LAKEFS_BRANCH.")
+    check_branch_name(branch)
+    # Platform standard: <branch>/dataset/, the path the pipeline reads.
+    # UPLOAD_PREFIX still overrides it for the rare custom layout.
+    prefix = os.environ.get("UPLOAD_PREFIX", "").strip("/") or dataset_prefix()
 
     cookie = os.environ.get("LAKEFS_COOKIE")
     if cookie:
@@ -52,11 +57,12 @@ def main() -> None:
         cred = do_login(url)
 
     client = LakeFSClient(url, cookie=cred.cookie, token=cred.token, concurrency=concurrency)
-    if not client.branch_exists(repo, branch):
-        client.ensure_branch(repo, branch, client.default_branch(repo))
+    created_from = open_branch(client, repo, branch, None)
 
     do_sync(pathlib.Path(local), client, repo, branch,
-            prefix=prefix, concurrency=concurrency)
+            prefix=prefix, concurrency=concurrency,
+            confirm_deletes=os.environ.get("LAKEFS_SYNC_YES") != "1",
+            created_from=created_from, validated=False)
 
 
 if __name__ == "__main__":

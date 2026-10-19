@@ -8,8 +8,8 @@ The rules here are a faithful local mirror of the pipeline's own checks in
 pipeline tightens its contract, tighten here too, or the CLI will pass datasets
 the pipeline later rejects.
 
-A dataset directory must look like (at its root — this becomes the lakeFS ref
-root, ``s3://<repo>/<branch>/``):
+A dataset directory must look like (at its root — this becomes the dataset
+folder of its lakeFS branch, ``s3://<repo>/<branch>/dataset/``):
 
     data.yaml                 # path, train, val, kpt_shape, names
     images/train/*.{jpg,...}  # required split

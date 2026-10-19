@@ -13,9 +13,11 @@
 
 The files land at the platform's dataset path, which your steps read:
 
-    s3://<repo>/<dataset-name>/dataset/<data-version>/
+    s3://<repo>/<dataset-name>/dataset/
 
-where data-version defaults to the dataset name (--data-version to change it).
+A new dataset name starts as a copy of the repository's default branch (or of
+--from), so only the files that differ are uploaded.
+
 lakeFS URL + repo are read from .kubecore/dataset-config.yaml when it exists;
 otherwise pass --url and --repo.
 """
@@ -33,7 +35,7 @@ sys.path.insert(0, str(_REPO / "dataset_tools"))
 from dataset_cli.appconfig import config_value  # noqa: E402
 from dataset_cli.lakefs_client import LakeFSClient  # noqa: E402
 from dataset_cli.login import login as do_login  # noqa: E402
-from dataset_cli.sync import dataset_prefix, sync as do_sync  # noqa: E402
+from dataset_cli.sync import check_branch_name, dataset_prefix, open_branch, sync as do_sync  # noqa: E402
 
 
 def main() -> int:
@@ -42,15 +44,18 @@ def main() -> int:
     ap.add_argument("name", nargs="?", default=None,
                     help="dataset name = the data-ref you type when running (default: main)")
     ap.add_argument("--branch", default=None, help=argparse.SUPPRESS)  # old spelling of `name`
-    ap.add_argument("--data-version", default=None,
-                    help="data-version folder inside the dataset (default: same as the name)")
+    ap.add_argument("--from", dest="source", default=None,
+                    help="when the name is new, start it as a copy of this branch/tag (default: the default branch)")
+    ap.add_argument("--data-version", default=None, help=argparse.SUPPRESS)  # removed; parsed only to explain why
     ap.add_argument("--url", default=None, help="lakeFS ingress URL (default: .kubecore/dataset-config.yaml)")
     ap.add_argument("--repo", default=None, help="lakeFS repo (default: .kubecore/dataset-config.yaml)")
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--prefix", default=None,
-                    help="advanced: override the standard dataset/<data-version> location")
+                    help="advanced: override the standard dataset/ location")
     ap.add_argument("--yes", action="store_true",
                     help="don't ask before deleting remote files that are not in your folder")
+    ap.add_argument("--remove-legacy", action="store_true",
+                    help="also delete old-layout dataset/<version>/ folders on the branch")
     ap.add_argument("--dry-run", action="store_true", help="show what would sync, upload nothing")
     args = ap.parse_args()
 
@@ -61,8 +66,11 @@ def main() -> int:
     url = args.url or config_value("lakefsUrl", start)
     repo = args.repo or config_value("repo", start)
     branch = args.name or args.branch or config_value("branch", start) or "main"
-    version = args.data_version or branch
-    prefix = args.prefix.strip("/") if args.prefix else dataset_prefix(version)
+    if args.data_version:
+        sys.exit("ERROR: --data-version was removed — a dataset now lives at "
+                 "<name>/dataset/. Keep each version under its own name.")
+    check_branch_name(branch)
+    prefix = args.prefix.strip("/") if args.prefix else dataset_prefix()
 
     if not url or not repo:
         sys.exit("ERROR: could not determine lakeFS url/repo. Run inside the app "
@@ -75,7 +83,7 @@ def main() -> int:
         print(f"✗ {folder} is not a folder with files in it. Point the tool at your dataset folder.")
         return 2
     print(f"✓ Found {len(files)} files.")
-    print(f"  Dataset name (data-ref): {branch}   data-version: {version}")
+    print(f"  Dataset name (data-ref): {branch}")
     print(f"  Target: s3://{repo}/{branch}/{prefix}/")
 
     if args.dry_run:
@@ -86,17 +94,16 @@ def main() -> int:
     cred = do_login(url)
     client = LakeFSClient(url, cookie=cred.cookie, token=cred.token,
                           concurrency=args.concurrency)
-    if not client.branch_exists(repo, branch):
-        client.ensure_branch(repo, branch, client.default_branch(repo))
+    created_from = open_branch(client, repo, branch, args.source)
 
     # 3) incremental sync (uploads + deletions, deletions confirmed), then commit
     commit_id = do_sync(pathlib.Path(args.dataset_dir), client, repo, branch,
                         prefix=prefix, concurrency=args.concurrency,
-                        extra_metadata={"branch": branch, "data_version": version},
-                        confirm_deletes=not args.yes)
+                        extra_metadata={"branch": branch},
+                        confirm_deletes=not args.yes, remove_legacy=args.remove_legacy,
+                        created_from=created_from, validated=False)  # no format to validate
     print(f"\n✓ Uploaded to s3://{repo}/{branch}/{prefix}/  (commit {commit_id})")
-    print(f"  When you run the pipeline, set data-ref = {branch}"
-          + (f" and data-version = {version}" if version != branch else "") + ".")
+    print(f"  When you run the pipeline, set data-ref = {branch}.")
     return 0
 
 
