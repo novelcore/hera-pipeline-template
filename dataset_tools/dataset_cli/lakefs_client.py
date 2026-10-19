@@ -123,6 +123,27 @@ class LakeFSClient:
                 f"HTTP {r.status_code} {r.text[:300]}"
             )
 
+    def delete_branch(self, repo: str, branch: str) -> None:
+        r = self.session.delete(
+            self._url(f"/repositories/{repo}/branches/{quote(branch, safe='')}"),
+            timeout=60,
+            allow_redirects=False,
+        )
+        if r.status_code not in (204, 404):
+            raise LakeFSError(f"delete branch {branch} failed: HTTP {r.status_code} {r.text[:300]}")
+
+    def has_objects(self, repo: str, ref: str, prefix: str) -> bool:
+        """True iff ``ref`` holds at least one object under ``prefix``."""
+        r = self.session.get(
+            self._url(f"/repositories/{repo}/refs/{quote(ref, safe='')}/objects/ls"),
+            params={"prefix": prefix, "amount": 1},
+            timeout=60,
+            allow_redirects=False,
+        )
+        if r.status_code != 200:
+            return False
+        return any(o.get("path_type", "object") == "object" for o in r.json().get("results", []))
+
     def default_branch(self, repo: str) -> str:
         r = self.session.get(
             self._url(f"/repositories/{quote(repo, safe='')}"),
@@ -164,15 +185,6 @@ class LakeFSClient:
             if not pagination.get("has_more"):
                 return
             after = pagination.get("next_offset", "")
-
-    def object_exists(self, repo: str, ref: str, path: str) -> bool:
-        r = self.session.get(
-            self._url(f"/repositories/{repo}/refs/{quote(ref, safe='')}/objects/stat"),
-            params={"path": path},
-            timeout=30,
-            allow_redirects=False,
-        )
-        return r.status_code == 200
 
     def list_refs(self, repo: str, kind: str) -> Iterator[dict]:
         """Yield every branch (``kind="branches"``) or tag (``kind="tags"``):

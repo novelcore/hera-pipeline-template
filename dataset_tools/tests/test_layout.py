@@ -133,7 +133,8 @@ def test_wrapper_new_name_starts_from_from(monkeypatch, wrapper, tmp_path):
     monkeypatch.setattr(wrapper, "LakeFSClient", _NewBranchClient)
     _NewBranchClient.created = []
     _run_wrapper(monkeypatch, wrapper, tmp_path, "cats", "--from", "v1")
-    assert _NewBranchClient.created == [("cats", "v1")]
+    # the branch is created by the sync, after the plan is confirmed
+    assert _NewBranchClient.created == []
     assert seen["created_from"] == "v1"
 
 
@@ -183,7 +184,7 @@ def test_cli_sync_new_branch_forks_the_default_branch(monkeypatch, tmp_path):
     _NewBranchClient.created = []
     cli.main(["sync", str(tmp_path), "--url", "https://lakefs.example", "--repo", "r",
               "--branch", "cats"])
-    assert _NewBranchClient.created == [("cats", "main")]
+    assert _NewBranchClient.created == []  # deferred to the sync
     assert seen["created_from"] == "main"
 
 
@@ -216,9 +217,10 @@ def test_cli_list_shows_datasets_in_both_layouts(monkeypatch, capsys):
                         {"id": "cats", "commit_id": "c" * 40}, {"id": "empty", "commit_id": "d" * 40}]
             return [{"id": "v1", "commit_id": "e" * 40}]
 
-        def object_exists(self, repo, ref, path):
-            return (ref, path) in {("main", "dataset/main/data.yaml"), ("cats", "dataset/data.yaml"),
-                                   ("v1", "dataset/data.yaml"), ("outputs", "dataset/data.yaml")}
+        def has_objects(self, repo, ref, prefix):
+            files = {"main": ["dataset/main/data.yaml"], "cats": ["dataset/data.yaml"],
+                     "v1": ["dataset/table.csv"], "outputs": ["dataset/data.yaml"], "empty": []}
+            return any(f.startswith(prefix) for f in files[ref])
 
     monkeypatch.setattr(cli, "LakeFSClient", _Refs)
     monkeypatch.setattr(cli, "do_login", lambda *a, **k: Credential(token="t"))
@@ -343,12 +345,70 @@ class _LegacyRemote:
 
 
 def test_sync_keeps_an_old_layout_dataset(tmp_path):
-    """Apps on older step code still read dataset/<version>/ (one repo serves the
-    whole project), so the mirror must not wipe it."""
+    """Apps on older step code still read dataset/<branch>/ (one repo serves the
+    whole project), so the mirror must not wipe it — with or without data.yaml."""
     (tmp_path / "data.yaml").write_text("path: .\n")
     plan = sync_mod.plan_sync(tmp_path, _LegacyRemote(), "r", "main", "dataset")
     assert plan.legacy == ["dataset/main/"]
     assert plan.delete == ["dataset/old.png"]
+
+
+def test_a_new_branch_does_not_keep_another_datasets_old_folder(tmp_path):
+    """cats copied from main inherits main's dataset/main/: nobody reads it on
+    cats, so it must not be kept (qat/quant/HPC would download it every run)."""
+    (tmp_path / "data.yaml").write_text("path: .\n")
+    plan = sync_mod.plan_sync(tmp_path, _LegacyRemote(), "r", "main", "dataset", name="cats")
+    assert plan.legacy == []
+    assert "dataset/main/images/train/a.jpg" in plan.delete
+
+
+class _CreatingClient(_WriteClient):
+    """Records branch creation/deletion; uploads fail when told to."""
+
+    def __init__(self, fail=False):
+        super().__init__()
+        self.fail = fail
+
+    def ensure_branch(self, repo, branch, source):
+        self.writes.append(("create", (branch, source)))
+
+    def delete_branch(self, repo, branch):
+        self.writes.append(("drop", (branch,)))
+
+    def upload_object(self, *a):
+        if self.fail:
+            raise sync_mod.LakeFSError("boom")
+        super().upload_object(*a)
+
+
+def test_a_new_branch_is_created_only_after_confirmation(monkeypatch, tmp_path):
+    _plan_with_deletes(monkeypatch, tmp_path)
+    tty = io.StringIO("n\n")
+    tty.isatty = lambda: True
+    monkeypatch.setattr(sys, "stdin", tty)
+    client = _CreatingClient()
+    with pytest.raises(SystemExit, match="Aborted"):
+        sync_mod.sync(tmp_path, client, "r", "cats", prefix="dataset",
+                      confirm_deletes=True, created_from="main")
+    assert client.writes == [], "an aborted upload must not leave a copy of main named cats"
+
+
+def test_a_new_branch_is_created_before_the_upload(monkeypatch, tmp_path):
+    _plan_with_deletes(monkeypatch, tmp_path)
+    client = _CreatingClient()
+    sync_mod.sync(tmp_path, client, "r", "cats", prefix="dataset", concurrency=1,
+                  created_from="main")
+    assert client.writes[0] == ("create", ("cats", "main"))
+
+
+def test_a_failed_upload_removes_the_new_branch(monkeypatch, tmp_path):
+    _plan_with_deletes(monkeypatch, tmp_path)
+    client = _CreatingClient(fail=True)
+    with pytest.raises(SystemExit):
+        sync_mod.sync(tmp_path, client, "r", "cats", prefix="dataset", concurrency=1,
+                      created_from="main")
+    assert client.writes[0] == ("create", ("cats", "main"))
+    assert client.writes[-1] == ("drop", ("cats",))
 
 
 def test_sync_remove_legacy_deletes_it(tmp_path):

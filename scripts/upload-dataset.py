@@ -35,7 +35,7 @@ sys.path.insert(0, str(_REPO / "dataset_tools"))
 from dataset_cli.appconfig import config_value  # noqa: E402
 from dataset_cli.lakefs_client import LakeFSClient  # noqa: E402
 from dataset_cli.login import login as do_login  # noqa: E402
-from dataset_cli.sync import check_branch_name, dataset_prefix, open_branch, sync as do_sync  # noqa: E402
+from dataset_cli.sync import branch_source, check_branch_name, dataset_prefix, sync as do_sync  # noqa: E402
 
 
 def main() -> int:
@@ -94,7 +94,7 @@ def main() -> int:
     cred = do_login(url)
     client = LakeFSClient(url, cookie=cred.cookie, token=cred.token,
                           concurrency=args.concurrency)
-    created_from = open_branch(client, repo, branch, args.source)
+    created_from = branch_source(client, repo, branch, args.source)
 
     # 3) incremental sync (uploads + deletions, deletions confirmed), then commit
     commit_id = do_sync(pathlib.Path(args.dataset_dir), client, repo, branch,

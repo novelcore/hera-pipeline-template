@@ -25,7 +25,7 @@ from . import __version__
 from .appconfig import config_value
 from .lakefs_client import LakeFSClient
 from .login import login as do_login
-from .sync import RESERVED_BRANCHES, check_branch_name, dataset_prefix, open_branch, sync as do_sync
+from .sync import RESERVED_BRANCHES, branch_source, check_branch_name, dataset_prefix, sync as do_sync
 from .validate import validate_dataset
 
 
@@ -101,7 +101,7 @@ def cmd_sync(args, *, do_auth: bool = True) -> int:
                           concurrency=args.concurrency)
 
     # 3) ensure branch exists (a new one starts as a copy of --from / the default branch)
-    created_from = open_branch(client, repo, branch, args.source, dry_run=args.dry_run)
+    created_from = branch_source(client, repo, branch, args.source)
 
     # 4) incremental sync + commit
     commit_id = do_sync(
@@ -120,8 +120,8 @@ def cmd_sync(args, *, do_auth: bool = True) -> int:
 
 
 def cmd_list(args) -> int:
-    """Datasets = branches and tags holding dataset/data.yaml (or the old
-    dataset/<ref>/data.yaml layout). Tags are frozen; branches move."""
+    """Datasets = branches and tags holding files under dataset/ (the old
+    layout: under dataset/<ref>/). Tags are frozen; branches move."""
     url = _resolve_url(args)
     repo = _resolve_repo(args)
     cred = do_login(url, prefer_paste=args.paste)
@@ -132,10 +132,13 @@ def cmd_list(args) -> int:
             name = ref.get("id", "")
             if not name or name in RESERVED_BRANCHES:
                 continue
-            if client.object_exists(repo, name, f"{dataset_prefix()}/data.yaml"):
-                layout = f"{dataset_prefix()}/"
-            elif client.object_exists(repo, name, f"{dataset_prefix()}/{name}/data.yaml"):
+            # By the files present, not a format marker: this template's
+            # datasets need no data.yaml.
+            if client.has_objects(repo, name, f"{dataset_prefix()}/{name}/") and not \
+                    client.has_objects(repo, name, f"{dataset_prefix()}/data.yaml"):
                 layout = f"{dataset_prefix()}/{name}/ (old layout)"
+            elif client.has_objects(repo, name, f"{dataset_prefix()}/"):
+                layout = f"{dataset_prefix()}/"
             else:
                 continue
             rows.append((name, "tag" if kind == "tags" else "branch",

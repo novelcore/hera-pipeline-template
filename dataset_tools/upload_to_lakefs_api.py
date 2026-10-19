@@ -26,7 +26,7 @@ import sys
 
 from dataset_cli.lakefs_client import LakeFSClient
 from dataset_cli.login import Credential, login as do_login, save_session
-from dataset_cli.sync import check_branch_name, dataset_prefix, open_branch, sync as do_sync
+from dataset_cli.sync import branch_source, check_branch_name, dataset_prefix, sync as do_sync
 
 
 def main() -> None:
@@ -57,7 +57,7 @@ def main() -> None:
         cred = do_login(url)
 
     client = LakeFSClient(url, cookie=cred.cookie, token=cred.token, concurrency=concurrency)
-    created_from = open_branch(client, repo, branch, None)
+    created_from = branch_source(client, repo, branch, None)
 
     do_sync(pathlib.Path(local), client, repo, branch,
             prefix=prefix, concurrency=concurrency,

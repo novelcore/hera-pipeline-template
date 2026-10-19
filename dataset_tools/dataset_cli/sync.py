@@ -18,9 +18,13 @@ read. Because the sync mirrors, callers that act for a person pass
 ``confirm_deletes=True`` so remote files are never deleted silently.
 
 A dataset uploaded before the version folder was dropped sits one level deeper,
-at ``dataset/<data-version>/`` (its own ``data.yaml``). Apps still on the old
-step code read it there, and one lakeFS repo serves every app of a project, so
-the mirror never deletes such a folder unless asked (``remove_legacy``).
+at ``dataset/<branch>/`` (the old default version = the branch name). Apps still
+on the old step code read it there, and one lakeFS repo serves every app of a
+project, so the mirror never deletes that folder unless asked (``remove_legacy``).
+
+A new branch is created only once the plan is confirmed, and removed again if
+the upload fails: a half-made branch would otherwise be a copy of its source
+that runs train on as if it were the dataset.
 """
 from __future__ import annotations
 
@@ -57,22 +61,17 @@ def check_branch_name(branch: str) -> None:
         sys.exit(f"ERROR: '{branch}' is reserved for pipeline outputs; pick another dataset name.")
 
 
-def open_branch(client: LakeFSClient, repo: str, branch: str, source: str | None,
-                dry_run: bool = False) -> str | None:
-    """Make sure ``branch`` exists. Returns the ref it was created from, or None
-    when it already existed. A new branch starts as a copy of ``source`` (the
-    repository's default branch when None), so the sync uploads only the files
-    that differ from it. A dry run creates nothing."""
+def branch_source(client: LakeFSClient, repo: str, branch: str, source: str | None) -> str | None:
+    """The ref a NEW ``branch`` will start as a copy of (``source``, else the
+    repository's default branch), or None when ``branch`` already exists. The
+    sync diffs against it, so only the files that differ upload, and creates
+    the branch itself once the plan is confirmed."""
     if client.branch_exists(repo, branch):
         if source:
             print(f"Branch '{branch}' already exists — --from {source} is ignored.")
         return None
     source = source or client.default_branch(repo)
-    if dry_run:
-        print(f"Branch '{branch}' does not exist — a real run creates it from '{source}'.")
-        return source
-    print(f"Branch '{branch}' does not exist — creating it from '{source}'.")
-    client.ensure_branch(repo, branch, source)
+    print(f"Branch '{branch}' does not exist — it will start as a copy of '{source}'.")
     return source
 
 
@@ -146,26 +145,26 @@ def _remote_index(client: LakeFSClient, repo: str, ref: str, prefix: str) -> dic
     return out
 
 
-def _legacy_roots(remote: dict[str, str], local: dict, prefix: str) -> list[str]:
-    """Old-layout datasets under ``prefix``: a ``<prefix>/<sub>/data.yaml`` on the
-    remote that the local folder does not have (so it is not part of this dataset)."""
-    roots = set()
-    head = f"{prefix}/" if prefix else ""
-    for repo_path in remote:
-        rest = repo_path[len(head):]
-        sub, _, name = rest.partition("/")
-        if name == "data.yaml" and repo_path not in local:
-            roots.add(f"{head}{sub}/")
-    return sorted(roots)
+def _legacy_roots(remote: dict[str, str], local: dict, prefix: str, name: str) -> list[str]:
+    """This dataset's old-layout folder, ``<prefix>/<name>/`` (the old default
+    version folder), when the remote has it and the local folder does not. Only
+    that one: another dataset's old folder copied onto a new branch is nobody's
+    data there, so the mirror removes it like any other stray file."""
+    root = f"{prefix}/{name}/" if prefix else f"{name}/"
+    if any(p.startswith(root) for p in remote) and not any(p.startswith(root) for p in local):
+        return [root]
+    return []
 
 
-def plan_sync(root: pathlib.Path, client: LakeFSClient, repo: str, branch: str,
-              prefix: str, remove_legacy: bool = False) -> SyncPlan:
+def plan_sync(root: pathlib.Path, client: LakeFSClient, repo: str, ref: str,
+              prefix: str, remove_legacy: bool = False, name: str | None = None) -> SyncPlan:
+    """Diff the local folder against ``ref`` (the branch, or for a new branch the
+    ref it will be copied from). ``name`` is the dataset (branch) name."""
     local = _local_index(root, prefix)
-    remote = _remote_index(client, repo, branch, prefix)
+    remote = _remote_index(client, repo, ref, prefix)
     plan = SyncPlan()
     if not remove_legacy:
-        plan.legacy = _legacy_roots(remote, local, prefix)
+        plan.legacy = _legacy_roots(remote, local, prefix, name or ref)
 
     for repo_path, (local_path, md5) in local.items():
         remote_sum = remote.get(repo_path)
@@ -219,13 +218,17 @@ def sync(root: pathlib.Path, client: LakeFSClient, repo: str, branch: str,
          commit_message: str | None = None, extra_metadata: dict | None = None,
          confirm_deletes: bool = False, remove_legacy: bool = False,
          created_from: str | None = None, validated: bool = True) -> str | None:
-    """Execute the incremental sync and commit. Returns the commit id (or None)."""
-    # A dry run against a branch that does not exist yet diffs the ref it would
-    # be created from.
-    diff_ref = created_from if (dry_run and created_from) else branch
+    """Execute the incremental sync and commit. Returns the commit id (or None).
+
+    ``created_from``: ``branch`` does not exist yet and starts as a copy of this
+    ref (see branch_source). The diff runs against it, and the branch is
+    created only after the plan is confirmed — and deleted again if the upload
+    fails."""
+    diff_ref = created_from or branch
     print(f"Diffing local tree against lakefs://{repo}/{diff_ref}"
           f"{('/' + prefix) if prefix else ' (root)'} …")
-    plan = plan_sync(root, client, repo, diff_ref, prefix, remove_legacy=remove_legacy)
+    plan = plan_sync(root, client, repo, diff_ref, prefix, remove_legacy=remove_legacy,
+                     name=branch)
 
     print(f"  add/changed: {len(plan.add)}")
     print(f"  delete:      {len(plan.delete)}")
@@ -236,7 +239,11 @@ def sync(root: pathlib.Path, client: LakeFSClient, repo: str, branch: str,
 
     if plan.changes == 0:
         print("Nothing to sync — branch already matches local.")
-        return None if dry_run else client.branch_tip(repo, branch)
+        if dry_run:
+            return None
+        if created_from:
+            client.ensure_branch(repo, branch, created_from)
+        return client.branch_tip(repo, branch)
 
     if dry_run:
         for _, rp in plan.add[:20]:
@@ -248,6 +255,10 @@ def sync(root: pathlib.Path, client: LakeFSClient, repo: str, branch: str,
 
     if confirm_deletes and plan.delete:
         _confirm_deletes(plan, repo, branch, created_from)
+
+    if created_from:
+        print(f"Creating branch '{branch}' from '{created_from}'.")
+        client.ensure_branch(repo, branch, created_from)
 
     # 1) uploads
     up_failures = _run_pool(
@@ -267,6 +278,10 @@ def sync(root: pathlib.Path, client: LakeFSClient, repo: str, branch: str,
         print(f"\n✗ {len(failures)} operation(s) failed — NOT committing. First 10:")
         for f in failures[:10]:
             print(f"    {f}")
+        if created_from:
+            # Never leave a half-made dataset behind (a copy of its source).
+            client.delete_branch(repo, branch)
+            print(f"  Removed the new branch '{branch}'; re-run to try again.")
         sys.exit(1)
 
     # 3) single commit on the branch
