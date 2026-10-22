@@ -11,7 +11,7 @@ On the pull request page, click the green **Merge pull request** button. Then cl
 That is your part done. Really. From here the platform takes over.
 
 !!! note "Not sure if you should merge?"
-    If someone on your team reviews changes first, wait for their go ahead. When in doubt, ask your Novelcore contact before you merge. Merging is easy to do and there is no rush.
+    If someone on your team reviews changes first, wait for their go ahead. When in doubt, ask your platform contact before you merge. Merging is easy to do and there is no rush.
 
 ## Step 2. Let the platform build
 

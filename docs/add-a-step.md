@@ -144,4 +144,4 @@ That is the whole job. You made a folder, wrote a small program, wrote a Dockerf
 Next you will send this in and watch it get checked. Go to [Send your change in](send-it-in.md).
 
 !!! tip "Need one step to hand data to the next?"
-    Steps do not share a disk. If a step needs a result from the step before it, the first step writes a small file and declares it as an output. The next step receives it automatically. See [When something breaks](troubleshooting.md) for the short version, or ask your Novelcore contact to point you at the developer notes.
+    Steps do not share a disk. If a step needs a result from the step before it, the first step writes a small file and declares it as an output. The next step receives it automatically. See [When something breaks](troubleshooting.md) for the short version, or ask your platform contact to point you at the developer notes.

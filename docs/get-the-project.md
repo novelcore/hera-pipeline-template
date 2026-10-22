@@ -4,7 +4,7 @@ Now you will copy the project from GitHub onto your computer. This is called clo
 
 ## Step 1. Find the project address
 
-Open the project page on GitHub in your browser. Your Novelcore contact will send you the link. It looks like this:
+Open the project page on GitHub in your browser. Your platform contact will send you the link. It looks like this:
 
 ```
 https://github.com/novelcore/your-project-name

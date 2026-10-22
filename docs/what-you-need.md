@@ -7,7 +7,7 @@ Before you start, set up a few things on your computer. This is a one time job. 
 GitHub is the website where your project lives. Think of it as a shared folder for code, with a history of every change.
 
 - If you do not have an account, make one at [github.com](https://github.com).
-- Tell your Novelcore contact your GitHub username. They will give your account access to the project. Without access you cannot see the project or send changes.
+- Tell your platform contact your GitHub username. They will give your account access to the project. Without access you cannot see the project or send changes.
 
 ## Git
 
@@ -43,7 +43,7 @@ Each step in your pipeline gets packed into a small box called an image. Docker 
 Tick these off before moving on:
 
 - [ ] I have a GitHub account.
-- [ ] My Novelcore contact gave my account access to the project.
+- [ ] My platform contact gave my account access to the project.
 - [ ] Git is installed and `git --version` shows a number.
 - [ ] Visual Studio Code is installed.
 - [ ] Docker Desktop is installed (optional for now).
