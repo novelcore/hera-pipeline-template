@@ -124,6 +124,33 @@ names:
 
 ---
 
+## Datasets are branches
+
+Each dataset name is a branch of your project's lakeFS repository, and the files
+sit at `<name>/dataset/` on it — the same path on every branch. That is what makes
+versions cheap:
+
+- **A new name starts as a copy** of the default branch (`main`), or of `--from
+  <name>`. Copying is instant and stores nothing twice, so when your folder is a
+  variant of an existing dataset only the changed files upload. Make a variant
+  with `--branch cats-v2 --from cats`.
+- **lakeFS can compare and merge them**: in the lakeFS UI, *Compare* two datasets
+  to see exactly which files differ, or merge a variant back.
+- **Freeze a version** with a lakeFS tag (UI → *Tags*); a tag name works as
+  `data-ref` too and never changes.
+- **See what exists**: `kubecore-dataset list` prints every dataset (branches and
+  tags) with its latest commit.
+
+A step that reads `s3://<repo>/<data-ref>/dataset/` reads the branch as it is at
+that moment; resolve `data-ref` to a commit once per run (the YOLO template's
+dataset-loading does, and records it in MLflow) to read one fixed snapshot.
+
+> **Older uploads** sit one level deeper, at `<name>/dataset/<name>/`. Runs still
+> read them there, and a sync never deletes them unless you pass `--remove-legacy`
+> (apps on older step code in the same project may still read them).
+
+---
+
 ## After uploading
 
 Run your pipeline from the Argo UI and type your dataset name in the `data-ref`
@@ -142,7 +169,8 @@ you're running outside the app clone:
 | `--url` / `LAKEFS_URL` | your lakeFS URL (auto-discovered otherwise) |
 | `--repo` / `LAKEFS_REPO` | your lakeFS repo (auto-discovered otherwise) |
 | `--branch` (sync) / 2nd argument (upload-dataset.py) | the dataset name, which is what you type as `data-ref` |
-| `--data-version` | a version folder inside the dataset (default: same as the name) |
+| `--from` | when the name is new, start it as a copy of this dataset/tag (default: the default branch) |
+| `--remove-legacy` | also delete a dataset left in the old `dataset/<version>/` layout on that branch |
 | `--yes` | don't ask before removing files that aren't in your folder |
 | `--paste` | guided sign-in instead of the automatic browser flow |
 | `--dry-run` | show what would change without uploading |

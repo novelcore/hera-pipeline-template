@@ -15,13 +15,12 @@ sys.path.insert(0, str(ROOT))
 from kubecore import enhance  # noqa: E402
 
 CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
-CATALOG = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "dataset-catalog.yaml").read_text())
 
 
 def _enhanced(ctx):
     import runpy
     ns = runpy.run_path(str(ROOT / "pipeline.py"), run_name="__pipeline__")
-    return enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), ctx, CATALOG)
+    return enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), ctx)
 
 
 def _twin_env(ctx):

@@ -16,7 +16,7 @@ Argo `WorkflowTemplate`. Developers never touch it; this README is for the
 |---|---|---|---|
 | `authoring.py` | render time (CI, tokenless) | no | `step()`/`pipeline()` → plain Hera `Container`s + Argo DAG; injects the compose-and-validate step as task 1; `gpu=True` → `Resources(gpus=1)` |
 | `derive_tree.py` | render time (CI, tokenless) | no | composes the Hydra `config/` tree, derives the submit-form parameters (group→dropdown, scalar-leaf→field, dots→dashes), runs the `reads=` render gate, registers structured-config schemas |
-| `enhance.py` | render time (CI, platform step) | no client code | post-processes the raw WFT: forces the app-scoped name + image indirection, injects env/secrets/scheduling/sizing/per-step class dropdowns/dynamic enums. Plain dicts, **no Hera dependency** |
+| `enhance.py` | render time (CI, platform step) | no client code | post-processes the raw WFT: forces the app-scoped name + image indirection, injects env/secrets/scheduling/sizing/per-step class dropdowns. Plain dicts, **no Hera dependency** |
 | `compose.py` | **run time** (inside the pipeline's first step container) | no | `python -m kubecore.compose` — composes tree+overrides → the single resolved `params.yaml`, validates, fails fast pre-GPU |
 
 `authoring` + `derive_tree` are **imported** by the developer's `pipeline.py`.

@@ -8,8 +8,9 @@ valid ``_lakefs_oauth2`` session cookie (or a Zitadel JWT bearer) and rejects a
 raw admin Basic header, so the admin key is useless to a headless caller. The
 credential the CLI carries is therefore the session cookie — oauth2-proxy
 validates it and forwards to nginx, which injects admin Basic before lakeFS.
-This client carries only that cookie; no lakeFS access keys ever live on the
-developer's machine. (See login.py for how the cookie is captured same-origin.)
+This client carries a Zitadel bearer from the browser login (or, as a fallback,
+a pasted session cookie); no lakeFS access keys ever live on the developer's
+machine. (See login.py.)
 
 Everything talks to the SSO-protected ingress `https://lakefs-<project>.<baseDns>`
 over the lakeFS REST API v1. See ``dataset_tools/README.md`` for the full flow.
@@ -122,6 +123,27 @@ class LakeFSClient:
                 f"HTTP {r.status_code} {r.text[:300]}"
             )
 
+    def delete_branch(self, repo: str, branch: str) -> None:
+        r = self.session.delete(
+            self._url(f"/repositories/{repo}/branches/{quote(branch, safe='')}"),
+            timeout=60,
+            allow_redirects=False,
+        )
+        if r.status_code not in (204, 404):
+            raise LakeFSError(f"delete branch {branch} failed: HTTP {r.status_code} {r.text[:300]}")
+
+    def has_objects(self, repo: str, ref: str, prefix: str) -> bool:
+        """True iff ``ref`` holds at least one object under ``prefix``."""
+        r = self.session.get(
+            self._url(f"/repositories/{repo}/refs/{quote(ref, safe='')}/objects/ls"),
+            params={"prefix": prefix, "amount": 1},
+            timeout=60,
+            allow_redirects=False,
+        )
+        if r.status_code != 200:
+            return False
+        return any(o.get("path_type", "object") == "object" for o in r.json().get("results", []))
+
     def default_branch(self, repo: str) -> str:
         r = self.session.get(
             self._url(f"/repositories/{quote(repo, safe='')}"),
@@ -139,7 +161,7 @@ class LakeFSClient:
         """Yield every object under ``prefix`` on ``ref`` (paginated).
 
         Each dict carries at least ``path``, ``checksum`` and ``size_bytes``.
-        Uses ``&user_metadata=false`` and a large page size to minimise calls.
+        Uses a large page size to minimise calls.
         """
         after = ""
         while True:
@@ -159,6 +181,26 @@ class LakeFSClient:
                 # skip common-prefix "directory" entries (path_type != object)
                 if obj.get("path_type", "object") == "object":
                     yield obj
+            pagination = body.get("pagination", {})
+            if not pagination.get("has_more"):
+                return
+            after = pagination.get("next_offset", "")
+
+    def list_refs(self, repo: str, kind: str) -> Iterator[dict]:
+        """Yield every branch (``kind="branches"``) or tag (``kind="tags"``):
+        dicts with ``id`` (the name) and ``commit_id``."""
+        after = ""
+        while True:
+            r = self.session.get(
+                self._url(f"/repositories/{repo}/{kind}"),
+                params={"after": after, "amount": 1000},
+                timeout=60,
+                allow_redirects=False,
+            )
+            if r.status_code != 200:
+                raise LakeFSError(f"list {kind} on {repo} failed: HTTP {r.status_code} {r.text[:300]}")
+            body = r.json()
+            yield from body.get("results", [])
             pagination = body.get("pagination", {})
             if not pagination.get("has_more"):
                 return

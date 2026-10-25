@@ -16,7 +16,6 @@ sys.path.insert(0, str(ROOT))
 from kubecore import enhance  # noqa: E402
 
 CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
-CATALOG = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "dataset-catalog.yaml").read_text())
 
 
 def _render():
@@ -26,7 +25,7 @@ def _render():
 
 
 def _enhanced():
-    return enhance.enhance(_render(), CONTEXT, CATALOG)
+    return enhance.enhance(_render(), CONTEXT)
 
 
 def test_pipeline_renders():

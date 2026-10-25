@@ -8,7 +8,8 @@ receive this file's content as an input parameter; they never see override
 tokens.
 
 Override semantics (group swap vs touched leaves):
-- GROUP tokens (key contains '/') are applied FIRST.
+- GROUP tokens (key contains '/', or names a top-level config/<group>/
+  directory) are applied FIRST.
 - A scalar-leaf token whose submitted value equals its RENDER-TIME
   default (--render-defaults manifest, baked into the WFT args) is
   DROPPED — an untouched form field follows whatever group you
@@ -17,9 +18,16 @@ Override semantics (group swap vs touched leaves):
 Without this elision a full form submission would freeze every leaf at
 the original defaults and silently revert any group swap.
 
+Override typing: a changed leaf keeps the type its config leaf DECLARES (the
+structured-config node type, else the type of its default in the tree
+composed with the group tokens). A string leaf is always Hydra-quoted, so a
+form value such as `3e286280`, `1234`, `true` or `null` stays a string
+instead of being parsed by its look (3e286280 -> inf). See _typed_override.
+
 Failure modes concentrated here, all before any GPU time:
 - unknown/typo'd override key   -> Hydra strict mode rejects it
-- type/enum-invalid value       -> structured-config validation
+- type/enum-invalid value       -> structured-config validation, or a
+                                   ComposeError for an int/float/bool leaf
 - step reads= section missing   -> --require check below
 - ADVANCED override with unknown keys -> struct-mode merge rejects it
 - ADVANCED override touching platform.* -> hard error (below)
@@ -28,12 +36,14 @@ Failure modes concentrated here, all before any GPU time:
 
 import argparse
 import json
+import re
 import sys
 from enum import Enum
 from pathlib import Path
 
 import yaml
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from omegaconf.nodes import BooleanNode, EnumNode, FloatNode, IntegerNode, StringNode
 
 from kubecore import derive_tree
 
@@ -65,53 +75,149 @@ def _normalize_override_token(token: str) -> str:
     return f"{key.strip()}={value.strip()}"
 
 
-def _quote_override_value(token: str) -> str:
-    """Quote a scalar override's value so Hydra's override grammar accepts it.
+def _hydra_quote(value: str) -> str:
+    """Wrap a string in double quotes per Hydra's override grammar.
 
-    Form values reach us as `key=value` tokens. Hydra's override parser rejects
-    a bare value containing a space or various special characters (a
-    `LexerNoViableAltException`) — so a perfectly ordinary config string like
-    `label=📊 Data summary` or `name=my run` would fail compose. Wrap the value
-    in double quotes (escaping any it contains) unless it is already quoted or
-    is a simple bare token Hydra parses fine. Group tokens (key contains '/')
-    and the key itself are left untouched.
+    Inside a quoted value Hydra treats a backslash literally EXCEPT in a run of
+    backslashes that precedes a quote or the end of the string, where each one
+    must be doubled; an embedded double quote is escaped as \\". Doubling every
+    backslash (the old behaviour) corrupted `C:\\data` into `C:\\\\data`."""
+    escaped = re.sub(
+        r'(\\*)("|$)',
+        lambda m: m.group(1) * 2 + ('\\"' if m.group(2) else ""),
+        value,
+    )
+    return f'"{escaped}"'
 
-    HISTORY (#867): this helper originally shipped only as a hotfix on an
-    app's VENDORED copy and was lost when the app re-synced to template HEAD
-    — it lives here now so the template is the single source of truth.
-    """
+
+def _is_quoted(value: str) -> bool:
+    return len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]
+
+
+def _leaf_kind(base_cfg, key: str):
+    """The declared type of the config leaf `key` in the composed base config.
+
+    Returns one of "str", "int", "float", "bool", "enum", "list", "dict", or
+    None when the key does not exist. Source of truth, in order:
+      1. the node's DECLARED type (structured-config schema: StringNode,
+         IntegerNode, FloatNode, BooleanNode, EnumNode) — holds even when the
+         default is None (Optional[int] stays an int);
+      2. for untyped yaml leaves (AnyNode), the type of the DEFAULT value.
+    An untyped leaf whose default is null or ??? carries no type, so it is a
+    string: a submitted form value is text, and we never guess a type from
+    the value's look."""
+    if base_cfg is None:
+        return None
+    parent_key, _, leaf = key.rpartition(".")
+    parent = OmegaConf.select(base_cfg, parent_key) if parent_key else base_cfg
+    if not isinstance(parent, DictConfig):
+        return None
+    node = parent._get_node(leaf)
+    if node is None:
+        return None
+    if isinstance(node, ListConfig):
+        return "list"
+    if isinstance(node, DictConfig):
+        return "dict"
+    for cls, kind in ((BooleanNode, "bool"), (IntegerNode, "int"), (FloatNode, "float"),
+                      (EnumNode, "enum"), (StringNode, "str")):
+        if isinstance(node, cls):
+            return kind
+    default = node._value()
+    if isinstance(default, bool):  # before int: bool is an int subclass
+        return "bool"
+    if isinstance(default, int):
+        return "int"
+    if isinstance(default, float):
+        return "float"
+    return "str"  # str, Enum value, None (null) or ??? (missing)
+
+
+def _typed_override(token: str, base_cfg) -> str:
+    """Render a scalar override so Hydra yields the value in the type its
+    config leaf DECLARES — never the type the value happens to look like.
+
+    Form values are all text (Argo parameters carry no type), and Hydra's
+    override grammar parses a BARE value by its look: `probe.label=3e286280`
+    became float inf (written `label: .inf`), `name=1234` an int, `tag=true` a
+    bool, `x=null` None. So the type comes from the composed base config
+    (see _leaf_kind):
+      - str / enum / untyped-null leaf -> always Hydra-quoted (and escaped);
+      - int / float / bool leaf        -> emitted as a canonical bare literal
+        (float leaves keep a float: `lr=1` -> `lr=1.0`); a value that is not
+        a valid literal of that type fails compose with a clear error;
+      - list / dict leaf               -> passed through (Hydra list/dict
+        syntax is the only way to write one);
+      - unknown key                    -> quoted as a string (a typo still
+        fails Hydra's strict mode; a `+new` key gets a string).
+    Already-quoted and empty values, group swaps (key has '/'), deletions
+    (`~key`) and hydra.* keys pass through unchanged.
+
+    HISTORY (#867): quoting originally shipped only as a hotfix on an app's
+    VENDORED copy and was lost when the app re-synced to template HEAD — it
+    lives here now so the template is the single source of truth. The first
+    version quoted only values failing a bare-token regex, which let numeric-
+    looking strings through unquoted (the 3e286280 -> inf bug)."""
     key, sep, value = token.partition("=")
-    if not sep or "/" in key:
-        return token  # not a scalar leaf assignment (or a group swap)
-    if value == "" or (value[0] in "\"'" and value[-1] == value[0]):
-        return token  # empty, or already quoted
-    # Bare tokens Hydra accepts as-is: alphanumerics, dot, underscore, hyphen,
-    # plus/at/colon/slash for paths — anything else (space, emoji, punctuation)
-    # needs quoting.
-    import re
-    if re.fullmatch(r"[A-Za-z0-9._+@:/\-]*", value):
+    if not sep or _is_group_key(key) or key.startswith("~"):
+        return token  # not a scalar leaf assignment (group swap / deletion)
+    lookup = key.lstrip("+")
+    if lookup.startswith("hydra.") or value == "" or _is_quoted(value):
+        return token  # hydra internals, empty, or already quoted
+    kind = _leaf_kind(base_cfg, lookup)
+    if kind in ("list", "dict"):
         return token
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'{key}="{escaped}"'
+    if kind == "bool":
+        if value.lower() not in ("true", "false"):
+            raise ComposeError(f"{lookup}={value!r}: '{lookup}' is a bool; use true or false")
+        return f"{key}={value.lower()}"
+    if kind == "int":
+        try:
+            return f"{key}={int(value, 10)}"
+        except ValueError:
+            raise ComposeError(f"{lookup}={value!r}: '{lookup}' is an int") from None
+    if kind == "float":
+        try:
+            return f"{key}={float(value)!r}"
+        except ValueError:
+            raise ComposeError(f"{lookup}={value!r}: '{lookup}' is a float") from None
+    return f"{key}={_hydra_quote(value)}"
 
 
-def order_overrides(overrides: list, render_defaults: dict) -> list:
-    """Groups first; untouched scalar leaves elided (see module docstring).
+def _is_group_key(key: str) -> bool:
+    """A config-group swap: a nested group path (`train/optimizer`) or a
+    top-level group (`model`, i.e. a `config/model/` directory)."""
+    key = key.lstrip("+~")
+    return "/" in key or (key != "" and (derive_tree.CONFIG_DIR / key).is_dir())
 
-    Tokens are whitespace-normalized first (#867: invisible trailing CR from
-    the submit plumbing), then changed scalar values are quoted so Hydra
-    accepts strings with spaces / special characters."""
+
+def _split_overrides(overrides: list, render_defaults: dict):
+    """(group tokens, changed scalar tokens): tokens whitespace-normalized
+    (#867: invisible trailing CR from the submit plumbing); untouched scalar
+    leaves (value == render-time default) elided."""
     groups, changed = [], []
     for token in overrides:
         token = _normalize_override_token(token)
         key, _, value = token.partition("=")
-        if "/" in key:
+        if _is_group_key(key):
             groups.append(token)
         elif render_defaults and key in render_defaults and value == render_defaults[key]:
             continue  # untouched -> follows the selected group
         else:
-            changed.append(_quote_override_value(token))
-    return groups + changed
+            changed.append(token)
+    return groups, changed
+
+
+def order_overrides(overrides: list, render_defaults: dict, base_cfg=None) -> list:
+    """Groups first; untouched scalar leaves elided (see module docstring);
+    changed scalar values rendered in their declared type (_typed_override).
+
+    `base_cfg` is the tree composed with the group tokens only — the type
+    source. When omitted it is composed here."""
+    groups, changed = _split_overrides(overrides, render_defaults)
+    if changed and base_cfg is None:
+        base_cfg = derive_tree.compose_tree(groups)
+    return groups + [_typed_override(token, base_cfg) for token in changed]
 
 
 def _plain(value):

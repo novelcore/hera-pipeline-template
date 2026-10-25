@@ -4,7 +4,8 @@ Subcommands:
   login     Log in to lakeFS via the browser (Zitadel PKCE login, paste fallback).
   validate  Check a local dataset against the Ultralytics-pose contract.
   sync      Validate, then incrementally sync (adds+deletes) to a lakeFS branch.
-  upload    Alias for `sync` with login + validate wired in (the old one-liner).
+  upload    Same as `sync` (the old one-liner's name).
+  list      Show the datasets in the repository (branches and tags holding one).
 
 Config precedence for every value: CLI flag > environment variable > default.
   LAKEFS_URL     external ingress, e.g. https://lakefs-<project>.<baseDns> (auto-discovered from .kubecore/dataset-config.yaml)
@@ -24,7 +25,7 @@ from . import __version__
 from .appconfig import config_value
 from .lakefs_client import LakeFSClient
 from .login import login as do_login
-from .sync import dataset_prefix, sync as do_sync
+from .sync import RESERVED_BRANCHES, branch_source, check_branch_name, dataset_prefix, sync as do_sync
 from .validate import validate_dataset
 
 
@@ -76,14 +77,18 @@ def cmd_sync(args, *, do_auth: bool = True) -> int:
     repo = _resolve_repo(args)
     branch = args.branch or _env("LAKEFS_BRANCH", "main")
     root = pathlib.Path(args.dataset_dir)
+    if args.data_version:
+        sys.exit("ERROR: --data-version was removed — a dataset now lives at "
+                 "<branch>/dataset/. Keep each version on its own branch (--branch).")
+    check_branch_name(branch)
 
-    version = args.data_version or branch
-    prefix = (args.prefix or "").strip("/") or dataset_prefix(version)
-    print(f"Dataset name (data-ref): {branch}   data-version: {version}")
+    prefix = (args.prefix or "").strip("/") or dataset_prefix()
+    print(f"Dataset name (data-ref): {branch}")
     print(f"Target: s3://{repo}/{branch}/{prefix}/\n")
 
     # 1) validate (unless skipped)
-    if not args.skip_validation:
+    validated = not args.skip_validation
+    if validated:
         result = validate_dataset(root)
         print(result.report())
         if not result.ok:
@@ -95,25 +100,56 @@ def cmd_sync(args, *, do_auth: bool = True) -> int:
     client = LakeFSClient(url, cookie=cred.cookie, token=cred.token,
                           concurrency=args.concurrency)
 
-    # 3) ensure branch exists (create from default if new)
-    if not client.branch_exists(repo, branch):
-        source = client.default_branch(repo)
-        print(f"Branch '{branch}' does not exist — creating from '{source}'.")
-        client.ensure_branch(repo, branch, source)
+    # 3) ensure branch exists (a new one starts as a copy of --from / the default branch)
+    created_from = branch_source(client, repo, branch, args.source)
 
     # 4) incremental sync + commit
     commit_id = do_sync(
         root, client, repo, branch,
         prefix=prefix, concurrency=args.concurrency, dry_run=args.dry_run,
-        extra_metadata={"branch": branch, "data_version": version},
-        confirm_deletes=not args.yes,
+        extra_metadata={"branch": branch},
+        confirm_deletes=not args.yes, remove_legacy=args.remove_legacy,
+        created_from=created_from, validated=validated,
     )
     if commit_id and not args.dry_run:
         # No cluster/kubectl instructions here: the client has only the browser
         # and the run form.
         print(f"\n✓ Done. Dataset '{branch}' is uploaded and versioned (commit {commit_id[:12]}).")
-        print(f"  When you run the pipeline, set data-ref = {branch}"
-              + (f" and data-version = {version}" if version != branch else "") + ".")
+        print(f"  When you run the pipeline, set data-ref = {branch}.")
+    return 0
+
+
+def cmd_list(args) -> int:
+    """Datasets = branches and tags holding files under dataset/ (the old
+    layout: under dataset/<ref>/). Tags are frozen; branches move."""
+    url = _resolve_url(args)
+    repo = _resolve_repo(args)
+    cred = do_login(url, prefer_paste=args.paste)
+    client = LakeFSClient(url, cookie=cred.cookie, token=cred.token)
+    rows = []
+    for kind in ("branches", "tags"):
+        for ref in client.list_refs(repo, kind):
+            name = ref.get("id", "")
+            if not name or name in RESERVED_BRANCHES:
+                continue
+            # By the files present, not a format marker: this template's
+            # datasets need no data.yaml.
+            if client.has_objects(repo, name, f"{dataset_prefix()}/{name}/") and not \
+                    client.has_objects(repo, name, f"{dataset_prefix()}/data.yaml"):
+                layout = f"{dataset_prefix()}/{name}/ (old layout)"
+            elif client.has_objects(repo, name, f"{dataset_prefix()}/"):
+                layout = f"{dataset_prefix()}/"
+            else:
+                continue
+            rows.append((name, "tag" if kind == "tags" else "branch",
+                         (ref.get("commit_id") or "")[:12], layout))
+    if not rows:
+        print(f"No datasets in '{repo}' yet. Upload one with: kubecore-dataset sync <dir> --branch <name>")
+        return 0
+    print(f"Datasets in '{repo}' (use the name as data-ref):")
+    width = max(len(r[0]) for r in rows)
+    for name, kind, commit, layout in rows:
+        print(f"  {name:<{width}}  {kind:<6}  {commit}  {layout}")
     return 0
 
 
@@ -131,15 +167,20 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--repo", help="lakeFS repository (or env LAKEFS_REPO)")
         sp.add_argument("--branch", help="dataset name = the data-ref you pick when running "
                                          "(or env LAKEFS_BRANCH, default main)")
+        sp.add_argument("--from", dest="source", default=None,
+                        help="when --branch is new, start it as a copy of this branch/tag "
+                             "(default: the repository's default branch); only changed files upload")
         sp.add_argument("--data-version", default=None,
-                        help="data-version folder inside the dataset (default: same as --branch)")
+                        help=argparse.SUPPRESS)  # removed; parsed only to explain why
         sp.add_argument("--yes", action="store_true",
                         help="don't ask before deleting remote files that are not in your folder")
+        sp.add_argument("--remove-legacy", action="store_true",
+                        help="also delete old-layout dataset/<version>/ folders on the branch")
         sp.add_argument("--concurrency", type=int, default=16)
         sp.add_argument("--paste", action="store_true",
                         help="skip the browser login; use guided cookie paste")
         sp.add_argument("--prefix", default="",
-                        help="advanced: override the standard dataset/<data-version> location")
+                        help="advanced: override the standard dataset/ location")
         sp.add_argument("--allow-prefix", action="store_true",
                         help=argparse.SUPPRESS)  # kept so old commands still parse; no longer needed
         sp.add_argument("--skip-validation", action="store_true")
@@ -164,6 +205,12 @@ def build_parser() -> argparse.ArgumentParser:
     up.add_argument("dataset_dir", help="path to the local dataset directory")
     add_common(up)
     up.set_defaults(func=cmd_sync)
+
+    ls = sub.add_parser("list", help="list the datasets (branches and tags) in the repository")
+    ls.add_argument("--url", help="lakeFS ingress URL (or env LAKEFS_URL)")
+    ls.add_argument("--repo", help="lakeFS repository (or env LAKEFS_REPO)")
+    ls.add_argument("--paste", action="store_true", help="use guided cookie paste")
+    ls.set_defaults(func=cmd_list)
 
     return p
 

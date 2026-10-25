@@ -103,7 +103,6 @@ class QuantizationMode(Enum):
 class DataConfig:
     ref: str = "main"
     source: DataSource = DataSource.lakefs
-    version: str = ""
     path_override: str = ""
     sample_size: str = ""
     seed: int = 42
@@ -117,7 +116,7 @@ class QuantizationConfig:
     calibration_seed: int = 42
     parity_frames: int = 100
     parity_max_abs_error: float = 0.05
-    output_prefix: str = "quantization"
+    output_prefix: str = ""
 
 
 # {config-store name registered in config.yaml's defaults list: node}
