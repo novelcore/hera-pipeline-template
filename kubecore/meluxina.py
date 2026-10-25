@@ -101,6 +101,7 @@ commit = os.environ.get('DATASET_COMMIT') or json.load(
 dest = pathlib.Path(os.environ['DATASET_CACHE']) / REPO / commit
 open(os.environ['DATASET_DIRFILE'], 'w').write(str(dest))
 if (dest / '.complete').exists():
+    (dest / '.complete').touch()            # last use, for the job's cache cleanup
     print('stage-in: cache hit', dest, flush=True)
     sys.exit(0)
 def ls(prefix):
@@ -624,6 +625,8 @@ def submit():
         # on Lustre, removed after a successful stage-out.
         'export KAOS_WORK=$SCR/kaos-work/$SLURM_JOB_ID; mkdir -p $KAOS_WORK/output',
         'BIND="$BIND -B $KAOS_WORK:/work"',
+        # Last use of a cached SIF, before the cleanup below can see it.
+        'touch -c "$SIF"',
         'if [ ! -f "$SIF" ]; then',
         # GCP token ONLY for GAR hosts: presenting it to Zot turns an
         # anonymous-OK pull into 401 authentication required (live job
@@ -634,6 +637,14 @@ def submit():
         ' APPTAINER_DOCKER_PASSWORD=$REG_TOKEN;; esac',
         '  apptainer pull "$SIF" docker://$IMAGE_REF || fail 231',
         'fi',
+        # PRD-1541: the image and download caches share the allocation's scratch
+        # quota with the dataset cache and only ever grew. This user's entries
+        # unused for 14 days go: SIFs, Apptainer's layer cache, in-job
+        # downloads. What this job uses was touched just above.
+        'find $SCR/sif-cache -maxdepth 1 -name "*.sif" -user "$USER" -mtime +14 -delete 2>/dev/null',
+        'find $SCR/data-cache -mindepth 3 -maxdepth 3 -name .complete -user "$USER" -mtime +14'
+        ' -printf "%h\\n" 2>/dev/null | xargs -r rm -rf',
+        'apptainer cache clean --force --days 14 >/dev/null 2>&1',
         # Start in the image's WORKDIR (Apptainer ignores it; Docker does not).
         'PWD_OPT=""; [ -n "$STEP_WORKDIR" ] && PWD_OPT="--pwd $STEP_WORKDIR"',
         # --nv only on GPU classes: on the cpu/largemem partitions there is
