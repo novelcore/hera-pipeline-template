@@ -911,6 +911,14 @@ DEFAULT_TIME_LIMIT_MINUTES = 240
 # must comfortably exceed queue + prep + time limit.
 QUEUE_ALLOWANCE_MINUTES = 480
 HPC_ANNOTATION = "platform.kubecore.io/hpc"
+# How the kubelet words a waiter pod lost with its node: Argo marks such a pod
+# Failed (a pod with a status message is never an Error), so OnError alone
+# never retries a Spot preemption or a node-pressure eviction.
+POD_LOSS_MESSAGES = ("imminent node shutdown|node is shutting down|node is draining"
+                     "|The node was low on resource|The node had condition"
+                     "|Pod was rejected|Evicted|evicted|pod deleted|Pod was deleted")
+POD_LOSS_RETRY = ("lastRetry.status == 'Error' or lastRetry.message matches '.*(%s).*'"
+                  % POD_LOSS_MESSAGES)
 
 
 def parse_time_limit(value) -> int:
@@ -1118,11 +1126,13 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
         # Per-step: Slurm time limit + queue/prep allowance (see
         # QUEUE_ALLOWANCE_MINUTES). Argo resolves the parameter here.
         "activeDeadlineSeconds": "{{inputs.parameters.deadline-seconds}}",
-        # A lost waiter pod (node preemption, eviction) is an Error, not a
+        # A lost waiter pod (node preemption, eviction, deletion) is not a
         # step failure: retry it — find_active() adopts the Slurm job by its
         # workflow-uid name, so a retried waiter re-attaches instead of
-        # submitting a duplicate.
-        "retryStrategy": {"limit": "2", "retryPolicy": "OnError"},
+        # submitting a duplicate (a PENDING job on_term cancelled is
+        # submitted afresh). A job that failed on MeluXina is not retried.
+        "retryStrategy": {"limit": "2", "retryPolicy": "Always",
+                          "expression": POD_LOSS_RETRY},
         "metadata": {"labels": {"platform.kubecore.io/compute-type": "hpc",
                                 "platform.kubecore.io/hpc-class": "{{inputs.parameters.hpc-class}}"}},
         "volumes": [{"name": "mlflow-svc", "secret": {
