@@ -788,12 +788,27 @@ TERMINAL = ('COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
 # once: a second long wait after the first resubmit must not strand the run.
 PULL_RESUBMITS = 3
 resubmits = 0
+# Why Slurm holds a queued job (Priority, Resources, AssocGrpGRESMinutes = the
+# allocation's GPU minutes are spent, ...): only slurmctld knows it, the
+# accounting record polled below does not. Printed when it changes, so a run
+# that never left the queue says why (kaos e2e 2026-10-26: two jobs PENDING
+# for the whole 2.5 h budget, reason unknown).
+pending_reason = None
 while True:
     time.sleep(30)
     try:
         job = (get(SDB + '/job/' + str(jid)).get('jobs') or [{}])[0]
         st = (job.get('state') or {}).get('current') or []
         print('state:', st, flush=True)
+        if 'PENDING' in st:
+            try:
+                reason = (get(API + '/job/' + str(jid)).get('jobs')
+                          or [{}])[0].get('state_reason') or ''
+            except Exception:
+                reason = pending_reason or ''
+            if reason != pending_reason:
+                print('pending reason:', reason, flush=True)
+                pending_reason = reason
         if ('PENDING' in st and WALLET_EXP
                 and time.time() > WALLET_EXP - WALLET_MARGIN_S):
             print('wallet expires within', WALLET_MARGIN_S // 60,
