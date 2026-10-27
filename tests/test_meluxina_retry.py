@@ -63,3 +63,14 @@ def test_a_lost_waiter_pod_is_retried():
 def test_a_failed_step_is_not_retried():
     for message in STEP_FAILED:
         assert not _retried("Failed", message), message
+
+
+def test_a_queued_job_logs_why_slurm_holds_it():
+    """The kaos e2e reads `pending reason: <Slurm state_reason>` from the twin's log to
+    tell a queue wait from a spent allocation (AssocGrpGRESMinutes). The accounting
+    record the loop polls has no live reason, so it is read from slurmctld (API)."""
+    src = meluxina.MELUXINA_SUBMIT_CODE
+    loop = src[src.index("pending_reason = None"):src.index("if any(x in TERMINAL for x in st)")]
+    assert "get(API + '/job/' + str(jid))" in loop and "state_reason" in loop
+    assert "print('pending reason:', reason, flush=True)" in loop
+    assert "if reason != pending_reason:" in loop  # once per change, not every poll
