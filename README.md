@@ -58,7 +58,7 @@ config/                THE config tree — all your parameters
 steps/<name>/          your step code + Dockerfile (one dir per step)
 kubecore/              platform-owned engine — SEEDED, DO NOT EDIT
 packages/kubecore/     the kubecore Python PACKAGE: datasets, run outputs, the `kubecore` command
-tests/, step_tests/    engine tests; step-code tests (two commands, see DEVELOPER.md §12)
+tests/, step_tests/    engine tests; step-code tests (two commands, see DEVELOPER.md §15)
 docs/                  the guides (see "Where to read next")
 pyproject.toml         PEP 621, pinned render deps
 ```
@@ -88,8 +88,10 @@ one, `dataset-default`.
 - **Templates are optional.** `kubecore dataset create` can start a repository from a
   format template (the starter layout, for example `ultralytics`), but you do not need
   one: any repository named `dataset-<something>` that you create by hand in lakeFS
-  becomes a dataset after its first commit. Any repository can also be read from code:
-  `datasets.materialize("<repo>@<ref>")` (see the package section).
+  becomes a dataset after its first commit (`kubecore dataset create <name> --template none`
+  makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
+  repository can be read from code too: `datasets.materialize("<repo>@<ref>")` (see the
+  package section). A repository with no template label is read as plain files.
 - A pipeline **never writes to a dataset**.
 
 Step by step, with every command: [first dataset → first run → your results](docs/first-run.md).
@@ -136,18 +138,27 @@ your project's lakeFS is.
 
 | command | what it does |
 |---|---|
-| `kubecore dataset create <name> [--classes a,b] [--template ultralytics]` | a new `dataset-<name>` with a starter layout |
-| `kubecore dataset pull <repo>@<ref> [dir]` | download a version to work on |
-| `kubecore dataset validate <dir>` | check a folder against the dataset's format |
-| `kubecore dataset push <dir> <repo> -m "message"` | validate, upload to a draft, open a pull request |
+| `kubecore dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
+| `kubecore dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
+| `kubecore dataset validate <dir> --format ultralytics` | check a folder against a format |
+| `kubecore dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
 | `kubecore dataset release <repo>` | tag the head of `main` as the next version |
 | `kubecore dataset list` / `versions <repo>` | what exists |
 
-From code (a step, a notebook):
+**Validation follows the template label.** `push` checks your folder against the format
+the repository is labelled with (`kaos.template`). A repository with **no template label
+validates nothing** and takes the files as they are. Add `--format ultralytics` to get the
+YOLO checks (detection, segmentation and pose labels, `nc` against `names`, an image for
+every label) on a repository that has no label.
+
+From code (a step, a notebook), any repository and any ref (`vN`, `latest`, a branch, a
+tag or a commit id):
 
 ```python
 from kubecore import datasets
-entry = datasets.materialize("dataset-cats@v2")   # local files; a data.yaml for an ultralytics dataset
+entry = datasets.materialize("dataset-cats@v2")    # ultralytics: the data.yaml; no label: the folder
+folder = datasets.materialize("my-repo@main")      # a repository you made by hand
+fmt = datasets.format_of("dataset-cats")           # "ultralytics", or "raw" when there is no label
 ```
 
 `materialize` downloads once and reuses the copy; on MeluXina it uses the copy the

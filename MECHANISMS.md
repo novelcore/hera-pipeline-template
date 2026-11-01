@@ -248,8 +248,8 @@ The gitops `workflow-template.yaml` is a Crossplane `RepositoryFile` MR with
 Crossplane seeds a one-task placeholder **once** and never issues an Update, so
 CI's git commit of the real rendered WFT is never reverted. ArgoCD `selfHeal` then
 keeps the live cluster WFT equal to what CI committed — so the platform's stated
-guarantee ("cluster state == last released pipeline") holds, and manual `kubectl`
-edits to the live WFT are reverted (everything goes through git, by design).
+guarantee ("cluster state == last released pipeline") holds, and manual changes
+to the live WFT are reverted (everything goes through git, by design).
 
 ---
 

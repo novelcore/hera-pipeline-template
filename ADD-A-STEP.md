@@ -83,8 +83,9 @@ def main() -> None:
     # Platform endpoints (if you need them) live under cfg["platform"]:
     #   cfg["platform"]["mlflow"]["tracking_uri"]
     #   cfg["platform"]["lakefs"]["endpoint"] / ["repository"]
-    # You do NOT need to configure credentials — the platform injects them as
-    # env vars (LAKEFS_ACCESS_KEY, LAKEFS_SECRET_KEY, MLFLOW_TRACKING_URI).
+    # You do NOT need to configure credentials — the platform injects them into
+    # the step's environment, and the kubecore package reads them (see
+    # docs/write-a-step.md for reading a dataset and writing results).
 
     print(f"[model-evaluation] split={evaluation['split']} "
           f"iou={evaluation['iou_threshold']}")

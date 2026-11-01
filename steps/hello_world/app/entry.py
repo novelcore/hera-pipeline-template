@@ -45,7 +45,7 @@ def describe(entry: Path) -> dict:
     """What a person wants to see about the data: its classes (a YAML entry point) or its file count."""
     if entry.is_file():
         return {"classes": (yaml.safe_load(entry.read_text()) or {}).get("names")}
-    return {"files": sum(1 for p in entry.rglob("*") if p.is_file())}
+    return {"files": sum(1 for p in entry.rglob("*") if p.is_file() and not p.name.startswith("."))}
 
 
 def write_result(cfg: dict, info: dict, entry: Path, client=None) -> str:

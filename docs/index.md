@@ -44,6 +44,14 @@ You start at the top and work down. The platform handles the middle. You press S
 
     [:octicons-arrow-right-24: Add a step](add-a-step.md)
 
+- :material-database: **Your first dataset**
+
+    ---
+
+    Make a dataset, run on it, find your results. Every command.
+
+    [:octicons-arrow-right-24: First dataset to results](first-run.md)
+
 - :material-tune: **Change a setting**
 
     ---

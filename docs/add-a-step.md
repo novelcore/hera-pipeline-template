@@ -105,14 +105,16 @@ Open `pipeline.py`. You will see something like this.
 
 ```python
 with pipeline("ml-pipeline") as p:
-    hello = step("hello-world", reads=["experiment"])
+    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
 Add one line for your new step. Make it run after the first step by pointing `needs` at it.
 
 ```python
 with pipeline("ml-pipeline") as p:
-    hello = step("hello-world", reads=["experiment"])
+    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
     goodbye = step("say-goodbye", reads=["experiment"], needs=[hello])
 ```
 

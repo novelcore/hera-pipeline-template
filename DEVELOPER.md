@@ -16,10 +16,14 @@ your-repo/
 ├── config/                  # THE experiment config tree (all your parameters)
 │   ├── config.yaml          #   defaults list (which group options are default)
 │   ├── experiment.yaml      #   a section of scalar leaves (add your own)
+│   ├── dataset.yaml         #   the `dataset` field: <dataset-repo>@<version>
 │   └── train/optimizer/{sgd,adam,adamw}.yaml     # a config GROUP (example)
-├── kubecore/                # platform-owned helpers (seeded — do not edit)
+├── kubecore/                # platform-owned engine (seeded — do not edit)
+├── packages/kubecore/       # the kubecore Python package: datasets, run outputs, the CLI
+├── tests/, step_tests/      # engine tests, step-code tests (two commands: §15)
 └── steps/
-    ├── hello_world/         # Dockerfile + entry point (your code)
+    ├── dataset_loading/     # pins the run's dataset to one commit
+    ├── hello_world/         # reads the dataset, writes a result (your code)
     └── ...
 ```
 
@@ -135,13 +139,14 @@ Push. The `train-optimizer` dropdown now offers `lion`.
 ## 4. Anatomy of pipeline.py (the whole file)
 
 `pipeline.py` declares structure and nothing else. This is the real,
-complete file from this repo — one example step:
+complete file from this repo — two example steps:
 
 ```python
 from kubecore.authoring import pipeline, step  # platform-owned, do not edit
 
 with pipeline("ml-pipeline") as p:  # platform renames to {app}-pipeline at release
-    hello = step("hello-world", reads=["experiment"])
+    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
 As your pipeline grows you add steps and wire them with `needs=`. An
@@ -417,23 +422,17 @@ with mlflow.start_run():
 ```
 
 **Datasets and results use the `kubecore` Python package** (installed in your
-step image from a pinned commit; see `docs/upload-to-lakefs.md`). A run's
+step image from a pinned commit; see `docs/write-a-step.md`). A run's
 `dataset` is `<dataset-repo>@<version>`; `dataset-loading` resolves it to a
-commit once and every step reads that commit (`consumer.materialize`, the staged
-copy on MeluXina). Results go to `outputs-<app>` with `outputs.write_run`.
+commit once and every step reads that commit (`datasets.materialize`, the staged
+copy on MeluXina). Results go to `outputs-<app>` with the run writer `outputs.run(...)`.
 The package and the vendored `kubecore/` engine share the import name and must
 never share a `sys.path`: step images install the package and copy only `app/`.
 
-lakeFS speaks the S3 API (repo = bucket, `ref/path` = key) for anything else:
-
-```python
-import os, boto3
-s3 = boto3.client("s3",
-    endpoint_url=os.environ["LAKEFS_ENDPOINT"],
-    aws_access_key_id=os.environ["LAKEFS_ACCESS_KEY"],
-    aws_secret_access_key=os.environ["LAKEFS_SECRET_KEY"])
-s3.download_file("my-project", "main/dataset.yaml", "/work/dataset.yaml")
-```
+Anything else in lakeFS (a file in a repository, a folder of a dataset) is reached with the
+same package: `datasets.materialize("<repo>@<ref>", prefix="folder/")` downloads a folder of any
+repository at a pinned ref, and `kubecore.lakefs.LakeFS.connect()` is the client both use. You
+write no endpoint and no credential: the step's environment has them.
 
 When you run locally, the same `platform` section is filled from a
 local fallback file, so `python -m app.entry --params
@@ -564,3 +563,28 @@ that's normal; parameters live in the template, not the images.
 **"Can I put big things (file contents, long lists) in config?"**
 The resolved params.yaml is capped (200KB, checked with a clear error).
 Config is for knobs; bulk data goes through lakeFS/checkpoints (§9).
+
+---
+
+## 15. Running the tests
+
+There are two test commands, on purpose:
+
+```bash
+python -m pytest                                   # the engine: tests/ (the vendored kubecore/)
+pip install ./packages/kubecore pytest             # once, in a virtual environment
+pytest step_tests                                  # step code that imports the kubecore package
+```
+
+**Why two.** The repository holds two things that are both imported as `kubecore`: the platform's
+engine in `kubecore/` (render, compose, enhance; it runs in CI and is never in a step image) and
+the Python package in `packages/kubecore/` (datasets, run outputs; it is installed in step images).
+Python can import only one of them in a process, whichever comes first on `sys.path`. So:
+
+- the engine tests put the repository root on the path, and run with `python -m pytest`;
+- the step tests need the *package*: run them with the `pytest` command (not `python -m pytest`,
+  which would add the repository root and load the engine instead). `step_tests/conftest.py`
+  stops with an explanation if it sees the engine;
+- a step image copies only its `app/` folder and installs the package from a pinned commit.
+
+The step tests use the package's in-memory lakeFS, so no network or cluster is needed.

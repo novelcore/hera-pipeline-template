@@ -17,7 +17,7 @@ When you click Submit, a form opens. Every field on this form came from your `co
 You will see fields like these.
 
 - `experiment-name` and any other settings you added.
-- Dropdowns the platform fills in for you, like which dataset to use.
+- Dropdowns the platform fills in for you. The `dataset` field lists the datasets of your project and their versions, like `dataset-cats@v2`: pick the one to run on ([Datasets](datasets.md)).
 - Sizing fields for each step, so you can ask for a smaller run.
 
 ![The experiment fields on the submit form](img/form-experiment-fields.png)
@@ -49,7 +49,7 @@ That is the full loop. You edited files. You sent them in. You merged. You ran i
 Depending on what your steps do, results land in a couple of places.
 
 - Numbers and charts from a run go to a tracking page called MLflow. Your contact can give you the link.
-- Files and datasets go to storage. Your steps read and write them using addresses the platform hands them.
+- Files your steps write (checkpoints, reports) go to your app's `outputs-<app>` repository in lakeFS, one commit per step per run, under `checkpoints/<experiment>/<run>/`. [First dataset to results](first-run.md) shows how to find them.
 
 You do not manage any of that plumbing. Your steps ask for what they need, and the platform provides it.
 
