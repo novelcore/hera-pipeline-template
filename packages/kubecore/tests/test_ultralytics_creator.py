@@ -22,6 +22,23 @@ def test_skeleton_is_a_valid_layout():
     assert "pets" in files["README.md"].decode()
 
 
+def test_skeleton_data_yaml_text_matches_kaos_lake_template():
+    text = creator.skeleton(["cat", 'do"g'])["data.yaml"].decode()
+    assert text == (
+        "# YOLO dataset (Ultralytics). Paths are relative to the dataset's root.\n"
+        "path: .\ntrain: images/train\nval: images/val\ntest: images/test\n"
+        'nc: 2\nnames:\n  0: "cat"\n  1: "do\\"g"\n')
+    assert set(creator.skeleton(["a"])) == {
+        "README.md", "data.yaml", *(f"{k}/{s}/.keep" for k in ("images", "labels") for s in ("train", "val", "test"))}
+
+
+def test_skeleton_with_11_classes_keeps_numeric_order():
+    files = creator.skeleton([f"c{i}" for i in range(11)])
+    text = files["data.yaml"].decode()
+    assert [ln.split(":")[0].strip() for ln in text.splitlines() if ln.startswith("  ")] == [str(i) for i in range(11)]
+    assert yaml.safe_load(text)["names"] == {i: f"c{i}" for i in range(11)}
+
+
 def test_skeleton_needs_classes():
     with pytest.raises(DatasetError, match="at least one class"):
         creator.skeleton([" ", ""])
@@ -130,3 +147,23 @@ def test_publish_direct_only_when_asked(fake, client, dataset_dir):
     result = creator.publish(dataset_dir, "dataset-default", "m", via_pull_request=False, client=client)
     assert result.branch == "main" and result.pull_id is None
     assert "data.yaml" in fake.tree("dataset-default", "main")
+
+
+def _with_names(root, names_block, nc):
+    (root / "data.yaml").write_text(
+        f"train: images/train\nval: images/val\nnc: {nc}\nnames:\n{names_block}\n")
+
+
+def test_validate_names_mapping_with_11_classes_in_numeric_order(dataset_dir):
+    _with_names(dataset_dir, "\n".join(f"  {i}: c{i}" for i in range(11)), 11)
+    assert validate(dataset_dir).ok
+
+
+def test_validate_names_ids_must_be_exactly_0_to_nc_minus_1(dataset_dir):
+    _with_names(dataset_dir, "  0: a\n  2: b", 2)
+    assert "ids must be exactly 0..1" in _errors(dataset_dir)
+
+
+def test_validate_names_keys_must_be_integers(dataset_dir):
+    _with_names(dataset_dir, '  "0": a\n  b: b', 2)
+    assert "keys must be integer class ids" in _errors(dataset_dir)

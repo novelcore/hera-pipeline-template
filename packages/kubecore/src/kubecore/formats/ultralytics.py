@@ -70,6 +70,16 @@ def _load_data_yaml(root: pathlib.Path, errors: list) -> Optional[dict]:
     return data
 
 
+def _names_from_mapping(names: dict, errors: list) -> list:
+    """Class names ordered by integer id; ids must be integers and exactly 0..n-1."""
+    if any(isinstance(k, bool) or not isinstance(k, int) for k in names):
+        errors.append("data.yaml: names keys must be integer class ids (0, 1, 2, ...)")
+        return list(names.values())
+    if sorted(names) != list(range(len(names))):
+        errors.append(f"data.yaml: names ids must be exactly 0..{len(names) - 1}, got {sorted(names)}")
+    return [names[k] for k in sorted(names)]  # numeric order: 0,1,2,...,10 (never string order)
+
+
 def _check_classes(data: dict, errors: list) -> Optional[int]:
     """Check nc/names; returns nc when usable for label checks."""
     nc, names = data.get("nc"), data.get("names")
@@ -77,7 +87,7 @@ def _check_classes(data: dict, errors: list) -> Optional[int]:
         errors.append(f"data.yaml: nc must be a positive integer (got {nc!r})")
         nc = None
     if isinstance(names, dict):
-        names = [names[k] for k in sorted(names, key=str)]
+        names = _names_from_mapping(names, errors)
     if not isinstance(names, list) or not names:
         errors.append("data.yaml: names must be a non-empty list (or an id -> name mapping)")
     elif nc is not None and nc != len(names):
@@ -164,6 +174,17 @@ Check a local copy with `kubecore dataset validate <dir>`; send changes with `ku
 """
 
 
+DATA_YAML = """# YOLO dataset (Ultralytics). Paths are relative to the dataset's root.
+path: .
+train: images/train
+val: images/val
+test: images/test
+nc: {nc}
+names:
+{names}
+"""
+
+
 class UltralyticsCreator:
     """Builds, validates and publishes ultralytics datasets."""
 
@@ -174,9 +195,9 @@ class UltralyticsCreator:
         names = [str(c).strip() for c in classes if str(c).strip()]
         if not names:
             raise DatasetError("an ultralytics dataset needs at least one class name (--classes a,b,c).")
-        data = {"path": ".", "train": "images/train", "val": "images/val", "test": "images/test",
-                "nc": len(names), "names": {i: n for i, n in enumerate(names)}}
-        files = {"data.yaml": yaml.safe_dump(data, sort_keys=False).encode(),
+        quoted = "\n".join(f"  {i}: {json.dumps(n)}" for i, n in enumerate(names))
+        data_yaml = DATA_YAML.format(nc=len(names), names=quoted)
+        files = {"data.yaml": data_yaml.encode(),
                  "README.md": README.format(title=title, description=description).encode()}
         for kind in ("images", "labels"):
             for split in SPLITS:

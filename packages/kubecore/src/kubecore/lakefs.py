@@ -122,6 +122,26 @@ class LakeFS:
         self._call("POST", f"/repositories/{_q(repo)}/branches", json={"name": name, "source": source},
                    what=f"create branch {name}")
 
+    def delete_branch(self, repo: str, name: str) -> None:
+        """Delete ``name`` (a missing branch is fine)."""
+        self._call("DELETE", f"/repositories/{_q(repo)}/branches/{_q(name)}", ok=(200, 204, 404),
+                   what=f"delete branch {name}")
+
+    def merge(self, repo: str, source: str, destination: str, message: str, metadata: Optional[dict] = None) -> str:
+        """Merge ``source`` into ``destination`` (mergeIntoBranch); returns the merge commit id."""
+        resp = self._call("POST", f"/repositories/{_q(repo)}/refs/{_q(source)}/merge/{_q(destination)}",
+                          json={"message": message, "metadata": {k: str(v) for k, v in (metadata or {}).items()}},
+                          what=f"merge {source} into {destination}")
+        return resp.json()["reference"]
+
+    def storage_namespace_prefix(self) -> Optional[str]:
+        """Where kaos-lake wants new repositories (``GET /kaos/v1/dataset-templates``), or None if it does not say."""
+        try:
+            resp = self.session.get(f"{self.base_url}/kaos/v1/dataset-templates", timeout=30, allow_redirects=False)
+            return (resp.json().get("storage_namespace_prefix") or None) if resp.status_code == 200 else None
+        except (requests.RequestException, ValueError):
+            return None
+
     def tags(self, repo: str) -> list:
         """Every tag: dicts with ``id`` (name) and ``commit_id``."""
         return list(self._pages(f"/repositories/{_q(repo)}/tags"))

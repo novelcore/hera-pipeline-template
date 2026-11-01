@@ -26,6 +26,7 @@ class FakeLakeFS(BaseAdapter):
         self.repos: dict = {}
         self.calls: list = []        # (method, path-without-query)
         self.writes: list = []       # (kind, repo, branch, path) for object uploads/deletes
+        self.storage_prefix = "gs://bucket/lakefs"   # None: kaos-lake publishes no prefix
         self._ids = itertools.count(1)
 
     # ---- test helpers
@@ -102,6 +103,10 @@ class FakeLakeFS(BaseAdapter):
         pass
 
     def _route(self, req, path, q):
+        if path == "/kaos/v1/dataset-templates":
+            if self.storage_prefix is None:
+                return 404, {}
+            return 200, {"storage_namespace_prefix": self.storage_prefix, "templates": []}
         m, body = req.method, (json.loads(req.body) if req.body and not _is_multipart(req) else {})
         parts = [unquote(p) for p in path.strip("/").split("/")]
         if parts == ["repositories"]:
@@ -136,6 +141,8 @@ class FakeLakeFS(BaseAdapter):
                 r["tags"][body["id"]] = self._resolve(repo, body["ref"])
                 return 201, {"id": body["id"], "commit_id": r["tags"][body["id"]]}
             return 200, {"id": rest[1], "commit_id": r["tags"][rest[1]]}
+        if kind == "refs" and rest[2] == "merge":
+            return self._merge(r, rest[1], rest[3], body)
         if kind == "refs":
             return self._refs(repo, rest[1], rest[2:], q)
         if kind == "pulls":
@@ -146,9 +153,13 @@ class FakeLakeFS(BaseAdapter):
 
     def _branches(self, m, repo, r, rest, body, req, q):
         if not rest:
-            r["branches"][body["name"]] = {"commit": self._resolve(repo, body["source"]), "staged": {}}
+            base = self._resolve(repo, body["source"])
+            r["branches"][body["name"]] = {"commit": base, "base": base, "staged": {}}
             return 201, body["name"]
         b = r["branches"][rest[0]]
+        if len(rest) == 1 and m == "DELETE":
+            del r["branches"][rest[0]]
+            return 204, None
         if len(rest) == 1:
             return 200, {"id": rest[0], "commit_id": b["commit"]}
         if rest[1] == "objects":
@@ -168,6 +179,24 @@ class FakeLakeFS(BaseAdapter):
             r.setdefault("commit_log", []).append((rest[0], cid, body["message"], body.get("metadata", {})))
             return 201, {"id": cid}
         return 404, {}
+
+    def _merge(self, r, source, dest, body):
+        """Three-way merge of a branch into dest: dest's tree plus the branch's changes since its base."""
+        src, dst = r["branches"][source], r["branches"][dest]
+        base, head = r["commits"][src["base"]], r["commits"][src["commit"]]
+        tree = dict(r["commits"][dst["commit"]])
+        for path in set(base) | set(head):
+            if head.get(path) == base.get(path):
+                continue
+            if path in head:
+                tree[path] = head[path]
+            else:
+                tree.pop(path, None)
+        repo = next(n for n, x in self.repos.items() if x is r)
+        cid, _ = self._new_commit(repo, tree)
+        dst["commit"] = cid
+        r.setdefault("commit_log", []).append((dest, cid, body["message"], body.get("metadata", {})))
+        return 200, {"reference": cid}
 
     def _refs(self, repo, ref, rest, q):
         view = self._view(repo, ref)

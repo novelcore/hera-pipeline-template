@@ -102,7 +102,7 @@ def test_create_dataset_makes_labelled_repo_with_skeleton_on_main(fake, client):
     assert repo == "dataset-cats"
     assert r["metadata"] == {"kaos.kind": "dataset", "kaos.template": "ultralytics",
                              "kaos.description": "cat photos"}
-    assert r["ns"] == "gs://bucket/proj/dataset-cats"          # sibling of an existing repo's storage
+    assert r["ns"] == "gs://bucket/lakefs/dataset-cats"        # <prefix kaos-lake publishes>/<repo>
     tree = fake.tree(repo, "main")
     assert {"data.yaml", "README.md", "images/train/.keep", "labels/test/.keep"} <= set(tree)
 
@@ -116,3 +116,30 @@ def test_get_format_alias_and_unknown():
     assert get_format("yolo") is get_format("ultralytics")
     with pytest.raises(DatasetError, match="unknown dataset format"):
         get_format("coco")
+
+
+def test_create_dataset_follows_the_kaos_lake_ui_flow(fake, client):
+    """repo -> starter files committed to main (commit metadata kaos.template) -> labels."""
+    datasets.create_dataset("cats", "ultralytics", "d", client, classes=["cat"])
+    seq = [(m, p.rsplit("/", 1)[-1]) for m, p in fake.calls if m == "POST" and "dataset-cats" in p or
+           (m, p) == ("POST", "/repositories")]
+    kinds = [p for _, p in seq]
+    assert kinds.index("repositories") < kinds.index("commits") < kinds.index("metadata")
+    branch, _, _, meta = fake.repos["dataset-cats"]["commit_log"][0]
+    assert branch == "main" and meta == {"kaos.template": "ultralytics"}
+
+
+def test_storage_prefix_falls_back_to_env_then_errors(fake, client, monkeypatch):
+    fake.storage_prefix = None
+    with pytest.raises(DatasetError, match="KUBECORE_STORAGE_NAMESPACE_BASE"):
+        datasets.create_dataset("cats", "ultralytics", "", client, classes=["a"])
+    assert "dataset-cats" not in fake.repos
+    monkeypatch.setenv("KUBECORE_STORAGE_NAMESPACE_BASE", "gs://other/lake/")
+    datasets.create_dataset("cats", "ultralytics", "", client, classes=["a"])
+    assert fake.repos["dataset-cats"]["ns"] == "gs://other/lake/dataset-cats"
+
+
+def test_published_storage_prefix_wins_over_env(fake, client, monkeypatch):
+    monkeypatch.setenv("KUBECORE_STORAGE_NAMESPACE_BASE", "gs://other/lake")
+    datasets.create_dataset("cats", "ultralytics", "", client, classes=["a"])
+    assert fake.repos["dataset-cats"]["ns"] == "gs://bucket/lakefs/dataset-cats"

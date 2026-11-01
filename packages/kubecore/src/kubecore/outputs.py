@@ -39,15 +39,21 @@ def run_prefix(experiment: str, run: str, kind: str = "checkpoints") -> str:
     return f"{_segment('kind', kind)}/{_segment('experiment', experiment)}/{_segment('run', run)}/"
 
 
+def run_branch(run: str) -> str:
+    """Branch a run writes on before merging into main: ``run-<run>`` with unsafe characters replaced."""
+    return "run-" + re.sub(r"[^A-Za-z0-9_-]", "-", run)
+
+
 def write_run(app: str, experiment: str, run: str, local_dir, kind: str = "checkpoints",
               client: Optional[LakeFS] = None) -> str:
-    """Upload ``local_dir`` to ``outputs-<app>`` under the run's prefix in ONE commit on main; returns the commit id.
+    """Write ``local_dir`` to ``outputs-<app>`` under the run's prefix; returns the merge commit on main.
 
-    Note: uploads and the commit target main's staging area, so two simultaneous
-    writers to the same app repository would share one commit; run ids keep paths apart.
+    Concurrency-safe: the run uploads and commits on its own branch ``run-<run>`` (created from main;
+    a leftover branch from a re-run of the same id is replaced), which is merged into main and deleted,
+    so simultaneous runs never share main's staging area. Main gets exactly one new commit per run.
     """
     c, root = client or LakeFS.connect(), pathlib.Path(local_dir)
-    repo, prefix = outputs_repo(app), run_prefix(experiment, run, kind)
+    repo, prefix, branch = outputs_repo(app), run_prefix(experiment, run, kind), run_branch(run)
     if not root.is_dir():
         raise DatasetError(f"{root} is not a directory.")
     try:
@@ -55,7 +61,14 @@ def write_run(app: str, experiment: str, run: str, local_dir, kind: str = "check
     except NotFoundError as exc:
         raise DatasetError(f"{repo} does not exist: the platform creates it for each ML app. "
                            "Check the app name.") from exc
-    if upload_tree(c, repo, MAIN, root, prefix) == 0:
-        raise DatasetError(f"{root} has no files to write.")
-    return c.commit(repo, MAIN, f"{kind}: {experiment}/{run}",
-                    {"app": app, "experiment": experiment, "run": run, "kind": kind})
+    c.delete_branch(repo, branch)  # replace a stale branch of a previous attempt of this run
+    c.create_branch(repo, branch, MAIN)
+    try:
+        if upload_tree(c, repo, branch, root, prefix) == 0:
+            raise DatasetError(f"{root} has no files to write.")
+        meta = {"app": app, "experiment": experiment, "run": run, "kind": kind}
+        message = f"{kind}: {experiment}/{run}"
+        c.commit(repo, branch, message, meta)
+        return c.merge(repo, branch, MAIN, message, meta)
+    finally:
+        c.delete_branch(repo, branch)

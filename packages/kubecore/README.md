@@ -11,9 +11,9 @@ PyPI is not available yet, so install from git, pinned to a commit:
 pip install "git+https://github.com/novelcore/hera-pipeline-template@<sha>#subdirectory=packages/kubecore"
 ```
 
-Python 3.9+. Dependencies: `requests`, `PyYAML`. Note: this repo's root also holds the vendored engine
-`kubecore/` (a different thing with the same import name). Do not put the repo root on `sys.path` in the
-same environment as this package; a follow-up converts the templates onto the package and removes the copy.
+Python 3.9+. Dependencies: `requests`, `PyYAML`.
+
+The package and the vendored `kubecore/` engine at the repo root share the import name `kubecore` and must not share a `sys.path`: step images will `pip install` the package from git (pinned to a commit, as above) and will not copy the vendored `kubecore/` into the image; the follow-up conversion removes the vendored copy.
 
 ## Data model
 
@@ -21,9 +21,9 @@ same environment as this package; a follow-up converts the templates onto the pa
   each project has `dataset-default`. Versions are tags `v1`, `v2`, ... on `main`; `latest` is the head of
   `main`. A run picks `<dataset-repo>@<version>`.
 - Changes reach `main` only through a pull request (the only direct commit is the starter layout written by
-  `create`, as kaos-lake does).
-- Each ML app writes results to `outputs-<app>`, on `main`, one commit per run, under
-  `checkpoints/<experiment>/<run>/`.
+  `create`, as the kaos-lake UI does: repo, starter files on main, then labels). New repositories are placed at `<storage_namespace_prefix kaos-lake publishes>/<repo>`, or `$KUBECORE_STORAGE_NAMESPACE_BASE`.
+- Each ML app writes results to `outputs-<app>`, on `main`, one commit per run (a merge from the
+  run's own branch `run-<run>`, so simultaneous runs never mix), under `checkpoints/<experiment>/<run>/`.
 
 ## Python API
 
@@ -40,7 +40,7 @@ fmt = get_format("ultralytics")
 fmt.creator.skeleton(classes=["cat", "dog"]); fmt.creator.validate(dir); fmt.creator.publish(dir, repo, "msg")
 fmt.consumer.materialize(ref, dest)
 
-outputs.write_run("myapp", "exp1", "run-7", "./ckpt")      # one commit on outputs-myapp main
+outputs.write_run("myapp", "exp1", "run-7", "./ckpt")      # merge commit on outputs-myapp main
 ```
 
 `materialize` downloads only `data.yaml`, `images/`, `labels/` at the pinned commit, rewrites `path:`, and

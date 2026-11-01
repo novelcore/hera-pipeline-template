@@ -139,19 +139,16 @@ def release(repo: str, client: Optional[LakeFS] = None) -> str:
 
 
 def _storage_namespace(c: LakeFS, repo: str) -> str:
-    """Storage for a new repository: a sibling of an existing one (or the env base)."""
-    base = os.environ.get(STORAGE_BASE_ENV)
+    """Storage for a new repository: ``<prefix>/<repo>``, the prefix kaos-lake publishes, else the env base."""
+    base = c.storage_namespace_prefix() or os.environ.get(STORAGE_BASE_ENV)
     if not base:
-        existing = [r["storage_namespace"] for r in c.repositories() if r.get("storage_namespace")]
-        if not existing:
-            raise DatasetError(f"cannot choose storage for {repo}: no repository exists to copy it from. "
-                               f"Set {STORAGE_BASE_ENV} (e.g. gs://bucket/project).")
-        base = existing[0].rstrip("/").rsplit("/", 1)[0]
+        raise DatasetError(f"cannot choose storage for {repo}: kaos-lake did not publish a storage prefix. "
+                           f"Set {STORAGE_BASE_ENV} (e.g. gs://bucket/lakefs).")
     return f"{base.rstrip('/')}/{repo}"
 
 
 def ensure_repository(c: LakeFS, repo: str, labels: dict) -> bool:
-    """Create ``repo`` with ``labels`` unless it exists; returns True when it was created."""
+    """Create ``repo`` and set ``labels`` unless it exists; returns True when it was created."""
     if c.repository(repo):
         return False
     c.create_repository(repo, _storage_namespace(c, repo), MAIN)
@@ -161,26 +158,29 @@ def ensure_repository(c: LakeFS, repo: str, labels: dict) -> bool:
 
 def create_dataset(name: str, fmt_name: str = "ultralytics", description: str = "",
                    client: Optional[LakeFS] = None, **skeleton_args) -> str:
-    """Create ``dataset-<name>`` labelled for ``fmt_name`` and commit the format's skeleton to main.
+    """Create ``dataset-<name>`` the way the kaos-lake UI does; returns the repository name.
 
-    Returns the repository name. Fails if the repository already exists.
+    Order: create the repository, commit the format's skeleton to main (commit metadata
+    ``kaos.template``), then set the labels. Fails if the repository already exists.
     """
     from .formats import get_format
     c, fmt = _client(client), get_format(fmt_name)
     repo = dataset_repo(name)
     files = fmt.creator.skeleton(description=description, **skeleton_args)
-    labels = {LABEL_KIND: "dataset", LABEL_TEMPLATE: fmt.name}
-    if description:
-        labels[LABEL_DESCRIPTION] = description
-    if not ensure_repository(c, repo, labels):
+    if c.repository(repo):
         raise DatasetError(f"{repo} already exists. Push to it with `kubecore dataset push <dir> {repo}`.")
+    c.create_repository(repo, _storage_namespace(c, repo), MAIN)
     with tempfile.TemporaryDirectory() as tmp:
         for rel, content in files.items():
             target = pathlib.Path(tmp, rel)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
         upload_tree(c, repo, MAIN, pathlib.Path(tmp))
-    c.commit(repo, MAIN, f"Create {fmt.name} dataset skeleton", {"kaos.template": fmt.name})
+    c.commit(repo, MAIN, f"Create {fmt.name} dataset skeleton", {LABEL_TEMPLATE: fmt.name})
+    labels = {LABEL_KIND: "dataset", LABEL_TEMPLATE: fmt.name}
+    if description:
+        labels[LABEL_DESCRIPTION] = description
+    c.set_metadata(repo, labels)
     return repo
 
 
