@@ -80,8 +80,10 @@ def test_validate_ok_and_failing(capsys, dataset_dir, tmp_path):
     (["dataset", "pull", "dataset-default"], "not a dataset reference"),
     (["dataset", "pull", "dataset-default@v9"], "no version v9"),
     (["dataset", "create", "x", "--classes", "a"], "invalid dataset name"),
+    (["dataset", "create", "cats"], "at least one class name"),
+    (["dataset", "pull", "my_repo@main"], "not a valid lakeFS repository name"),
     (["dataset", "create", "default", "--classes", "a"], "already exists"),
-    (["dataset", "release", "dataset-ghost"], "not found"),
+    (["dataset", "release", "dataset-ghost"], "does not exist"),
     (["dataset", "versions", "BAD"], "invalid dataset name"),
 ])
 def test_user_errors_are_one_line_without_traceback(capsys, argv, fragment):

@@ -15,6 +15,16 @@ Python 3.9+. Dependencies: `requests`, `PyYAML`.
 
 The package and the vendored `kubecore/` engine at the repo root share the import name `kubecore` and must not share a `sys.path`: step images will `pip install` the package from git (pinned to a commit, as above) and will not copy the vendored `kubecore/` into the image; the follow-up conversion removes the vendored copy.
 
+## Any repository works
+
+Templates are optional. `DatasetRef.parse` accepts any lakeFS repository (`my-repo@main`) and a ref that is
+`vN` (tag), `latest` (head of the default branch), a branch, a tag or a commit id. `materialize` uses the
+repository's `kaos.template` label (`ultralytics`, alias `yolo`) and otherwise the `raw` format: the whole
+tree (or `prefix=`) at the pinned commit, cached by (repo, commit, prefix), returned as a folder. `raw` has
+no skeleton, validates nothing and publishes as is. `kubecore dataset create <name> --template none` makes an
+empty `dataset-<name>` (only `kaos.kind=dataset`); kaos-lake lists it as a dataset once its first commit lands.
+The pipeline dropdown lists only `dataset-*` repositories.
+
 ## Data model
 
 - A dataset is its own lakeFS repository `dataset-<name>` (3 to 48 chars of `a-z0-9-` after the prefix);
@@ -30,10 +40,10 @@ The package and the vendored `kubecore/` engine at the repo root share the impor
 ```python
 from kubecore import datasets, outputs
 
-ref = datasets.DatasetRef.parse("dataset-default@v2")      # DatasetError on malformed input
+ref = datasets.DatasetRef.parse("dataset-default@v2")      # any repository: "my-repo@main", "@latest", "@<tag>", "@<commit>"
 ref = ref.with_commit(commit)                              # optional: pin the commit dataset-loading resolved
 commit = datasets.resolve(ref)                             # pinned commit returned as is, else tag/main head
-data_yaml = datasets.materialize(ref, dest=None)           # Path to a data.yaml Ultralytics can train on
+data_yaml = datasets.materialize(ref, dest=None)           # ultralytics: Path to data.yaml; raw: the folder (prefix= for one folder)
 datasets.list_datasets(); datasets.versions("dataset-x"); datasets.release("dataset-x")   # -> "vN"
 
 from kubecore.formats import get_format                   # "ultralytics" (alias "yolo"); detect, segment, pose

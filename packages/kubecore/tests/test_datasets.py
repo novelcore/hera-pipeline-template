@@ -23,17 +23,57 @@ def test_parse_valid(text, repo, version):
     ("dataset-xyz@", "not a dataset reference"),
     ("@v1", "not a dataset reference"),
     ("dataset-xyz@v1@v2", "more than one '@'"),
-    ("x@v1", "not a dataset repository"),
-    ("dataset-Ab@v1", "not a dataset repository"),
-    ("dataset-ab@v1", "not a dataset repository"),   # 2 chars: below the 3-char minimum
-    ("dataset-xyz@1", "not a version"),
-    ("dataset-xyz@v0", "not a version"),
-    ("dataset-xyz@main", "not a version"),
+    ("x@v1", "not a valid lakeFS repository name"),
+    ("ab@v1", "not a valid lakeFS repository name"),   # 2 chars: below the 3-char minimum
+    ("Dataset-Ab@v1", "not a valid lakeFS repository name"),
+    ("-bad-start@v1", "not a valid lakeFS repository name"),
+    ("my_repo@main", "not a valid lakeFS repository name"),
+    ("dataset-xyz@bad ref", "not a valid ref"),
+    ("dataset-xyz@a..b", "not a valid ref"),
+    ("dataset-xyz@-x", "not a valid ref"),
+    ("dataset-xyz@dir/", "not a valid ref"),
 ])
 def test_parse_malformed_gives_clear_error(text, fragment):
     with pytest.raises(DatasetError) as err:
         datasets.DatasetRef.parse(text)
     assert fragment in str(err.value)
+
+
+@pytest.mark.parametrize("text,repo,version", [
+    ("dataset-default@latest", "dataset-default", "latest"),       # head of the default branch
+    ("dataset-default@v3", "dataset-default", "v3"),                # tag
+    ("my-lake-repo@main", "my-lake-repo", "main"),                  # any repository, a branch
+    ("my-lake-repo@feature/x-1", "my-lake-repo", "feature/x-1"),    # branch with a slash
+    ("my-lake-repo@release-2024.1", "my-lake-repo", "release-2024.1"),  # tag
+    ("abc@3f1c9e2a7b", "abc", "3f1c9e2a7b"),                        # commit id
+])
+def test_parse_accepts_every_ref_kind_on_any_repository(text, repo, version):
+    ref = datasets.DatasetRef.parse(text)
+    assert (ref.repo, ref.version) == (repo, version) and str(ref) == text
+
+
+def test_resolve_branch_tag_and_commit_on_a_non_dataset_repo(fake):
+    client = fake.client()
+    c1 = fake.add_repo("my-repo", ns="gs://b/x/my-repo")
+    fake.repos["my-repo"]["commits"]["c2commit"] = {"a": b"1"}
+    fake.repos["my-repo"]["branches"]["dev"] = {"commit": "c2commit", "base": c1, "staged": {}}
+    fake.tag("my-repo", "rc1", "dev")
+    parse = datasets.DatasetRef.parse
+    assert datasets.resolve(parse("my-repo@latest"), client) == c1             # default branch head
+    assert datasets.resolve(parse("my-repo@dev"), client) == "c2commit"        # branch
+    assert datasets.resolve(parse("my-repo@rc1"), client) == "c2commit"        # tag
+    assert datasets.resolve(parse("my-repo@c2commit"), client) == "c2commit"   # commit id
+    with pytest.raises(DatasetError, match="no branch, tag or commit 'nope'"):
+        datasets.resolve(parse("my-repo@nope"), client)
+
+
+def test_latest_follows_a_non_main_default_branch(fake):
+    client = fake.client()
+    fake.add_repo("my-repo")
+    fake.repos["my-repo"]["default_branch"] = "trunk"
+    fake.repos["my-repo"]["commits"]["ctrunk"] = {}
+    fake.repos["my-repo"]["branches"]["trunk"] = {"commit": "ctrunk", "base": "ctrunk", "staged": {}}
+    assert datasets.resolve(datasets.DatasetRef.parse("my-repo@latest"), client) == "ctrunk"
 
 
 def test_dataset_repo_normalizes_and_validates():
