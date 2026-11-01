@@ -18,7 +18,8 @@ pipeline from the first push — replace it with your own steps.
 from kubecore.authoring import pipeline, step
 
 with pipeline("ml-pipeline") as p:  # platform renames to {app}-pipeline at release
-    hello = step("hello-world", reads=["experiment"])
+    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
 Add more steps and wire dependencies as your pipeline grows:
@@ -43,7 +44,9 @@ config/                THE config tree — all your parameters
   config.yaml            the defaults list (which group options are default)
   experiment.yaml        a section of scalar leaves (add your own files/groups)
 steps/<name>/          your step code + Dockerfile (one dir per step)
-kubecore/              platform-owned helpers — SEEDED, DO NOT EDIT
+kubecore/              platform-owned engine — SEEDED, DO NOT EDIT
+packages/kubecore/     the kubecore Python PACKAGE: datasets, run outputs, the `kubecore` CLI
+tests/, step_tests/    engine tests; step-code tests (two commands, see step_tests/README.md)
 pyproject.toml         PEP 621, pinned render deps
 ```
 
@@ -53,6 +56,15 @@ pyproject.toml         PEP 621, pinned render deps
 - **Add a step** → `mkdir steps/<name>` + a Dockerfile + an entry that reads its
   config slice, then one `step("<name>", reads=[…], needs=[…])` line in
   `pipeline.py`. Push.
+
+## Datasets and results
+
+A dataset is its own lakeFS repository `dataset-<name>`, versioned by tags (`v1`, `v2`,
+...), changed only through pull requests. The run's **`dataset`** field is a dropdown of
+`<dataset-repo>@<version>`; `dataset-loading` resolves it to a commit once and every step
+reads that commit with the `kubecore` package. Results are written to your app's
+`outputs-<app>` repository with `outputs.write_run`. Manage datasets with the
+`kubecore dataset ...` command: see [docs/upload-to-lakefs.md](docs/upload-to-lakefs.md).
 
 ## Local iteration (no cluster)
 

@@ -31,3 +31,8 @@ compose-and-validate = "kubecore.compose:main"
 
 [tool.setuptools]
 packages = ["kubecore"]
+
+[tool.pytest.ini_options]
+# Engine tests only. Step code imports the kubecore PACKAGE, which shares its name with the
+# vendored engine, so it has its own run: see step_tests/README.md.
+testpaths = ["tests"]

@@ -395,7 +395,7 @@ contains it (you don't declare or read= it, it's just there):
 ```python
 cfg = yaml.safe_load(args.params)
 bucket = cfg["platform"]["checkpoints"]["bucket"]     # e.g. "my-project"
-prefix = cfg["platform"]["checkpoints"]["prefix"]     # "outputs/checkpoints" (the project's outputs branch)
+prefix = cfg["platform"]["checkpoints"]["prefix"]     # "main/checkpoints" (bucket = your app's outputs-<app> repository)
 repo   = cfg["platform"]["lakefs"]["repository"]
 ```
 
@@ -416,7 +416,15 @@ with mlflow.start_run():
     mlflow.log_metric("accuracy", 0.87)
 ```
 
-lakeFS speaks the S3 API (repo = bucket, `ref/path` = key):
+**Datasets and results use the `kubecore` Python package** (installed in your
+step image from a pinned commit; see `docs/upload-to-lakefs.md`). A run's
+`dataset` is `<dataset-repo>@<version>`; `dataset-loading` resolves it to a
+commit once and every step reads that commit (`consumer.materialize`, the staged
+copy on MeluXina). Results go to `outputs-<app>` with `outputs.write_run`.
+The package and the vendored `kubecore/` engine share the import name and must
+never share a `sys.path`: step images install the package and copy only `app/`.
+
+lakeFS speaks the S3 API (repo = bucket, `ref/path` = key) for anything else:
 
 ```python
 import os, boto3
@@ -444,10 +452,10 @@ Open the workflow template in the Argo UI, press **Submit**:
   leave untouched follow the group you pick; fields you explicitly
   change win over the group.
 - **Your scalar fields** — every leaf of your tree
-  (`experiment-name`, `train-epochs`, `data-ref`, …), plus dropdowns the
+  (`experiment-name`, `train-epochs`, `dataset`, …), plus dropdowns the
   platform fills live (`cpu-class`/`gpu-class` list this cluster's node
-  classes; `data-ref` is free text — `kubecore-dataset list` shows the
-  datasets that exist) and
+  classes; `dataset` lists `<dataset-repo>@<version>` choices — the
+  datasets of your project, `kubecore dataset list`) and
   fixed-choice fields it validates (e.g. `data-source`).
 - **Per-step sizing** — `{step}-cpu` / `{step}-mem`.
 - **`config` (ADVANCED)** — normally empty. When non-empty it is an

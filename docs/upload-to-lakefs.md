@@ -1,125 +1,75 @@
-# Upload to lakeFS
+# Datasets in lakeFS
 
-Your steps can read a dataset from lakeFS, the project's data storage. This page shows you how to put a folder of files there, and how a step reads it back. Any kind of files works: images, CSV, text.
+A dataset is its own lakeFS repository, called `dataset-<name>`. Your project starts with one, `dataset-default`. A run does not read "whatever is there now": it picks a **version** of one dataset, and every step of that run reads exactly that version.
 
-## Step 1. Install the upload tool
+- A **version** is a tag, `v1`, `v2`, and so on. `latest` means the newest data on `main`.
+- Changes reach `main` only through a **pull request**, so someone reviews them before they become the new data.
+- Your results are never written to a dataset. They go to your app's own repository, `outputs-<app>`.
 
-The upload tool is already in your project, in a folder called `dataset_tools`. Install it once, inside a small private Python space for this project (a "virtual environment"). Run these in your project folder.
+You do this with the `kubecore` command.
+
+## Step 1. Install the tool and sign in
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install ./dataset_tools
+pip install "git+https://github.com/novelcore/hera-pipeline-template@<commit>#subdirectory=packages/kubecore"
+kubecore login
 ```
 
-On Windows, the middle line is `.venv\Scripts\activate` instead.
+On Windows, the middle line is `.venv\Scripts\activate` instead. Your browser opens once for the sign-in; the tool remembers you. It finds your project's lakeFS from the file `.kubecore/dataset-config.yaml` in your app folder, so run the commands inside your app folder.
 
-Next time, just run the middle line again before uploading.
+!!! tip "Why the virtual environment?"
+    Many computers no longer let `pip install` change the system's own Python (a message that mentions `externally-managed-environment`). The virtual environment avoids that.
 
-!!! tip "Why the extra two lines?"
-    Many computers no longer let `pip install` change the system's own Python. They stop with a message that mentions `externally-managed-environment`. The virtual environment avoids that.
-
-## Step 2. Upload your folder
+## Step 2. Create a dataset and send your files in
 
 ```bash
-python3 scripts/upload-dataset.py /path/to/your-folder
+kubecore dataset create cars --classes car,truck,bus      # makes dataset-cars with the starter layout
+kubecore dataset pull dataset-cars@latest ./dataset-cars   # a local copy to add your files to
+# add images to images/train and images/val, one label file per image in labels/...
+kubecore dataset validate ./dataset-cars                   # checks the layout before you send it
+kubecore dataset push ./dataset-cars dataset-cars -m "first 200 images"
 ```
 
-Replace `/path/to/your-folder` with the real folder on your computer. You do not pass any links. Your project already knows its lakeFS.
+`push` opens a pull request and prints its link. Open it in lakeFS and merge it when it looks right. Nothing changes on `main` until you do.
 
-The first time, your browser opens and asks you to sign in. Sign in, close the tab, and go back to the Terminal. The tool remembers you.
-
-The tool uploads the folder as the dataset called `main`, and saves it. To keep more than one dataset, give each one a name after the folder:
+## Step 3. Release a version
 
 ```bash
-python3 scripts/upload-dataset.py /path/to/your-folder my-data-v1
+kubecore dataset release dataset-cars     # tags the head of main as the next version: v1, then v2, ...
+kubecore dataset versions dataset-cars
+kubecore dataset list                     # every dataset you can see
 ```
 
-!!! warning "Same name replaces"
-    Uploading again with a name you already used makes that dataset match your folder. Files you do not have on your computer are removed from it. The tool shows you which files and asks before it removes anything. To keep the old one, pick a new name.
-
-A new name starts as a copy of `main` (or of the dataset you name with `--from`), so when your folder is a variant of an existing dataset only the changed files upload:
-
-```bash
-python3 scripts/upload-dataset.py /path/to/your-folder my-data-v2 --from my-data-v1
-```
-
-To see every dataset you have, run `kubecore-dataset list`.
-
-## Step 3. Add the dataset fields to the run page
-
-Create `config/data.yaml`:
-
-```yaml
-data:
-  ref: "main"      # which dataset: the name you uploaded with
-```
-
-Then add `- data` to the list in `config/config.yaml`, under `- experiment`:
-
-```yaml
-defaults:
-  - _self_
-  - experiment
-  - data
-  - platform: live
-```
-
-The run page now has a `data-ref` field.
+The run page's `dataset` field is a dropdown of `dataset-<name>@<version>` choices (newest first, then `@latest`). A new version shows up the next time your pipeline is released.
 
 ## Step 4. Read the data in a step
 
-Give the step `reads=["data"]` in `pipeline.py`:
+Your pipeline has a `dataset` field (`config/dataset.yaml`). The first step, `dataset-loading`, turns the choice into one commit and passes it on as `--dataset-info`. A later step reads that commit with the package:
 
 ```python
-reader = step("read-data", reads=["data"], needs=[hello])
+from kubecore import datasets
+from kubecore.formats import get_format
+
+ref = datasets.DatasetRef.parse(info["dataset"])            # "dataset-cars@v1"
+data_yaml = get_format("ultralytics").consumer.materialize(ref)   # a local data.yaml you can train on
 ```
 
-In the step's `entry.py`, the dataset is at `<data-ref>/dataset/` in your lakeFS repository. The platform hands every step the address and keys, so you only build the path:
+`materialize` downloads only `data.yaml`, `images/` and `labels/`, and keeps the copy for next time. On MeluXina the platform has already copied the version to the machine, and the same call uses that copy.
+
+## Step 5. Write results
 
 ```python
-import argparse
-import os
-
-import boto3
-import yaml
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--params", required=True)
-    args, _ = parser.parse_known_args()
-    cfg = yaml.safe_load(args.params)
-
-    repo = cfg["platform"]["lakefs"]["repository"]
-    ref = cfg["data"]["ref"]
-    prefix = f"{ref}/dataset/"
-
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=os.environ["LAKEFS_ENDPOINT"],
-        aws_access_key_id=os.environ["LAKEFS_ACCESS_KEY"],
-        aws_secret_access_key=os.environ["LAKEFS_SECRET_KEY"],
-    )
-    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=repo, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            print(obj["Key"])
-            # s3.download_file(repo, obj["Key"], "/tmp/" + obj["Key"].split("/")[-1])
-
-
-if __name__ == "__main__":
-    main()
+from kubecore import outputs
+outputs.write_run("my-app", experiment, run_id, "./results")   # one commit on outputs-my-app
 ```
 
-Add `boto3` to that step's Dockerfile: `RUN pip install --no-cache-dir PyYAML boto3`.
-
-Send the change in as usual ([Send your change in](send-it-in.md)). When you run, set `data-ref` to the name you uploaded with.
-
-!!! note "One snapshot per run"
-    Reading by name reads the dataset as it is at that moment. If several steps read it, or uploads may happen while a run is going, resolve the name to its commit once in your first data step and hand the commit to the later steps; `s3://<repo>/<commit>/dataset/` never changes. The YOLO template's `dataset-loading` step shows how.
+The files appear under `checkpoints/<experiment>/<run>/` in `outputs-<app>`. Call it once per step per run. The template steps (`steps/hello_world/app/entry.py`) show the whole flow.
 
 ## If something goes wrong
 
-- **The browser sign-in fails or never opens.** Copy the link the tool printed into your browser. If it still fails, sign in the guided way with `kubecore-dataset login --paste`, then run the upload again.
-- **`externally-managed-environment`.** Install inside the virtual environment, as in Step 1.
-- **The step lists no files.** Check `data-ref` on the run page is the name you uploaded with (`main` if you gave none); `kubecore-dataset list` shows the names that exist. A dataset uploaded before this layout sits one level deeper, at `<name>/dataset/<name>/`; upload it again to move it.
+- **The browser sign-in fails or never opens.** Copy the link the tool printed into your browser.
+- **`not a dataset reference`.** Write `<dataset-repo>@<version>`, for example `dataset-cars@v1`.
+- **`has no version v3`.** The message lists the versions that exist. Release one with `kubecore dataset release`.
+- **`nothing new to release`.** Merge your pull request first; the head of `main` is already a version.
