@@ -713,12 +713,30 @@ def submit():
     req = urllib.request.Request(API + '/job/submit',
                                  data=json.dumps(body).encode(),
                                  headers=hdrs(), method='POST')
-    resp = json.load(urllib.request.urlopen(req, timeout=30))
+    try:
+        resp = json.load(urllib.request.urlopen(req, timeout=30))
+    except urllib.error.HTTPError as e:
+        print('job submit refused:', submit_refusal(e), flush=True)
+        sys.exit(1)
     j = resp.get('job_id')
     print('submitted job', j, 'errors:', resp.get('errors'), flush=True)
     if not j:
         sys.exit(1)
     return j
+
+
+def submit_refusal(e):
+    """slurmrestd refuses a job with an HTTP error whose body names why
+    (errors/warnings: an account, partition or QOS it rejects, a time limit
+    above the QOS); without it the step dies on a bare 'HTTP Error 500'."""
+    try:
+        why = json.loads(e.read().decode(errors='replace') or '{}')
+    except Exception:
+        why = {}
+    if not isinstance(why, dict):
+        why = {}
+    return 'HTTP %s %s' % (e.code, {k: why.get(k) for k in ('errors', 'warnings')
+                                     if why.get(k)} or '(no reason in the body)')
 
 
 def cancel(j):
