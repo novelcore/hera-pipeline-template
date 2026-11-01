@@ -121,7 +121,7 @@ def test_stage_in_without_a_pin_resolves_the_ref(tmp_path, monkeypatch):
     assert (tmp_path / "cache" / "dataset-cars" / "tipcommit" / "data.yaml").exists()
 
 
-def test_stage_out_goes_to_the_outputs_repository(tmp_path, monkeypatch):
+def test_stage_out_goes_to_a_hand_off_branch_of_the_outputs_repository(tmp_path, monkeypatch):
     lakefs = _LakeFS({})
     monkeypatch.setattr(urllib.request, "urlopen", lakefs)
     (tmp_path / "output").mkdir()
@@ -134,7 +134,9 @@ def test_stage_out_goes_to_the_outputs_repository(tmp_path, monkeypatch):
     g = {}
     exec(MELUXINA_SUBMIT_CODE.split("import base64, json")[0], g)
     exec(g["STAGEOUT"], {})
-    assert any("/repositories/outputs-myapp/branches/main/objects?" in u for u in lakefs.urls), lakefs.urls
+    # a hand-off branch, never main: a merge into a dirty main is refused by lakeFS
+    assert any("/repositories/outputs-myapp/branches/hpc-u-model-training/objects?" in u for u in lakefs.urls), lakefs.urls
+    assert not any("/branches/main/objects" in u for u in lakefs.urls)
 
 
 # ---------------------------------------------------------------- render wiring

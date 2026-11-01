@@ -7,8 +7,8 @@ from dataset-loading). This one:
   1. reads the dataset at the commit dataset-loading pinned, through the kubecore
      package (`get_format(...).consumer`): a local `data.yaml` Ultralytics could train
      on. On MeluXina the platform stages the commit and the package uses that copy;
-  2. writes a small result to the app's own outputs repository `outputs-<app>` with
-     `kubecore.outputs.write_run` (one commit per step per run).
+  2. writes a small result to the app's own outputs repository `outputs-<app>` with the run
+     writer `kubecore.outputs.run` (one merge commit on main per step per run).
 
 Replace the body with your own logic, and add your runtime dependencies to the Dockerfile.
 """
@@ -27,27 +27,13 @@ from kubecore.formats import get_format
 READS = ["experiment", "dataset"]
 
 
-def pinned_client(commit: str, client=None):
-    """A lakeFS client whose refs all resolve to `commit`.
-
-    The consumer resolves the ref it is given; passing it this client makes it read the
-    commit dataset-loading pinned even when the choice was `latest`. (The package has no
-    `commit=` argument yet; drop this when it does.)
-    """
-    from kubecore.lakefs import LakeFS
-    c = client or LakeFS.connect()
-    c.branch_commit = lambda repo, branch: commit
-    c.tag_commit = lambda repo, tag: commit
-    return c
-
-
 def read_dataset(info: dict, client=None) -> Path:
     """Local data.yaml of the pinned dataset commit (downloaded once, or the staged copy)."""
     commit = info.get("dataset_commit") or ""
     if not commit:
         raise SystemExit("[hello-world] --dataset-info carries no dataset_commit: run dataset-loading first.")
-    ref = datasets.DatasetRef.parse(info["dataset"])
-    return get_format("ultralytics").consumer.materialize(ref, None, pinned_client(commit, client))
+    ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(commit)  # read the pinned commit, never a moving ref
+    return get_format("ultralytics").consumer.materialize(ref, None, client)
 
 
 def write_result(cfg: dict, info: dict, data_yaml: Path, client=None) -> str:
@@ -60,7 +46,11 @@ def write_result(cfg: dict, info: dict, data_yaml: Path, client=None) -> str:
     run = os.environ.get("KUBECORE_RUN_ID") or "local"
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "hello.json").write_text(json.dumps(result, indent=2))
-        return outputs.write_run(app, cfg["experiment"]["name"], run, tmp, client=client)
+        # The run writer saves on the branch run-<run>-checkpoints (durable, reused on a retry) and
+        # finish() merges it into main: one commit on main per step per run, then the branch is gone.
+        with outputs.run(app, cfg["experiment"]["name"], run, client=client) as r:
+            r.save(tmp)
+            return r.finish({"dataset_ref": info["dataset"], "dataset_commit": info["dataset_commit"]})
 
 
 def main() -> None:

@@ -49,14 +49,25 @@ MELUXINA_SUBMIT_CODE = r'''
 STAGEOUT = r"""
 # F-05 stage-out: the step's declared outputs (/work/output/<name>.json,
 # what Argo would have read as outputs.parameters in-cluster) go to lakeFS
-# at hpc-outputs/{wf-uid}/{step}/ on `main` of the app's outputs repository
-# (outputs-<app>, next to the in-cluster results); the waiter fetches them back
-# into the twin's outputs so downstream steps see real values.
-import json, os, pathlib, urllib.parse, urllib.request
+# at hpc-outputs/{wf-uid}/{step}/ on a hand-off branch of the app's outputs
+# repository (outputs-<app>); the waiter fetches them back into the twin's outputs so
+# downstream steps see real values, then deletes the branch. They never touch `main`:
+# lakeFS refuses a merge into a branch with uncommitted objects, and the step's real
+# results (checkpoints) are written by the step itself, inside the image, with the
+# kubecore package's run writer (branch run-<run>-<kind>, merged into main).
+import json, os, pathlib, urllib.error, urllib.parse, urllib.request
 base = os.environ['LAKEFS_ENDPOINT'].rstrip('/') + '/api/v1'
 H = {'Authorization': 'Bearer ' + os.environ['LAKEFS_BEARER_TOKEN']}
 repo = os.environ['OUTPUTS_REPO']
-branch = os.environ.get('OUTPUTS_REF') or 'main'
+branch = 'hpc-%s-%s' % (os.environ['WF_UID'], os.environ['STEP_NAME'])
+try:
+    urllib.request.urlopen(urllib.request.Request(
+        base + '/repositories/%s/branches' % repo, method='POST',
+        data=json.dumps({'name': branch, 'source': os.environ.get('OUTPUTS_REF') or 'main'}).encode(),
+        headers=dict(H, **{'Content-Type': 'application/json'})), timeout=60).read()
+except urllib.error.HTTPError as e:
+    if e.code != 409:   # 409: a retry of this stage-out created it already
+        raise
 prefix = 'hpc-outputs/%s/%s/' % (os.environ['WF_UID'], os.environ['STEP_NAME'])
 out = pathlib.Path(os.environ['KAOS_WORK']) / 'output'
 for name in [n for n in os.environ.get('STEP_OUTPUTS', '').split(',') if n]:
@@ -835,7 +846,7 @@ def fetch_outputs():
     repo = os.environ.get('OUTPUTS_REPO') or ''
     if not (OUTPUT_NAMES and base and repo and WALLET):
         return
-    branch = os.environ.get('OUTPUTS_REF') or 'main'
+    branch = 'hpc-%s-%s' % (os.environ.get('WF_UID', ''), os.environ.get('STEP_NAME', ''))
     for n in OUTPUT_NAMES:
         q = urllib.parse.urlencode({'path': 'hpc-outputs/%s/%s/%s.json' % (
             os.environ.get('WF_UID', ''), os.environ.get('STEP_NAME', ''), n)})
@@ -847,6 +858,12 @@ def fetch_outputs():
             print('output', n, ':', len(data), 'bytes', flush=True)
         except Exception as e:
             print('output', n, 'not staged out (default {}):', e, flush=True)
+    try:   # the hand-off branch has done its job
+        urllib.request.urlopen(urllib.request.Request(
+            base + '/api/v1/repositories/%s/branches/%s' % (repo, branch), method='DELETE',
+            headers={'Authorization': 'Bearer ' + WALLET}), timeout=60).read()
+    except Exception as e:
+        print('hand-off branch', branch, 'not deleted:', e, flush=True)
 
 
 TERMINAL = ('COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
