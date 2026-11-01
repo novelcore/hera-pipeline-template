@@ -63,6 +63,7 @@ from pathlib import Path
 import yaml
 
 from kubecore.meluxina import enhance_hpc, hpc_classes
+from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
 KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc"}
@@ -470,14 +471,12 @@ def enhance_env(step: dict, ctx: dict, annots: dict) -> None:
                 "valueFrom": {"secretKeyRef": {"name": secret_name, "key": keys["secretKey"]}},
             }
         )
-    # checkpoint bucket/prefix (the live WFT injects these; step code derives
-    # checkpoint locations from them), plus the run id that keeps one run's
-    # checkpoints from overwriting another's. Only when the context declares them.
-    checkpoints = ctx.get("checkpoints")
-    if checkpoints:
-        add({"name": "CHECKPOINT_BUCKET", "value": str(checkpoints.get("bucket", ""))})
-        add({"name": "CHECKPOINT_PREFIX", "value": str(checkpoints.get("prefix", ""))})
-        add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
+    # Results location: the app's own outputs repository `outputs-<app>` on `main`
+    # (never a dataset repository), plus the run id that names the run's
+    # directory and its lakeFS commit. Steps write with kubecore.outputs.write_run.
+    add({"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)})
+    add({"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()})
+    add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
 
 
 # How long a step may sit Pending before the platform calls it unschedulable.
@@ -847,16 +846,13 @@ def enhance_platform_group(steps: list, ctx: dict) -> None:
     if compose is None:
         return  # a pipeline without the compose step — nothing to inject
 
-    checkpoints = ctx.get("checkpoints") or {}
     overrides = {
         "platform.lakefs.repository": ctx["lakefs"]["repository"],
         "platform.lakefs.endpoint": ctx["lakefs"]["endpoint"],
         "platform.mlflow.tracking_uri": ctx["mlflow"]["trackingUri"],
+        "platform.checkpoints.bucket": outputs_repo(ctx),
+        "platform.checkpoints.prefix": checkpoint_prefix(),
     }
-    if checkpoints.get("bucket"):
-        overrides["platform.checkpoints.bucket"] = checkpoints["bucket"]
-    if checkpoints.get("prefix"):
-        overrides["platform.checkpoints.prefix"] = checkpoints["prefix"]
 
     args = compose["container"].setdefault("args", [])
     existing = {a.split("=", 1)[0] for a in args if isinstance(a, str)}
@@ -998,9 +994,9 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Enhance a raw Hera WorkflowTemplate with platform wiring.")
     parser.add_argument("--raw", required=True, help="Path to the raw WorkflowTemplate YAML (from pipeline.py).")
     parser.add_argument("--context", required=True, help="Path to pipeline-context.yaml.")
-    # Ignored: data-ref is free text (datasets are listed by `kubecore-dataset
-    # list` and config-validation). Still accepted so a CI that passes it keeps
-    # rendering.
+    # Ignored: the `dataset` parameter is filled from the platform's dataset
+    # catalog (hera-enhance-commit), not here. Still accepted so a CI that passes
+    # it keeps rendering.
     parser.add_argument("--catalog", default="", help=argparse.SUPPRESS)
     parser.add_argument("--output", required=True, help="Path to write the enhanced WorkflowTemplate YAML.")
     args = parser.parse_args(argv)
