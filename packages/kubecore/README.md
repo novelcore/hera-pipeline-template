@@ -31,17 +31,38 @@ The package and the vendored `kubecore/` engine at the repo root share the impor
 from kubecore import datasets, outputs
 
 ref = datasets.DatasetRef.parse("dataset-default@v2")      # DatasetError on malformed input
-commit = datasets.resolve(ref)                             # lakeFS commit id
+ref = ref.with_commit(commit)                              # optional: pin the commit dataset-loading resolved
+commit = datasets.resolve(ref)                             # pinned commit returned as is, else tag/main head
 data_yaml = datasets.materialize(ref, dest=None)           # Path to a data.yaml Ultralytics can train on
 datasets.list_datasets(); datasets.versions("dataset-x"); datasets.release("dataset-x")   # -> "vN"
 
-from kubecore.formats import get_format                   # "ultralytics" (alias "yolo")
+from kubecore.formats import get_format                   # "ultralytics" (alias "yolo"); detect, segment, pose
 fmt = get_format("ultralytics")
 fmt.creator.skeleton(classes=["cat", "dog"]); fmt.creator.validate(dir); fmt.creator.publish(dir, repo, "msg")
-fmt.consumer.materialize(ref, dest)
+fmt.consumer.materialize(ref, dest, commit=None)
 
-outputs.write_run("myapp", "exp1", "run-7", "./ckpt")      # merge commit on outputs-myapp main
+with outputs.run("myapp", "exp1", "run-7", "checkpoints") as r:    # branch run-run-7-checkpoints, reused on retry
+    resume = r.latest("weights/")                          # local path of what the branch already holds, or None
+    r.save("./ckpt")                                       # upload + commit on the run branch (durable)
+    r.finish({"dataset_ref": "dataset-default@v2", "mlflow_run_id": "..."})  # merge into main, delete branch
+outputs.write_run("myapp", "exp1", "run-7", "./ckpt")      # shortcut: open, save once, finish
 ```
+
+An exception inside `with outputs.run(...)` neither merges nor deletes the branch, so the retry resumes.
+Leaving the block normally without calling `finish` finishes with no extra metadata. An empty commit or an
+empty merge is a success and returns the existing commit.
+
+Datasets are validated for detection (`cls x y w h`), segmentation (`cls x1 y1 x2 y2 ...`, even count >= 6) and
+pose (`kpt_shape: [K, D]`, K*D values per line, visibility 0/1/2 when D=3). `nc` is optional when `names` is given.
+
+### Rights each call needs
+
+| call | needs |
+| --- | --- |
+| `resolve`, `materialize`, `consumer.materialize`, `versions`, `list_datasets`, `DatasetRef` | read on `dataset-*` (an app key can) |
+| `outputs.run(...)` / `write_run` (`open`, `save`, `latest`, `finish`) | write on that app's `outputs-<app>` (an app key can) |
+| `release` | tag creation on the dataset: people or admins, not an app key |
+| `create_dataset`, `creator.publish` / `publish_tree` (repository, draft branch, pull request) | people or admins, not an app key |
 
 `materialize` downloads only `data.yaml`, `images/`, `labels/` at the pinned commit, rewrites `path:`, and
 caches by (repo, commit) (`$KUBECORE_CACHE_DIR`, default `~/.cache/kubecore/datasets`); a second call is
@@ -66,7 +87,7 @@ kubecore dataset create <name> --classes a,b,c [--description ...]
 kubecore dataset list
 kubecore dataset versions <repo>
 kubecore dataset release <repo>
-kubecore dataset push <dir> <repo> -m "message"      # validates, draft branch, pull request
+kubecore dataset push <dir> <repo> -m "message" [--no-validate]   # validates, draft branch, pull request
 kubecore dataset pull <repo>@<version> [dest]
 kubecore dataset validate <dir>
 ```

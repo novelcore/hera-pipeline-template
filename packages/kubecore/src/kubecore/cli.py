@@ -96,8 +96,12 @@ def cmd_release(args) -> int:
 def cmd_push(args) -> int:
     c = _connect(args)
     repo = datasets.dataset_repo(args.repo)
+    if args.no_validate:
+        print("WARNING: --no-validate: the dataset was not validated; training may fail on bad labels.",
+              file=sys.stderr)
     result = get_format(args.format).creator.publish(
-        args.dir, repo, args.message, description=args.description or "", client=c)
+        args.dir, repo, args.message, description=args.description or "",
+        validate_first=not args.no_validate, client=c)
     if result.created:
         print(f"Created {repo}.")
     print(f"Uploaded to draft branch {result.branch} and opened a pull request into main.")
@@ -157,6 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("repo", help="dataset repository (created if missing)")
     sp.add_argument("-m", "--message", required=True, help="what changed (pull request title)")
     sp.add_argument("--description", help="description label when the repository is created")
+    sp.add_argument("--no-validate", action="store_true", help="skip the format check (prints a warning)")
     sp.add_argument("--format", default="ultralytics", choices=fmts + ["yolo"])
     sp = add(dsub, "pull", cmd_pull, "download a dataset version for training")
     sp.add_argument("ref", help="<dataset-repo>@<version>, e.g. dataset-default@v2")

@@ -101,3 +101,10 @@ def test_not_signed_in_error(capsys, monkeypatch):
     monkeypatch.setenv("LAKEFS_ENDPOINT", "http://lakefs.test")
     code, _, err = run(capsys, "dataset", "list")
     assert code == 1 and "kubecore login" in err
+
+
+def test_push_no_validate_warns_and_uploads(capsys, tmp_path):
+    root = write_dataset(tmp_path / "bad", bad_label="7 0.5 0.5 0.1 0.1")
+    code, out, err = run(capsys, "dataset", "push", str(root), "dataset-default", "-m", "x", "--no-validate")
+    assert code == 0 and "WARNING" in err and "not validated" in err
+    assert "/pulls/1" in out

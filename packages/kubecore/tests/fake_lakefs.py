@@ -166,6 +166,7 @@ class FakeLakeFS(BaseAdapter):
             self.writes.append((m, repo, rest[0], q["path"]))
             if m == "POST":
                 b["staged"][q["path"]] = _multipart_content(req)
+                r.setdefault("mtimes", {})[q["path"]] = next(self._ids)   # write order stands in for mtime
             else:
                 b["staged"][q["path"]] = None
             return (201 if m == "POST" else 204), {}
@@ -192,6 +193,8 @@ class FakeLakeFS(BaseAdapter):
                 tree[path] = head[path]
             else:
                 tree.pop(path, None)
+        if tree == r["commits"][dst["commit"]]:
+            return 400, {"message": "merge: no changes"}
         repo = next(n for n, x in self.repos.items() if x is r)
         cid, _ = self._new_commit(repo, tree)
         dst["commit"] = cid
@@ -202,7 +205,7 @@ class FakeLakeFS(BaseAdapter):
         view = self._view(repo, ref)
         if rest[0] == "objects" and len(rest) == 2:  # objects/ls
             pre = q.get("prefix", "")
-            return 200, {"results": [{"path": p, "path_type": "object", "size_bytes": len(c),
+            return 200, {"results": [{"path": p, "path_type": "object", "size_bytes": len(c), "mtime": self.repos[repo].get("mtimes", {}).get(p, 0),
                                       "checksum": hashlib.md5(c).hexdigest()}
                                      for p, c in sorted(view.items()) if p.startswith(pre)],
                          "pagination": {"has_more": False}}

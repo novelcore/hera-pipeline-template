@@ -93,3 +93,25 @@ def test_staged_dir_for_another_commit_is_ignored(populated, client, tmp_path, m
 def test_materialize_unknown_version_is_clear(populated, client):
     with pytest.raises(DatasetError, match="no version v9"):
         datasets.materialize(datasets.DatasetRef.parse("dataset-default@v9"), client=client)
+
+
+def test_pinned_commit_argument_skips_resolution_and_downloads_that_commit(populated, client, tmp_path):
+    before = len(populated.calls)
+    data_yaml = datasets.materialize(REF, tmp_path / "pin", client=client, commit="c-data")
+    assert (tmp_path / "pin" / "images/train/a.jpg").is_file() and data_yaml.is_file()
+    assert not any(c[1].endswith("/tags/v1") or c[1].endswith("/branches/main") for c in populated.calls[before:])
+
+
+def test_ref_carrying_a_commit_is_used_by_resolve_and_materialize(populated, client, tmp_path):
+    pinned = REF.with_commit("c-data")
+    n = len(populated.calls)
+    assert datasets.resolve(pinned, client) == "c-data" and len(populated.calls) == n    # no lakeFS call
+    populated.tag("dataset-default", "v1", "main")
+    populated.repos["dataset-default"]["tags"]["v1"] = "somewhere-else"                  # the tag moved
+    datasets.materialize(pinned, tmp_path / "x", client=client)
+    assert (tmp_path / "x" / "images/train/a.jpg").read_bytes() == b"img-a"
+
+
+def test_pinned_commit_must_look_like_a_commit():
+    with pytest.raises(DatasetError, match="not a commit id"):
+        REF.with_commit("no good!")
