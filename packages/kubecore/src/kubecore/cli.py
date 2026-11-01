@@ -33,7 +33,7 @@ def _repo_url(c: LakeFS, repo: str, tail: str = "objects") -> str:
 
 
 def _print_errors(errors: list) -> None:
-    from .formats.ultralytics import ValidationReport
+    from .formats import ValidationReport
     print(ValidationReport(errors).format(), file=sys.stderr)
 
 
@@ -45,11 +45,22 @@ def cmd_login(args) -> int:
     return 0
 
 
+def _repo(c: LakeFS, name: str) -> str:
+    """An existing repository by its exact name, else the ``dataset-<name>`` shorthand."""
+    return name if c.repository(name) else datasets.dataset_repo(name)
+
+
 def cmd_create(args) -> int:
     c = _connect(args)
     classes = [x.strip() for x in (args.classes or "").split(",") if x.strip()]
     repo = datasets.create_dataset(args.name, args.template, args.description or "", c,
                                    classes=classes, title=args.name)
+    if args.template == datasets.NO_TEMPLATE:
+        print(f"Created {repo}: empty, no template (labelled kaos.kind=dataset).")
+        print(f"  Open it:  {_repo_url(c, repo)}")
+        print("kaos-lake lists it as a dataset once its first commit lands. Next: push your files")
+        print(f"  kubecore dataset push ./my-files {repo} -m \"first files\"")
+        return 0
     print(f"Created {repo} ({get_format(args.template).name}).")
     print(f"  Open it:  {_repo_url(c, repo)}")
     print("Next: get a local copy, add your images and labels, then push (opens a pull request):")
@@ -73,7 +84,7 @@ def cmd_list(args) -> int:
 
 def cmd_versions(args) -> int:
     c = _connect(args)
-    repo = datasets.dataset_repo(args.repo)
+    repo = _repo(c, args.repo)
     found = datasets.versions(repo, c)
     print(f"{repo}: {', '.join(found) if found else 'no versions yet'} (and {datasets.LATEST}, the head of main)")
     if found:
@@ -85,7 +96,7 @@ def cmd_versions(args) -> int:
 
 def cmd_release(args) -> int:
     c = _connect(args)
-    repo = datasets.dataset_repo(args.repo)
+    repo = _repo(c, args.repo)
     version = datasets.release(repo, c)
     print(f"Released {repo} {version}.")
     print(f"  Open it:  {_repo_url(c, repo, f'objects?ref={version}')}")
@@ -95,11 +106,12 @@ def cmd_release(args) -> int:
 
 def cmd_push(args) -> int:
     c = _connect(args)
-    repo = datasets.dataset_repo(args.repo)
+    repo = _repo(c, args.repo)
+    fmt_name = args.format or datasets.format_of(repo, c)   # no template label: raw, validates nothing
     if args.no_validate:
         print("WARNING: --no-validate: the dataset was not validated; training may fail on bad labels.",
               file=sys.stderr)
-    result = get_format(args.format).creator.publish(
+    result = get_format(fmt_name).creator.publish(
         args.dir, repo, args.message, description=args.description or "",
         validate_first=not args.no_validate, client=c)
     if result.created:
@@ -113,9 +125,12 @@ def cmd_push(args) -> int:
 def cmd_pull(args) -> int:
     c = _connect(args)
     ref = datasets.DatasetRef.parse(args.ref)
-    data_yaml = datasets.materialize(ref, args.dest, client=c)
-    print(f"Ready: {data_yaml}")
-    print(f"Next: train with it, e.g.  YOLO('yolo11n.pt').train(data='{data_yaml}')")
+    path = datasets.materialize(ref, args.dest, args.format, c, prefix=args.prefix)
+    print(f"Ready: {path}")
+    if path.is_dir():
+        print(f"Next: your files are in {path}; read them from there in your code.")
+    else:
+        print(f"Next: train with it, e.g.  YOLO('yolo11n.pt').train(data='{path}')")
     return 0
 
 
@@ -150,9 +165,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = add(dsub, "create", cmd_create, "create a new dataset repository with a starter layout")
     sp.add_argument("name", help="dataset name (the repository becomes dataset-<name>)")
-    sp.add_argument("--classes", required=True, help="comma-separated class names, e.g. cat,dog")
+    sp.add_argument("--classes", help="comma-separated class names, e.g. cat,dog (ultralytics template)")
     sp.add_argument("--description", help="what the dataset is for")
-    sp.add_argument("--template", default="ultralytics", help=f"format ({', '.join(fmts)}; default ultralytics)")
+    sp.add_argument("--template", default="ultralytics", choices=fmts + ["yolo", datasets.NO_TEMPLATE],
+                    help=f"starter layout ({', '.join(fmts)}), or none for an empty repository (default ultralytics)")
     add(dsub, "list", cmd_list, "list the datasets you can read")
     add(dsub, "versions", cmd_versions, "list a dataset's versions").add_argument("repo")
     add(dsub, "release", cmd_release, "tag the head of main with the next version").add_argument("repo")
@@ -162,10 +178,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-m", "--message", required=True, help="what changed (pull request title)")
     sp.add_argument("--description", help="description label when the repository is created")
     sp.add_argument("--no-validate", action="store_true", help="skip the format check (prints a warning)")
-    sp.add_argument("--format", default="ultralytics", choices=fmts + ["yolo"])
+    sp.add_argument("--format", choices=fmts + ["yolo"],
+                    help="format to validate with (default: the repository's template label; none means raw)")
     sp = add(dsub, "pull", cmd_pull, "download a dataset version for training")
-    sp.add_argument("ref", help="<dataset-repo>@<version>, e.g. dataset-default@v2")
+    sp.add_argument("ref", help="<repository>@<ref>, e.g. dataset-default@v2 or my-repo@main")
     sp.add_argument("dest", nargs="?", help="folder to download into (default: a per-commit cache)")
+    sp.add_argument("--format", choices=fmts + ["yolo"], help="default: the repository's template label, else raw")
+    sp.add_argument("--prefix", help="download only this folder of the repository (raw format)")
     sp = add(dsub, "validate", cmd_validate, "check a local folder against the dataset format", url=False)
     sp.add_argument("dir")
     sp.add_argument("--format", default="ultralytics", choices=fmts + ["yolo"])

@@ -1,14 +1,34 @@
-"""Dataset formats: each is a creator (build, validate, publish) plus a consumer (materialize).
+"""Dataset formats (``ultralytics``, and ``raw`` for any repository): each is a creator (build, validate, publish) plus a consumer (materialize).
 
 ``get_format("ultralytics")`` returns the pair. ``yolo`` is accepted as an alias
 (kaos-lake is renaming its template ``yolo`` -> ``ultralytics``).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import DatasetError
+
+
+MAX_SHOWN = 30
+
+
+@dataclass
+class ValidationReport:
+    """Every problem found in a local dataset (aggregated, never first-error-only)."""
+    errors: list = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+    def format(self) -> str:
+        shown = self.errors[:MAX_SHOWN]
+        lines = [f"  - {e}" for e in shown]
+        if len(self.errors) > len(shown):
+            lines.append(f"  ... and {len(self.errors) - len(shown)} more")
+        return "\n".join(lines) if lines else "dataset is valid"
 
 
 @dataclass(frozen=True)
@@ -40,4 +60,4 @@ def format_names() -> list:
     return sorted(_REGISTRY)
 
 
-from . import ultralytics  # noqa: E402,F401  (registers itself)
+from . import raw, ultralytics  # noqa: E402,F401  (register themselves)

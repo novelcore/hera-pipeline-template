@@ -83,8 +83,12 @@ def upload_tree(client: LakeFS, repo: str, branch: str, root: pathlib.Path, pref
     return upload_files(client, repo, branch, local_files(root, prefix))
 
 
-def download_prefixes(client: LakeFS, repo: str, commit: str, prefixes: Iterable, dest: pathlib.Path) -> int:
-    """Download every object under any of ``prefixes`` at ``commit`` into ``dest``; returns the count."""
+def download_prefixes(client: LakeFS, repo: str, commit: str, prefixes: Iterable, dest: pathlib.Path,
+                      strip: str = "") -> int:
+    """Download every object under any of ``prefixes`` at ``commit`` into ``dest``; returns the count.
+
+    ``strip`` is removed from the start of each path before it is written below ``dest``.
+    """
     paths = [o["path"] for pre in prefixes for o in client.list_objects(repo, commit, pre)]
-    _parallel(client, paths, lambda p: client.download_object(repo, commit, p, dest / p))
+    _parallel(client, paths, lambda p: client.download_object(repo, commit, p, dest / p[len(strip):]))
     return len(paths)

@@ -175,6 +175,11 @@ class LakeFS:
         return self._call("GET", f"/repositories/{_q(repo)}/tags/{_q(tag)}",
                           what=f"tag {tag} of {repo}").json()["commit_id"]
 
+    def commit_id(self, repo: str, commit: str) -> str:
+        """``commit`` itself when it exists in ``repo`` (NotFoundError otherwise)."""
+        return self._call("GET", f"/repositories/{_q(repo)}/commits/{_q(commit)}",
+                          what=f"commit {commit} of {repo}").json()["id"]
+
     def create_tag(self, repo: str, tag: str, ref: str) -> None:
         self._call("POST", f"/repositories/{_q(repo)}/tags", json={"id": tag, "ref": ref},
                    what=f"create tag {tag}")

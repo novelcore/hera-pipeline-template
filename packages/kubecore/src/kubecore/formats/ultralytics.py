@@ -12,11 +12,8 @@ materializes a pinned version for training. Registered as ``ultralytics``.
 from __future__ import annotations
 
 import json
-import os
 import pathlib
-import shutil
-import tempfile
-from dataclasses import dataclass, field
+
 from typing import Optional, Sequence
 
 import yaml
@@ -24,38 +21,16 @@ import yaml
 from .. import datasets
 from ..errors import DatasetError, ValidationFailed
 from ..lakefs import LakeFS
-from ..transfer import download_prefixes
-from . import Format, register
+from . import Format, ValidationReport, local, register
 
 NAME = "ultralytics"
 SPLITS = ("train", "val", "test")
 REQUIRED_SPLITS = ("train", "val")  # Ultralytics trains on train and validates on val; test is optional
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 DOWNLOAD_PREFIXES = ("data.yaml", "images/", "labels/")  # everything training reads, nothing else
-MARKER = ".kubecore-dataset.json"
-STAGED_ENV, CACHE_ENV = "KUBECORE_STAGED_DIR", "KUBECORE_CACHE_DIR"
-STAGED_COMMIT_FILES = (".kaos-commit", ".kaos-ready")  # MeluXina stager markers that may hold the commit
-MAX_SHOWN = 30
 
 
 # --------------------------------------------------------------------- validation
-@dataclass
-class ValidationReport:
-    """Every problem found in a local dataset (aggregated, never first-error-only)."""
-    errors: list = field(default_factory=list)
-
-    @property
-    def ok(self) -> bool:
-        return not self.errors
-
-    def format(self) -> str:
-        shown = self.errors[:MAX_SHOWN]
-        lines = [f"  - {e}" for e in shown]
-        if len(self.errors) > len(shown):
-            lines.append(f"  ... and {len(self.errors) - len(shown)} more")
-        return "\n".join(lines) if lines else "dataset is valid"
-
-
 def _load_data_yaml(root: pathlib.Path, errors: list) -> Optional[dict]:
     path = root / "data.yaml"
     if not path.is_file():
@@ -266,32 +241,6 @@ class UltralyticsCreator:
 
 
 # --------------------------------------------------------------------- consumer
-def cache_root() -> pathlib.Path:
-    """Default home of materialized datasets, keyed <repo>/<commit>."""
-    return pathlib.Path(os.environ.get(CACHE_ENV) or pathlib.Path.home() / ".cache" / "kubecore" / "datasets")
-
-
-def _marker_matches(directory: pathlib.Path, repo: str, commit: str) -> bool:
-    try:
-        m = json.loads((directory / MARKER).read_text())
-    except (OSError, ValueError):
-        return False
-    return m.get("repo") == repo and m.get("commit") == commit and (directory / "data.yaml").is_file()
-
-
-def _staged_dir(commit: str) -> Optional[pathlib.Path]:
-    """The staged copy (KUBECORE_STAGED_DIR) when it holds ``commit``, else None."""
-    raw = os.environ.get(STAGED_ENV)
-    if not raw:
-        return None
-    staged = pathlib.Path(raw)
-    if not (staged / "data.yaml").is_file():
-        return None
-    holders = [staged.name] + [
-        (staged / f).read_text() for f in STAGED_COMMIT_FILES if (staged / f).is_file()]
-    return staged if any(commit in h for h in holders) else None
-
-
 def _write_data_yaml(source: pathlib.Path, out: pathlib.Path, dataset_path: pathlib.Path) -> pathlib.Path:
     """Copy ``source`` data.yaml to ``out`` with ``path:`` pointing at ``dataset_path``."""
     data = yaml.safe_load(source.read_text()) or {}
@@ -307,37 +256,27 @@ class UltralyticsConsumer:
     name = NAME
 
     def materialize(self, ref: datasets.DatasetRef, dest=None, client: Optional[LakeFS] = None,
-                    commit: Optional[str] = None) -> pathlib.Path:
+                    commit: Optional[str] = None, prefix: Optional[str] = None) -> pathlib.Path:
         """Local ``data.yaml`` Ultralytics can train on for ``ref``.
 
         Only data.yaml, images/ and labels/ are downloaded, at the pinned commit. Data lives in
         ``dest`` (default ``<cache>/<repo>/<commit>``); a second call for the same commit is free.
-        ``commit`` (or ``ref.commit``) pins the version. A staged copy (KUBECORE_STAGED_DIR holding the commit) is used in place, nothing downloaded.
+        ``commit`` (or ``ref.commit``) pins the version. A staged copy (KUBECORE_STAGED_DIR holding
+        the commit) is used in place, nothing downloaded. ``prefix`` is only for the raw format.
         """
+        if prefix:
+            raise DatasetError("prefix= is only supported by the raw format (fmt_name='raw').")
         commit = datasets.resolve(ref, client, commit)
-        target = pathlib.Path(dest) if dest else cache_root() / ref.repo / commit
-        staged = _staged_dir(commit)
+        target = pathlib.Path(dest) if dest else local.cache_dir(ref.repo, commit)
+        staged = local.staged_dir(commit, "data.yaml")
         if staged:
             return _write_data_yaml(staged / "data.yaml", target / "data.yaml", staged)
-        if _marker_matches(target, ref.repo, commit):
+        if local.marker_matches(target, ref.repo, commit, None, "data.yaml"):
             return target / "data.yaml"
-        self._download(ref, commit, target, client)
+        local.fetch(client, ref.repo, commit, DOWNLOAD_PREFIXES, target,
+                    finalize=lambda tmp: _write_data_yaml(tmp / "data.yaml", tmp / "data.yaml", target.resolve()),
+                    empty_message=f"{ref} holds no ultralytics files (data.yaml, images/, labels/).")
         return target / "data.yaml"
-
-    def _download(self, ref, commit: str, target: pathlib.Path, client: LakeFS) -> None:
-        if target.exists() and any(target.iterdir()) and not (target / MARKER).is_file():
-            raise DatasetError(f"{target} is not empty and is not a kubecore dataset copy; pick another folder.")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = pathlib.Path(tempfile.mkdtemp(prefix=target.name + ".part-", dir=target.parent))
-        try:
-            if download_prefixes(client, ref.repo, commit, DOWNLOAD_PREFIXES, tmp) == 0:
-                raise DatasetError(f"{ref} holds no ultralytics files (data.yaml, images/, labels/).")
-            _write_data_yaml(tmp / "data.yaml", tmp / "data.yaml", target.resolve())
-            (tmp / MARKER).write_text(json.dumps({"repo": ref.repo, "commit": commit}))
-            shutil.rmtree(target, ignore_errors=True)
-            os.replace(tmp, target)  # atomic: a half-downloaded copy is never visible as complete
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
 
 
 register(Format(NAME, UltralyticsCreator(), UltralyticsConsumer()))

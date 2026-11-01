@@ -23,10 +23,13 @@ MAIN = "main"
 LATEST = "latest"
 LABEL_KIND, LABEL_TEMPLATE, LABEL_DESCRIPTION = "kaos.kind", "kaos.template", "kaos.description"
 LABEL_DEFAULT, LABEL_LOCATION, LABEL_SHARED = "kaos.default", "kaos.location", "kaos.shared_with"
+NO_TEMPLATE = "none"   # create_dataset(fmt_name="none"): an empty repository
 STORAGE_BASE_ENV = "KUBECORE_STORAGE_NAMESPACE_BASE"
 
 _NAME_RE = re.compile(r"^[a-z0-9-]{3,48}$")
 _VERSION_RE = re.compile(r"^v[1-9][0-9]*$")
+_REPO_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}$")   # any valid lakeFS repository name
+_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$")  # vN, latest, branch, tag or commit id
 _COMMIT_RE = re.compile(r"^[A-Za-z0-9_-]{6,128}$")
 
 
@@ -42,9 +45,10 @@ def dataset_repo(name: str) -> str:
 
 @dataclass(frozen=True)
 class DatasetRef:
-    """A choice ``<dataset-repo>@<version>``; version is ``latest`` or ``vN``.
+    """A choice ``<repository>@<ref>`` over ANY lakeFS repository (not only ``dataset-*``).
 
-    ``commit`` optionally pins the exact lakeFS commit (e.g. the one ``dataset-loading`` resolved);
+    ``version`` is ``vN`` (a tag), ``latest`` (head of the default branch), a branch, a tag or a
+    commit id. ``commit`` optionally pins the exact commit (e.g. the one ``dataset-loading`` resolved);
     when set, ``resolve`` returns it without asking lakeFS.
     """
     repo: str
@@ -59,19 +63,20 @@ class DatasetRef:
 
     @classmethod
     def parse(cls, text: str) -> "DatasetRef":
-        """Parse ``dataset-x@v2``; raises DatasetError saying what is wrong and what is valid."""
+        """Parse ``dataset-x@v2`` or ``my-repo@main``; raises DatasetError saying what is wrong."""
         text = (text or "").strip()
         repo, sep, version = text.partition("@")
         if not sep or not repo or not version:
-            raise DatasetError(f"{text!r} is not a dataset reference: write <dataset-repo>@<version>, "
-                               f"e.g. dataset-default@v2 or dataset-default@{LATEST}.")
+            raise DatasetError(f"{text!r} is not a dataset reference: write <repository>@<ref>, "
+                               f"e.g. dataset-default@v2, dataset-default@{LATEST} or my-repo@main.")
         if "@" in version:
-            raise DatasetError(f"{text!r} has more than one '@': write <dataset-repo>@<version>.")
-        if not repo.startswith(DATASET_PREFIX) or not _NAME_RE.match(repo[len(DATASET_PREFIX):]):
-            raise DatasetError(f"{repo!r} is not a dataset repository: names look like "
-                               f"{DATASET_PREFIX}<name> (3 to 48 characters from a-z, 0-9, '-').")
-        if version != LATEST and not _VERSION_RE.match(version):
-            raise DatasetError(f"{version!r} is not a version: use {LATEST} or v1, v2, ...")
+            raise DatasetError(f"{text!r} has more than one '@': write <repository>@<ref>.")
+        if not _REPO_RE.match(repo):
+            raise DatasetError(f"{repo!r} is not a valid lakeFS repository name: use 3 to 63 characters "
+                               "from a-z, 0-9 and '-', starting with a letter or digit.")
+        if not _REF_RE.match(version) or ".." in version or version.endswith(("/", ".lock")):
+            raise DatasetError(f"{version!r} is not a valid ref: use {LATEST}, a version like v2, "
+                               "a branch, a tag or a commit id.")
         return cls(repo, version)
 
     def __str__(self) -> str:
@@ -93,25 +98,64 @@ def _client(client: Optional[LakeFS]) -> LakeFS:
     return client or LakeFS.connect()
 
 
-def resolve(ref: DatasetRef, client: Optional[LakeFS] = None, commit: Optional[str] = None) -> str:
-    """The commit id ``ref`` points at (tag commit for ``vN``, head of main for ``latest``).
+def default_branch(c: LakeFS, repo: str) -> str:
+    """The repository's default branch (``main`` when lakeFS does not say)."""
+    info = c.repository(repo)
+    if info is None:
+        raise DatasetError(f"repository {repo} does not exist. List datasets with `kubecore dataset list`.")
+    return info.get("default_branch") or MAIN
 
-    A pinned ``commit`` (argument, or carried by ``ref``) is returned as is, with no lakeFS call.
+
+def _lookup(c: LakeFS, repo: str, name: str) -> Optional[str]:
+    """Commit of ``name`` as a branch, then a tag, then a commit id; None when it is none of them."""
+    for find in (c.branch_commit, c.tag_commit, c.commit_id):
+        try:
+            return find(repo, name)
+        except NotFoundError:
+            continue
+    return None
+
+
+def resolve(ref: DatasetRef, client: Optional[LakeFS] = None, commit: Optional[str] = None) -> str:
+    """The commit id ``ref`` points at.
+
+    ``latest`` is the head of the default branch, ``vN`` a tag, anything else a branch, tag or commit id
+    (tried in that order). A pinned ``commit`` (argument, or carried by ``ref``) is returned as is,
+    with no lakeFS call.
     """
     pinned = commit or ref.commit
     if pinned:
         return ref.with_commit(pinned).commit
     c = _client(client)
-    try:
-        if ref.version == LATEST:
-            return c.branch_commit(ref.repo, MAIN)
-        return c.tag_commit(ref.repo, ref.version)
-    except NotFoundError as exc:
-        have = ", ".join(versions(ref.repo, c)) if c.repository(ref.repo) else None
-        if have is None:
-            raise DatasetError(f"dataset {ref.repo} does not exist. List datasets with `kubecore dataset list`.") from exc
+    branch = default_branch(c, ref.repo)  # also the clear "does not exist" error
+    if ref.version == LATEST:
+        return c.branch_commit(ref.repo, branch)
+    found = _lookup(c, ref.repo, ref.version) if not _VERSION_RE.match(ref.version) else _tag_or_none(c, ref)
+    if found:
+        return found
+    if _VERSION_RE.match(ref.version):
+        have = ", ".join(versions(ref.repo, c))
         raise DatasetError(f"{ref.repo} has no version {ref.version}. "
-                           f"Available: {have or 'none yet (release one with `kubecore dataset release`)'}.") from exc
+                           f"Available: {have or 'none yet (release one with `kubecore dataset release`)'}.")
+    raise DatasetError(f"{ref.repo} has no branch, tag or commit {ref.version!r}.")
+
+
+def _tag_or_none(c: LakeFS, ref: DatasetRef) -> Optional[str]:
+    try:
+        return c.tag_commit(ref.repo, ref.version)
+    except NotFoundError:
+        return None
+
+
+def format_of(repo: str, client: Optional[LakeFS] = None) -> str:
+    """Name of the format a repository is labelled with (``kaos.template``) if we know it, else ``raw``."""
+    from .formats import format_names, get_format
+    try:
+        label = _client(client).metadata(repo).get(LABEL_TEMPLATE)
+    except LakeFSError:
+        label = None
+    known = label and (label in format_names() or label == "yolo")
+    return get_format(label).name if known else "raw"
 
 
 def list_datasets(client: Optional[LakeFS] = None) -> list:
@@ -142,9 +186,9 @@ def versions(repo: str, client: Optional[LakeFS] = None) -> list:
 
 
 def release(repo: str, client: Optional[LakeFS] = None) -> str:
-    """Tag the head of ``main`` with the next ``vN`` and return it (v10 follows v9)."""
+    """Tag the head of the default branch (``main``) with the next ``vN`` and return it (v10 follows v9)."""
     c = _client(client)
-    head = c.branch_commit(repo, MAIN)
+    head = c.branch_commit(repo, default_branch(c, repo))
     tags = {t["id"]: t["commit_id"] for t in c.tags(repo)}
     nums = [n for n in (_version_number(t) for t in tags) if n]
     for tag, commit in tags.items():
@@ -174,15 +218,30 @@ def ensure_repository(c: LakeFS, repo: str, labels: dict) -> bool:
     return True
 
 
+def _create_empty(c: LakeFS, repo: str, description: str) -> str:
+    """An empty ``dataset-<name>`` labelled kaos.kind=dataset: no files, no starter commit, no template."""
+    if c.repository(repo):
+        raise DatasetError(f"{repo} already exists. Push to it with `kubecore dataset push <dir> {repo}`.")
+    c.create_repository(repo, _storage_namespace(c, repo), MAIN)
+    labels = {LABEL_KIND: "dataset"}
+    if description:
+        labels[LABEL_DESCRIPTION] = description
+    c.set_metadata(repo, labels)
+    return repo
+
+
 def create_dataset(name: str, fmt_name: str = "ultralytics", description: str = "",
                    client: Optional[LakeFS] = None, **skeleton_args) -> str:
     """Create ``dataset-<name>`` the way the kaos-lake UI does; returns the repository name.
 
     Order: create the repository, commit the format's skeleton to main (commit metadata
-    ``kaos.template``), then set the labels. Fails if the repository already exists.
+    ``kaos.template``), then set the labels. Fails if the repository already exists. ``fmt_name="none"`` creates an empty labelled repository.
     """
     from .formats import get_format
-    c, fmt = _client(client), get_format(fmt_name)
+    c = _client(client)
+    if fmt_name == NO_TEMPLATE:
+        return _create_empty(c, dataset_repo(name), description)
+    fmt = get_format(fmt_name)
     repo = dataset_repo(name)
     files = fmt.creator.skeleton(description=description, **skeleton_args)
     if c.repository(repo):
@@ -241,16 +300,16 @@ def publish_tree(local_dir, repo: str, message: str, via_pull_request: bool = Tr
 
 
 def materialize(ref: DatasetRef, dest=None, fmt_name: Optional[str] = None,
-                client: Optional[LakeFS] = None, commit: Optional[str] = None) -> pathlib.Path:
-    """Local, trainable copy of ``ref`` in its format's layout; returns the format's entry file.
+                client: Optional[LakeFS] = None, commit: Optional[str] = None,
+                prefix: Optional[str] = None) -> pathlib.Path:
+    """Local copy of ``ref`` through its format's consumer.
 
-    ``commit`` (or ``ref.commit``) pins the exact commit. ``fmt_name`` defaults to the repository's ``kaos.template`` label, then ``ultralytics``.
+    Returns the format's entry: ``data.yaml`` for ``ultralytics``, the folder for ``raw``. The format is
+    ``fmt_name`` if given, else the repository's ``kaos.template`` label (``yolo`` is an alias), else
+    ``raw``. ``commit`` (or ``ref.commit``) pins the exact commit; ``prefix`` (raw only) downloads one folder.
     """
     from .formats import get_format
     c = _client(client)
-    if fmt_name is None:
-        try:
-            fmt_name = c.metadata(ref.repo).get(LABEL_TEMPLATE)
-        except LakeFSError:
-            fmt_name = None
-    return get_format(fmt_name or "ultralytics").consumer.materialize(ref, dest, c, commit)
+    fmt = get_format(fmt_name) if fmt_name else get_format(format_of(ref.repo, c))
+    extra = {"prefix": prefix} if prefix else {}
+    return fmt.consumer.materialize(ref, dest, c, commit, **extra)
