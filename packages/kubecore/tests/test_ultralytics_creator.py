@@ -78,7 +78,7 @@ def test_validate_image_without_label(tmp_path):
     ("5 0.5 0.5 0.2 0.2", "class id 5 is outside 0..1"),
     ("0 1.5 0.5 0.2 0.2", "coordinates must be within [0,1]"),
     ("x 0.5 0.5 0.2 0.2", "class id must be an integer"),
-    ("0 0.5 abc 0.2 0.2", "class id must be an integer and x y w h numbers"),
+    ("0 0.5 abc 0.2 0.2", "class id must be an integer and the rest numbers"),
 ])
 def test_validate_label_line_errors(tmp_path, line, fragment):
     root = write_dataset(tmp_path / "d", bad_label=line)
@@ -167,3 +167,91 @@ def test_validate_names_ids_must_be_exactly_0_to_nc_minus_1(dataset_dir):
 def test_validate_names_keys_must_be_integers(dataset_dir):
     _with_names(dataset_dir, '  "0": a\n  b: b', 2)
     assert "keys must be integer class ids" in _errors(dataset_dir)
+
+
+# ---- pose / segmentation / optional nc
+def _pose_dataset(root, label, kpt="[3, 3]", extra=""):
+    write_dataset(root)
+    (root / "data.yaml").write_text(
+        f"train: images/train\nval: images/val\nnames:\n  0: person\nkpt_shape: {kpt}\n{extra}")
+    for split in ("train", "val"):
+        for stem in ("a", "b"):
+            (root / "labels" / split / f"{stem}.txt").write_text(label + "\n")
+    return root
+
+
+GOOD_POSE_D3 = "0 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2 0.2 1 0.3 0.3 0"      # 5 + 3*3 values
+
+
+def test_validate_pose_with_visibility_ok(tmp_path):
+    assert validate(_pose_dataset(tmp_path / "p", GOOD_POSE_D3)).ok
+
+
+def test_validate_pose_d2_ok(tmp_path):
+    assert validate(_pose_dataset(tmp_path / "p", "0 0.5 0.5 0.2 0.2 0.1 0.1 0.2 0.2 0.3 0.3", "[3, 2]")).ok
+
+
+@pytest.mark.parametrize("label,fragment", [
+    ("0 0.5 0.5 0.2 0.2 0.1 0.1 2", "3 keypoints x 3 values (14 values), got 8"),       # too few
+    ("0 0.5 0.5 0.2 0.2 0.1 0.1 3 0.2 0.2 1 0.3 0.3 0", "visibility must be 0, 1 or 2"),
+    ("0 0.5 0.5 0.2 0.2 1.1 0.1 2 0.2 0.2 1 0.3 0.3 0", "coordinates must be within [0,1]"),
+    ("0 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2 0.2 1 0.3 -0.3 0", "coordinates must be within [0,1]"),
+    ("4 0.5 0.5 0.2 0.2 0.1 0.1 2 0.2 0.2 1 0.3 0.3 0", "class id 4 is outside"),
+])
+def test_validate_pose_label_errors(tmp_path, label, fragment):
+    assert fragment in _errors(_pose_dataset(tmp_path / "p", label))
+
+
+@pytest.mark.parametrize("kpt", ["[3]", "[0, 3]", "[3, 4]", "oops", "[3.5, 3]"])
+def test_validate_bad_kpt_shape(tmp_path, kpt):
+    assert "kpt_shape must be [K, D]" in _errors(_pose_dataset(tmp_path / "p", GOOD_POSE_D3, kpt))
+
+
+def test_validate_segmentation_polygons_ok_and_mixed_with_boxes(tmp_path):
+    root = write_dataset(tmp_path / "s")
+    (root / "labels" / "train" / "a.txt").write_text("0 0.1 0.1 0.9 0.1 0.5 0.9\n1 0.5 0.5 0.2 0.2\n")
+    assert validate(root).ok
+
+
+@pytest.mark.parametrize("line", ["0 0.1 0.1 0.9 0.1 0.5", "0 0.1 0.1", "0 0.1 0.1 0.9 0.1 0.5 0.9 0.4"])
+def test_validate_segmentation_needs_even_coordinate_count_at_least_6(tmp_path, line):
+    root = write_dataset(tmp_path / "s", bad_label=line)
+    assert "segmentation" in _errors(root)
+
+
+def test_validate_segmentation_coordinates_in_range(tmp_path):
+    root = write_dataset(tmp_path / "s", bad_label="0 0.1 0.1 0.9 1.5 0.5 0.9")
+    assert "coordinates must be within [0,1]" in _errors(root)
+
+
+def test_validate_nc_is_optional_when_names_given(dataset_dir):
+    (dataset_dir / "data.yaml").write_text("train: images/train\nval: images/val\nnames:\n  0: a\n  1: b\n")
+    assert validate(dataset_dir).ok
+    (dataset_dir / "labels" / "train" / "a.txt").write_text("2 0.5 0.5 0.2 0.2\n")   # id derived from names
+    assert "class id 2 is outside 0..1" in _errors(dataset_dir)
+
+
+def test_validate_names_required(dataset_dir):
+    (dataset_dir / "data.yaml").write_text("train: images/train\nval: images/val\nnc: 2\n")
+    assert "names must be a non-empty list" in _errors(dataset_dir)
+
+
+def test_validate_nc_checked_against_names_only_when_both_present(dataset_dir):
+    (dataset_dir / "data.yaml").write_text("train: images/train\nval: images/val\nnc: 5\nnames: [a, b]\n")
+    assert "nc is 5 but names has 2" in _errors(dataset_dir)
+
+
+def test_publish_pose_dataset_through_pr(fake, client, tmp_path):
+    root = _pose_dataset(tmp_path / "p", GOOD_POSE_D3)
+    assert creator.publish(root, "dataset-default", "pose", client=client).pull_id
+
+
+def test_publish_no_validate_uploads_an_invalid_dataset(fake, client, tmp_path):
+    root = write_dataset(tmp_path / "d", bad_label="0 9 9 9 9")
+    assert creator.publish(root, "dataset-default", "m", validate_first=False, client=client).pull_id
+
+
+def test_publish_records_metadata_on_the_commit(fake, client, dataset_dir):
+    result = creator.publish(dataset_dir, "dataset-default", "m", metadata={"source": "labeler", "n": 3}, client=client)
+    log = fake.repos["dataset-default"]["commit_log"]
+    assert log[-1][0] == result.branch and log[-1][3] == {"source": "labeler", "n": "3"}

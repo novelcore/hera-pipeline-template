@@ -72,11 +72,15 @@ def apply_plan(client: LakeFS, repo: str, branch: str, plan: MirrorPlan) -> None
     _parallel(client, plan.delete, lambda path: client.delete_object(repo, branch, path))
 
 
-def upload_tree(client: LakeFS, repo: str, branch: str, root: pathlib.Path, prefix: str = "") -> int:
-    """Upload every file under ``root`` to ``branch`` below ``prefix``; returns the file count."""
-    files = local_files(root, prefix)
+def upload_files(client: LakeFS, repo: str, branch: str, files: dict) -> int:
+    """Upload ``{repo path: local Path}`` to ``branch``; returns the file count."""
     _parallel(client, files.items(), lambda kv: client.upload_object(repo, branch, kv[0], kv[1]))
     return len(files)
+
+
+def upload_tree(client: LakeFS, repo: str, branch: str, root: pathlib.Path, prefix: str = "") -> int:
+    """Upload every file under ``root`` to ``branch`` below ``prefix``; returns the file count."""
+    return upload_files(client, repo, branch, local_files(root, prefix))
 
 
 def download_prefixes(client: LakeFS, repo: str, commit: str, prefixes: Iterable, dest: pathlib.Path) -> int:

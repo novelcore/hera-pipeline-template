@@ -25,6 +25,15 @@ def _q(value: str) -> str:
     return quote(value, safe="")
 
 
+def _strs(metadata: Optional[dict]) -> dict:
+    return {k: str(v) for k, v in (metadata or {}).items()}
+
+
+def _is_no_changes(exc: LakeFSError) -> bool:
+    """lakeFS answers an empty commit or merge with 400 'no changes'."""
+    return exc.status == 400 and "no changes" in str(exc).lower()
+
+
 def _session(cred: credentials.Credential, pool: int) -> requests.Session:
     s = requests.Session()
     retry = Retry(total=5, backoff_factor=0.5, status_forcelist=[502, 503, 504],
@@ -127,12 +136,28 @@ class LakeFS:
         self._call("DELETE", f"/repositories/{_q(repo)}/branches/{_q(name)}", ok=(200, 204, 404),
                    what=f"delete branch {name}")
 
-    def merge(self, repo: str, source: str, destination: str, message: str, metadata: Optional[dict] = None) -> str:
-        """Merge ``source`` into ``destination`` (mergeIntoBranch); returns the merge commit id."""
-        resp = self._call("POST", f"/repositories/{_q(repo)}/refs/{_q(source)}/merge/{_q(destination)}",
-                          json={"message": message, "metadata": {k: str(v) for k, v in (metadata or {}).items()}},
-                          what=f"merge {source} into {destination}")
+    def merge(self, repo: str, source: str, destination: str, message: str, metadata: Optional[dict] = None,
+              tolerate_empty: bool = False) -> str:
+        """Merge ``source`` into ``destination`` (mergeIntoBranch); returns the merge commit id.
+
+        With ``tolerate_empty`` a merge with nothing to merge is a success returning the destination head.
+        """
+        try:
+            resp = self._call("POST", f"/repositories/{_q(repo)}/refs/{_q(source)}/merge/{_q(destination)}",
+                              json={"message": message, "metadata": _strs(metadata)},
+                              what=f"merge {source} into {destination}")
+        except LakeFSError as exc:
+            if tolerate_empty and _is_no_changes(exc):
+                return self.branch_commit(repo, destination)
+            raise
         return resp.json()["reference"]
+
+    def branch_exists(self, repo: str, branch: str) -> bool:
+        try:
+            self.branch_commit(repo, branch)
+            return True
+        except NotFoundError:
+            return False
 
     def storage_namespace_prefix(self) -> Optional[str]:
         """Where kaos-lake wants new repositories (``GET /kaos/v1/dataset-templates``), or None if it does not say."""
@@ -179,11 +204,19 @@ class LakeFS:
         self._call("DELETE", f"/repositories/{_q(repo)}/branches/{_q(branch)}/objects",
                    params={"path": path}, ok=(200, 204, 404), what=f"delete {path}")
 
-    def commit(self, repo: str, branch: str, message: str, metadata: Optional[dict] = None) -> str:
-        """Commit the staged changes on ``branch``; returns the new commit id."""
-        resp = self._call("POST", f"/repositories/{_q(repo)}/branches/{_q(branch)}/commits",
-                          json={"message": message, "metadata": {k: str(v) for k, v in (metadata or {}).items()}},
-                          what=f"commit on {branch}")
+    def commit(self, repo: str, branch: str, message: str, metadata: Optional[dict] = None,
+               tolerate_empty: bool = False) -> str:
+        """Commit the staged changes on ``branch``; returns the new commit id.
+
+        With ``tolerate_empty`` a commit with nothing staged is a success returning the branch head.
+        """
+        try:
+            resp = self._call("POST", f"/repositories/{_q(repo)}/branches/{_q(branch)}/commits",
+                              json={"message": message, "metadata": _strs(metadata)}, what=f"commit on {branch}")
+        except LakeFSError as exc:
+            if tolerate_empty and _is_no_changes(exc):
+                return self.branch_commit(repo, branch)
+            raise
         return resp.json()["id"]
 
     # -- pull requests ---------------------------------------------------

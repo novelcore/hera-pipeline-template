@@ -27,6 +27,7 @@ STORAGE_BASE_ENV = "KUBECORE_STORAGE_NAMESPACE_BASE"
 
 _NAME_RE = re.compile(r"^[a-z0-9-]{3,48}$")
 _VERSION_RE = re.compile(r"^v[1-9][0-9]*$")
+_COMMIT_RE = re.compile(r"^[A-Za-z0-9_-]{6,128}$")
 
 
 def dataset_repo(name: str) -> str:
@@ -41,9 +42,20 @@ def dataset_repo(name: str) -> str:
 
 @dataclass(frozen=True)
 class DatasetRef:
-    """A pinned choice ``<dataset-repo>@<version>``; version is ``latest`` or ``vN``."""
+    """A choice ``<dataset-repo>@<version>``; version is ``latest`` or ``vN``.
+
+    ``commit`` optionally pins the exact lakeFS commit (e.g. the one ``dataset-loading`` resolved);
+    when set, ``resolve`` returns it without asking lakeFS.
+    """
     repo: str
     version: str
+    commit: Optional[str] = None
+
+    def with_commit(self, commit: str) -> "DatasetRef":
+        """A copy of this ref pinned to ``commit``."""
+        if not _COMMIT_RE.match(commit or ""):
+            raise DatasetError(f"{commit!r} is not a commit id.")
+        return DatasetRef(self.repo, self.version, commit)
 
     @classmethod
     def parse(cls, text: str) -> "DatasetRef":
@@ -81,8 +93,14 @@ def _client(client: Optional[LakeFS]) -> LakeFS:
     return client or LakeFS.connect()
 
 
-def resolve(ref: DatasetRef, client: Optional[LakeFS] = None) -> str:
-    """The commit id ``ref`` points at (tag commit for ``vN``, head of main for ``latest``)."""
+def resolve(ref: DatasetRef, client: Optional[LakeFS] = None, commit: Optional[str] = None) -> str:
+    """The commit id ``ref`` points at (tag commit for ``vN``, head of main for ``latest``).
+
+    A pinned ``commit`` (argument, or carried by ``ref``) is returned as is, with no lakeFS call.
+    """
+    pinned = commit or ref.commit
+    if pinned:
+        return ref.with_commit(pinned).commit
     c = _client(client)
     try:
         if ref.version == LATEST:
@@ -196,12 +214,13 @@ class PublishResult:
 
 
 def publish_tree(local_dir, repo: str, message: str, via_pull_request: bool = True,
-                 labels: Optional[dict] = None, client: Optional[LakeFS] = None) -> PublishResult:
+                 labels: Optional[dict] = None, client: Optional[LakeFS] = None,
+                 metadata: Optional[dict] = None) -> PublishResult:
     """Mirror ``local_dir`` into ``repo``: draft branch, commit, pull request into main.
 
     Creates the repository (with ``labels``) when missing. With
     ``via_pull_request=False`` the commit goes straight to main (admin use only).
-    Raises DatasetError when the directory is identical to main.
+    ``metadata`` is recorded on the commit. Raises DatasetError when the directory is identical to main.
     """
     c, root = _client(client), pathlib.Path(local_dir)
     created = ensure_repository(c, repo, labels or {LABEL_KIND: "dataset"})
@@ -213,7 +232,7 @@ def publish_tree(local_dir, repo: str, message: str, via_pull_request: bool = Tr
         branch = "draft/" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
         c.create_branch(repo, branch, MAIN)
     apply_plan(c, repo, branch, plan)
-    commit = c.commit(repo, branch, message)
+    commit = c.commit(repo, branch, message, metadata)
     if not via_pull_request:
         return PublishResult(repo, created, commit, branch)
     pull_id = c.create_pull(repo, branch, MAIN, message)
@@ -222,10 +241,10 @@ def publish_tree(local_dir, repo: str, message: str, via_pull_request: bool = Tr
 
 
 def materialize(ref: DatasetRef, dest=None, fmt_name: Optional[str] = None,
-                client: Optional[LakeFS] = None) -> pathlib.Path:
+                client: Optional[LakeFS] = None, commit: Optional[str] = None) -> pathlib.Path:
     """Local, trainable copy of ``ref`` in its format's layout; returns the format's entry file.
 
-    ``fmt_name`` defaults to the repository's ``kaos.template`` label, then ``ultralytics``.
+    ``commit`` (or ``ref.commit``) pins the exact commit. ``fmt_name`` defaults to the repository's ``kaos.template`` label, then ``ultralytics``.
     """
     from .formats import get_format
     c = _client(client)
@@ -234,4 +253,4 @@ def materialize(ref: DatasetRef, dest=None, fmt_name: Optional[str] = None,
             fmt_name = c.metadata(ref.repo).get(LABEL_TEMPLATE)
         except LakeFSError:
             fmt_name = None
-    return get_format(fmt_name or "ultralytics").consumer.materialize(ref, dest, c)
+    return get_format(fmt_name or "ultralytics").consumer.materialize(ref, dest, c, commit)

@@ -1,8 +1,10 @@
 """The ``ultralytics`` dataset format: the YOLO layout Ultralytics reads.
 
-    data.yaml                path / train / val / test / nc / names
+    data.yaml                path / train / val / test / names (nc optional) / kpt_shape for pose
     images/{train,val,test}/ the images
-    labels/{train,val,test}/ one <image-stem>.txt per image: "<class-id> <x> <y> <w> <h>" lines, coords in [0,1]
+    labels/{train,val,test}/ one <image-stem>.txt per image: "<class-id> <x> <y> <w> <h>" lines, coords in [0,1];
+                             pose adds K*D keypoint values (kpt_shape [K, D], visibility 0/1/2 when D=3);
+                             segmentation lines are "<class-id> x1 y1 x2 y2 ..." (even count >= 6)
 
 ``UltralyticsCreator`` builds, validates and publishes; ``UltralyticsConsumer``
 materializes a pinned version for training. Registered as ``ultralytics``.
@@ -81,18 +83,37 @@ def _names_from_mapping(names: dict, errors: list) -> list:
 
 
 def _check_classes(data: dict, errors: list) -> Optional[int]:
-    """Check nc/names; returns nc when usable for label checks."""
+    """Check names/nc; returns the class count labels are checked against.
+
+    ``names`` is required; ``nc`` is optional (Ultralytics derives it) and is compared with
+    ``names`` only when both are present.
+    """
     nc, names = data.get("nc"), data.get("names")
-    if isinstance(nc, bool) or not isinstance(nc, int) or nc < 1:
+    if nc is not None and (isinstance(nc, bool) or not isinstance(nc, int) or nc < 1):
         errors.append(f"data.yaml: nc must be a positive integer (got {nc!r})")
         nc = None
     if isinstance(names, dict):
         names = _names_from_mapping(names, errors)
     if not isinstance(names, list) or not names:
         errors.append("data.yaml: names must be a non-empty list (or an id -> name mapping)")
-    elif nc is not None and nc != len(names):
+        return nc
+    if nc is not None and nc != len(names):
         errors.append(f"data.yaml: nc is {nc} but names has {len(names)} entries")
-    return nc
+    return nc if nc is not None else len(names)
+
+
+def _kpt_shape(data: dict, errors: list) -> Optional[tuple]:
+    """(K, D) of a pose dataset from ``kpt_shape: [K, D]``, or None for detection/segmentation."""
+    shape = data.get("kpt_shape")
+    if shape is None:
+        return None
+    ok = (isinstance(shape, list) and len(shape) == 2
+          and all(isinstance(v, int) and not isinstance(v, bool) for v in shape)
+          and shape[0] >= 1 and shape[1] in (2, 3))
+    if not ok:
+        errors.append(f"data.yaml: kpt_shape must be [K, D] with K >= 1 keypoints and D 2 or 3 (got {shape!r})")
+        return None
+    return shape[0], shape[1]
 
 
 def _split_dirs(data: dict, split: str, errors: list) -> Optional[tuple]:
@@ -109,26 +130,44 @@ def _split_dirs(data: dict, split: str, errors: list) -> Optional[tuple]:
     return entry, "labels/" + entry[len("images/"):]
 
 
-def _check_label_file(label: pathlib.Path, rel: str, nc: Optional[int], errors: list) -> None:
+def _line_problems(parts: list, nc: Optional[int], kpt: Optional[tuple]) -> list:
+    """Problems of one label line (already split). Detection, polygon (segmentation) or pose."""
+    if kpt:
+        k, d = kpt
+        if len(parts) != 5 + k * d:
+            return [f"expected '<class-id> <x> <y> <w> <h>' + {k} keypoints x {d} values "
+                    f"({5 + k * d} values), got {len(parts)}"]
+    elif len(parts) != 5 and not (len(parts) >= 7 and len(parts) % 2 == 1):
+        return [f"expected '<class-id> <x> <y> <w> <h>' (detection) or '<class-id> x1 y1 x2 y2 ...' "
+                f"(segmentation: an even number >= 6 of coordinates), got {len(parts)} values"]
+    try:
+        cid, vals = int(parts[0]), [float(p) for p in parts[1:]]
+    except ValueError:
+        return ["class id must be an integer and the rest numbers"]
+    problems = []
+    if cid < 0 or (nc is not None and cid >= nc):
+        problems.append(f"class id {cid} is outside 0..{(nc or 1) - 1}")
+    if kpt and kpt[1] == 3:
+        coords = vals[:4] + [v for i, v in enumerate(vals[4:]) if i % 3 != 2]
+        vis = [v for i, v in enumerate(vals[4:]) if i % 3 == 2]
+        if any(v not in (0.0, 1.0, 2.0) for v in vis):
+            problems.append("keypoint visibility must be 0, 1 or 2")
+    else:
+        coords = vals
+    if any(not 0.0 <= c <= 1.0 for c in coords):
+        problems.append("coordinates must be within [0,1]")
+    return problems
+
+
+def _check_label_file(label: pathlib.Path, rel: str, nc: Optional[int], kpt: Optional[tuple], errors: list) -> None:
     for n, line in enumerate(label.read_text().splitlines(), 1):
-        if not line.strip():
-            continue
-        parts = line.split()
-        if len(parts) != 5:
-            errors.append(f"{rel}:{n}: expected '<class-id> <x> <y> <w> <h>', got {len(parts)} values")
-            continue
-        try:
-            cid, coords = int(parts[0]), [float(p) for p in parts[1:]]
-        except ValueError:
-            errors.append(f"{rel}:{n}: class id must be an integer and x y w h numbers: {line.strip()!r}")
-            continue
-        if cid < 0 or (nc is not None and cid >= nc):
-            errors.append(f"{rel}:{n}: class id {cid} is outside 0..{(nc or 1) - 1}")
-        if any(not 0.0 <= c <= 1.0 for c in coords):
-            errors.append(f"{rel}:{n}: coordinates must be within [0,1]: {line.strip()!r}")
+        if line.strip():
+            for problem in _line_problems(line.split(), nc, kpt):
+                errors.append(f"{rel}:{n}: {problem}: {line.strip()[:80]!r}")
 
 
-def _check_split(root: pathlib.Path, split: str, dirs: tuple, nc: Optional[int], errors: list) -> None:
+def _check_split(root: pathlib.Path, split: str, dirs: tuple, nc: Optional[int], kpt: Optional[tuple],
+                 errors: list) -> None:
     img_dir, lbl_dir = root / dirs[0], root / dirs[1]
     images = sorted(p for p in img_dir.rglob("*")
                     if p.is_file() and p.suffix.lower() in IMAGE_EXTS and not p.name.startswith("."))
@@ -140,7 +179,7 @@ def _check_split(root: pathlib.Path, split: str, dirs: tuple, nc: Optional[int],
         if not label.is_file():
             errors.append(f"{img.relative_to(root).as_posix()} has no label file {rel}")
         else:
-            _check_label_file(label, rel, nc, errors)
+            _check_label_file(label, rel, nc, kpt, errors)
 
 
 def validate(local_dir) -> ValidationReport:
@@ -150,11 +189,11 @@ def validate(local_dir) -> ValidationReport:
         return ValidationReport([f"{root} is not a directory"])
     data = _load_data_yaml(root, errors)
     if data is not None:
-        nc = _check_classes(data, errors)
+        nc, kpt = _check_classes(data, errors), _kpt_shape(data, errors)
         for split in SPLITS:
             dirs = _split_dirs(data, split, errors)
             if dirs:
-                _check_split(root, split, dirs, nc, errors)
+                _check_split(root, split, dirs, nc, kpt, errors)
     return ValidationReport(errors)
 
 
@@ -208,12 +247,13 @@ class UltralyticsCreator:
         return validate(local_dir)
 
     def publish(self, local_dir, repo: str, message: str, via_pull_request: bool = True,
-                description: str = "", validate_first: bool = True,
+                description: str = "", validate_first: bool = True, metadata: Optional[dict] = None,
                 client: Optional[LakeFS] = None) -> datasets.PublishResult:
         """Validate, then upload ``local_dir`` to ``repo`` through a draft branch and a pull request.
 
         Creates ``repo`` first when missing (labels kaos.kind=dataset, kaos.template=ultralytics).
-        Raises ValidationFailed with every problem when the dataset is invalid.
+        Raises ValidationFailed with every problem when the dataset is invalid
+        (``validate_first=False`` skips the check). ``metadata`` is recorded on the commit.
         """
         if validate_first:
             report = validate(local_dir)
@@ -222,7 +262,7 @@ class UltralyticsCreator:
         labels = {datasets.LABEL_KIND: "dataset", datasets.LABEL_TEMPLATE: NAME}
         if description:
             labels[datasets.LABEL_DESCRIPTION] = description
-        return datasets.publish_tree(local_dir, repo, message, via_pull_request, labels, client)
+        return datasets.publish_tree(local_dir, repo, message, via_pull_request, labels, client, metadata)
 
 
 # --------------------------------------------------------------------- consumer
@@ -266,14 +306,15 @@ class UltralyticsConsumer:
 
     name = NAME
 
-    def materialize(self, ref: datasets.DatasetRef, dest=None, client: Optional[LakeFS] = None) -> pathlib.Path:
+    def materialize(self, ref: datasets.DatasetRef, dest=None, client: Optional[LakeFS] = None,
+                    commit: Optional[str] = None) -> pathlib.Path:
         """Local ``data.yaml`` Ultralytics can train on for ``ref``.
 
         Only data.yaml, images/ and labels/ are downloaded, at the pinned commit. Data lives in
         ``dest`` (default ``<cache>/<repo>/<commit>``); a second call for the same commit is free.
-        A staged copy (KUBECORE_STAGED_DIR holding the commit) is used in place, nothing downloaded.
+        ``commit`` (or ``ref.commit``) pins the version. A staged copy (KUBECORE_STAGED_DIR holding the commit) is used in place, nothing downloaded.
         """
-        commit = datasets.resolve(ref, client)
+        commit = datasets.resolve(ref, client, commit)
         target = pathlib.Path(dest) if dest else cache_root() / ref.repo / commit
         staged = _staged_dir(commit)
         if staged:
