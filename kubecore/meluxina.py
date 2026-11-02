@@ -40,6 +40,8 @@ Operational notes baked in from the live F-01/F-02 shakedown (2026-08):
 import json
 import re
 
+from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
+from kubecore.kaos_lib_support import support_value
 from kubecore.outputs_repo import OUTPUTS_REF, checkpoint_prefix, outputs_repo
 
 # The submit/poll program the meluxina-run container executes via
@@ -734,7 +736,8 @@ def submit():
     # Only when set: step code reads os.environ.get(..., default), so an empty
     # value would override its own default.
     env += [k + '=' + os.environ[k] for k in
-            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID', 'KUBECORE_WORKFLOW_NAME')
+            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID', 'KUBECORE_WORKFLOW_NAME',
+             'KAOS_LIB_SUPPORT')
             if os.environ.get(k)]
     global WALLET, WALLET_EXP
     wallet = WALLET = mint_wallet()
@@ -1295,7 +1298,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()},
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
                 {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
-            ],
+            ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else []),
         },
         # slurm-job-id plus the union of every routed step's declared outputs
         # (one shared template; each twin fills its own, the rest default).
