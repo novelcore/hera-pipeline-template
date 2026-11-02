@@ -113,9 +113,8 @@ class LakeFS:
             what=f"create repository {repo}")
 
     def metadata(self, repo: str) -> dict:
-        """The repository's metadata labels (``kaos.*``)."""
-        return self._call("GET", f"/repositories/{_q(repo)}/metadata", what=f"metadata of {repo}") \
-            .json().get("metadata", {})
+        """The repository's metadata labels (``kaos.*``); lakeFS answers them as a flat object."""
+        return self._call("GET", f"/repositories/{_q(repo)}/metadata", what=f"metadata of {repo}").json() or {}
 
     def set_metadata(self, repo: str, labels: dict) -> None:
         self._call("POST", f"/repositories/{_q(repo)}/metadata", json={"metadata": labels},

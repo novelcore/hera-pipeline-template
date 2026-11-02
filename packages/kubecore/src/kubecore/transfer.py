@@ -12,7 +12,8 @@ from typing import Iterable
 
 from .lakefs import LakeFS
 
-IGNORED_NAMES = {".DS_Store", "Thumbs.db"}
+# formats.local.MARKER: a pulled copy's marker never goes back up when the folder is pushed.
+IGNORED_NAMES = {".DS_Store", "Thumbs.db", ".kubecore-dataset.json"}
 
 
 @dataclass

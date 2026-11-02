@@ -288,7 +288,7 @@ def publish_tree(local_dir, repo: str, message: str, via_pull_request: bool = Tr
         raise DatasetError(f"nothing to publish: {root} is identical to {repo} main.")
     branch = MAIN
     if via_pull_request:
-        branch = "draft/" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        branch = "draft-" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
         c.create_branch(repo, branch, MAIN)
     apply_plan(c, repo, branch, plan)
     commit = c.commit(repo, branch, message, metadata)
