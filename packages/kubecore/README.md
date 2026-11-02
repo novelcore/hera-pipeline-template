@@ -81,6 +81,7 @@ for answer in peers.shared(client):                         # per peer: answer.d
 
 ```
 kubecore dataset list --shared                # what other projects share with yours, with versions
+kubecore dataset versions team-a/dataset-cats # its versions, read from team-a's lakeFS
 kubecore dataset pull team-a/dataset-cats@v3  # read-only copy
 ```
 

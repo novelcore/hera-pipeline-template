@@ -30,6 +30,7 @@ class FakeLakeFS(BaseAdapter):
         self.calls: list = []        # (method, path-without-query)
         self.auth: list = []         # the Authorization header of every request (None when absent)
         self.kaos: dict = {}         # "/kaos/v1/..." -> (status, JSON body or raw bytes); others: 404 HTML
+        self.deny = None             # an HTTP status every /api/v1 call answers (a token this server refuses)
         self.writes: list = []       # (kind, repo, branch, path) for object uploads/deletes
         self.storage_prefix = "gs://bucket/lakefs"   # None: kaos-lake publishes no prefix
         self._ids = itertools.count(1)
@@ -96,7 +97,11 @@ class FakeLakeFS(BaseAdapter):
         self.calls.append((request.method, path))
         self.auth.append(request.headers.get("Authorization"))
         try:
+            if self.deny and not path.startswith("/kaos/"):
+                raise PermissionError
             status, body = self._route(request, path, q)
+        except PermissionError:
+            status, body = self.deny, {"message": "insufficient permissions"}
         except KeyError:
             status, body = 404, {"message": "not found"}
         resp = requests.Response()

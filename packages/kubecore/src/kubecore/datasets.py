@@ -233,9 +233,22 @@ def _version_number(tag: str) -> Optional[int]:
     return int(tag[1:]) if _VERSION_RE.match(tag) else None
 
 
+def split_owner(name: str) -> tuple:
+    """``(owner, repo)`` of ``<owner>/dataset-<name>`` (validated as in a shared reference), else ``(None, name)``."""
+    if "/" not in (name or ""):
+        return None, name
+    owner, _, repo = name.partition("/")
+    _check_shared(name, owner, repo)
+    return owner, repo
+
+
 def versions(repo: str, client: Optional[LakeFS] = None) -> list:
-    """Version tags of ``repo`` as ``["v1", "v2", ...]`` in numeric order."""
-    c = _client(client)
+    """Version tags of ``repo`` as ``["v1", "v2", ...]`` in numeric order.
+
+    ``<owner>/dataset-<name>`` lists a dataset another project shares, from the owner's lakeFS.
+    """
+    owner, repo = split_owner(repo)
+    _, c = source(DatasetRef(repo, LATEST, owner=owner), client)
     nums = sorted(n for n in (_version_number(t["id"]) for t in c.tags(repo)) if n)
     return [f"v{n}" for n in nums]
 

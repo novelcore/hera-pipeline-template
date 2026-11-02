@@ -101,9 +101,11 @@ class LakeFS:
             return resp
         raise self._error(resp, what or f"{method} {path}")
 
-    @staticmethod
-    def _error(resp: requests.Response, what: str) -> LakeFSError:
+    def _error(self, resp: requests.Response, what: str) -> LakeFSError:
         status, detail = resp.status_code, (resp.text or "")[:300]
+        if self.owner and status in (301, 302, 303, 307, 308, 401, 403):
+            return AuthError(f"not shared with your project: project {self.owner}'s lakeFS refused it ({what}). "
+                             f"Ask {self.owner} to share the dataset with your project.")
         if status in (301, 302, 303, 307, 308, 401):
             return AuthError(f"lakeFS rejected the credential ({what}). Run `kubecore login` again.")
         if status == 403:

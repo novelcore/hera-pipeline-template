@@ -251,3 +251,103 @@ def test_laptop_uses_the_browser_session_for_the_peer(lakes, monkeypatch, tmp_pa
     credentials.save_session(OWN_BASE, "person-token")
     datasets.materialize(SHARED)
     assert set(owner.auth) == {"Bearer person-token"} and set(own.auth) == {"Bearer person-token"}
+
+
+# ------------------------------------------------------------------ versions of a shared dataset
+@pytest.fixture
+def tagged(lakes):
+    own, owner = lakes
+    for t in ("v2", "v10", "not-a-version"):
+        owner.tag("dataset-x", t)
+    return own, owner
+
+
+def test_versions_own_vs_owner(tagged, step_env):
+    assert datasets.versions("a/dataset-x") == ["v1", "v2", "v10"]
+    assert datasets.versions("dataset-x") == ["v1"]
+
+
+def test_versions_of_a_shared_dataset_send_only_bearer_to_the_owner(tagged, step_env):
+    own, owner = tagged
+    datasets.versions("a/dataset-x")
+    assert ("GET", "/repositories/dataset-x/tags") in owner.calls
+    assert owner.auth and set(owner.auth) == {"Bearer minted-token"}
+    assert not any(c[1].startswith("/repositories") for c in own.calls)       # own lakeFS: only /kaos/v1/peers
+    assert set(own.auth) == {"Basic " + base64.b64encode(b"AK-B:SK-B").decode()}
+
+
+def test_versions_unknown_owner(tagged, step_env):
+    with pytest.raises(DatasetError, match="zz is not a project of your organisation"):
+        datasets.versions("zz/dataset-x")
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_versions_refused_by_the_peer_is_not_shared(tagged, step_env, status):
+    _, owner = tagged
+    owner.deny = status
+    with pytest.raises(AuthError) as err:
+        datasets.versions("a/dataset-x")
+    assert "not shared with your project" in str(err.value) and "Ask a to share" in str(err.value)
+    assert "kubecore login" not in str(err.value)
+
+
+def test_materialize_refused_by_the_peer_is_not_shared(tagged, step_env):
+    _, owner = tagged
+    owner.deny = 401
+    with pytest.raises(AuthError, match="not shared with your project"):
+        datasets.materialize(SHARED)
+
+
+def test_own_lakefs_refusal_still_says_login(tagged, step_env):
+    own, _ = tagged
+    own.deny = 401
+    with pytest.raises(AuthError, match="kubecore login"):
+        datasets.versions("dataset-x")
+
+
+@pytest.mark.parametrize("name,fragment", [
+    ("a/my-repo", "a/my-repo is not a shared dataset"),
+    ("A/dataset-x", "'A' is not a project name"),
+    ("a/b/c", "more than one '/'"),
+])
+def test_versions_invalid_shared_names(name, fragment):
+    with pytest.raises(DatasetError, match=fragment):
+        datasets.versions(name, client=object())          # refused before the client is used
+
+
+def test_cli_versions_same_shape_for_own_and_shared(tagged, step_env, capsys):
+    assert cli.main(["dataset", "versions", "a/dataset-x"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["a/dataset-x: v1, v2, v10 (and latest, the head of main)",
+                   "Pick one in the pipeline:  dataset = a/dataset-x@v10"]
+    assert cli.main(["dataset", "versions", "dataset-x"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["dataset-x: v1 (and latest, the head of main)",
+                                                    "Pick one in the pipeline:  dataset = dataset-x@v1"]
+
+
+def test_cli_versions_of_a_shared_dataset_without_versions(lakes, step_env, capsys):
+    _, owner = lakes
+    owner.repos["dataset-x"]["tags"].clear()
+    assert cli.main(["dataset", "versions", "a/dataset-x"]) == 0
+    out = capsys.readouterr().out
+    assert "a/dataset-x: no versions yet (and latest, the head of main)" in out
+    assert "ask project a to release a version" in out and "dataset = a/dataset-x@latest" in out
+    assert "kubecore dataset release" not in out                           # the owner releases, not you
+
+
+@pytest.mark.parametrize("argv,fragment", [
+    (["dataset", "versions", "zz/dataset-x"], "zz is not a project of your organisation"),
+    (["dataset", "versions", "a/my-repo"], "not a shared dataset"),
+])
+def test_cli_versions_errors_are_one_line(tagged, step_env, capsys, argv, fragment):
+    code = cli.main(argv)
+    err = capsys.readouterr().err
+    assert code == 1 and err.startswith("ERROR:") and fragment in err and err.count("\n") == 1
+
+
+def test_cli_versions_refused_by_the_peer(tagged, step_env, capsys):
+    _, owner = tagged
+    owner.deny = 401
+    code = cli.main(["dataset", "versions", "a/dataset-x"])
+    err = capsys.readouterr().err
+    assert code == 1 and err.startswith("ERROR: not shared with your project") and err.count("\n") == 1

@@ -110,12 +110,18 @@ def cmd_list(args) -> int:
 
 
 def cmd_versions(args) -> int:
+    owner, name = datasets.split_owner(args.repo)
     c = _connect(args)
-    repo = _repo(c, args.repo)
+    if owner:   # a dataset another project shares: no lookup in the own lakeFS
+        repo = f"{owner}/{name}"
+    else:
+        repo = _repo(c, args.repo)
     found = datasets.versions(repo, c)
     print(f"{repo}: {', '.join(found) if found else 'no versions yet'} (and {datasets.LATEST}, the head of main)")
     if found:
         print(f"Pick one in the pipeline:  dataset = {repo}@{found[-1]}")
+    elif owner:
+        print(f"Next: ask project {owner} to release a version, or pick  dataset = {repo}@{datasets.LATEST}")
     else:
         print(f"Next: kubecore dataset release {repo}")
     return 0
