@@ -11,7 +11,12 @@ PyPI is not available yet, so install from git, pinned to a commit:
 pip install "git+https://github.com/novelcore/hera-pipeline-template@<sha>#subdirectory=packages/kubecore"
 ```
 
-Python 3.9+. Dependencies: `requests`, `PyYAML`.
+Python 3.9+. Dependencies: `requests`, `PyYAML`. Reading datasets other projects share from a pipeline step
+(machine-key tokens) needs the `zitadel` extra (PyJWT, cryptography):
+
+```bash
+pip install "kubecore[zitadel] @ git+https://github.com/novelcore/hera-pipeline-template@<sha>#subdirectory=packages/kubecore"
+```
 
 The package and the vendored `kubecore/` engine at the repo root share the import name `kubecore` and must not share a `sys.path`: step images will `pip install` the package from git (pinned to a commit, as above) and will not copy the vendored `kubecore/` into the image; the follow-up conversion removes the vendored copy.
 
@@ -60,6 +65,41 @@ with outputs.run("myapp", "exp1", "run-7", "checkpoints") as r:    # branch run-
 outputs.write_run("myapp", "exp1", "run-7", "./ckpt")      # shortcut: open, save once, finish
 ```
 
+## Datasets shared with your project
+
+Another project of your organisation can share its `dataset-*` repositories with yours (read-only; models are
+not shared). Refer to one as `<owner-project>/dataset-<name>@<version>`; `dataset-<name>@<version>` keeps
+meaning your own project, and `<your-project>/dataset-x@v1` is the same as `dataset-x@v1`.
+
+```python
+ref = datasets.DatasetRef.parse("team-a/dataset-cats@v3")   # ref.owner == "team-a"; also @latest, a branch or a commit
+data_yaml = datasets.materialize(ref)                       # read from team-a's lakeFS, cached apart from your own
+from kubecore import peers
+for answer in peers.shared(client):                         # per peer: answer.datasets (DatasetInfo, owner set), answer.note
+    ...
+```
+
+```
+kubecore dataset list --shared                # what other projects share with yours, with versions
+kubecore dataset pull team-a/dataset-cats@v3  # read-only copy
+```
+
+- **Where**: your lakeFS lists the other projects (`GET /kaos/v1/peers`, read once per process).
+  `LakeFS.for_owner(owner)` talks to the owner's in-cluster endpoint when your own lakeFS address is an
+  in-cluster `.svc` one (pipeline steps), else to its public URL (laptops).
+- **Who**: the owner sees a bearer token, never your project's `LAKEFS_ACCESS_KEY`/`LAKEFS_SECRET_KEY`
+  (`credentials.resolve_peer`): `LAKEFS_BEARER_TOKEN`, else a short-lived Zitadel token minted from the step's
+  machine key (`ZITADEL_MACHINE_KEY_FILE`, `ZITADEL_DOMAIN`, `ZITADEL_MLFLOW_PROJECT_ID`; needs
+  `kubecore[zitadel]`), else your `kubecore login` session. The owner grants read on exactly the datasets it
+  shares with your project.
+- **Cache**: `<cache>/<owner>/<repo>/<commit>` (your own: `<cache>/<repo>/<commit>`); the copy's marker records
+  the owner, so your `dataset-x` and the owner's `dataset-x` never mix, even at the same commit id. A staged copy
+  (`$KUBECORE_STAGED_DIR`) is used only when its `.kaos-ready` record names the same repository and owner.
+- **Read-only**: `release`, `push` and `create` of a `<owner>/...` name are refused before anything is sent.
+- **Errors**: an owner that is not a project of your organisation, or a lakeFS too old to serve
+  `/kaos/v1/peers`, is a one-line error. In `list --shared`, a peer that answers 401 shares nothing with you; a
+  peer too old or unreachable is skipped with a `NOTE:` on stderr.
+
 An exception inside `with outputs.run(...)` neither merges nor deletes the branch, so the retry resumes.
 Leaving the block normally without calling `finish` finishes with no extra metadata. An empty commit or an
 empty merge is a success and returns the existing commit.
@@ -72,6 +112,7 @@ pose (`kpt_shape: [K, D]`, K*D values per line, visibility 0/1/2 when D=3). `nc`
 | call | needs |
 | --- | --- |
 | `resolve`, `materialize`, `consumer.materialize`, `versions`, `list_datasets`, `DatasetRef` | read on `dataset-*` (an app key can) |
+| the same on `<owner>/dataset-*`, `peers.shared` | a bearer token the owner accepts (machine-key token or login session) |
 | `outputs.run(...)` / `write_run` (`open`, `save`, `latest`, `finish`) | write on that app's `outputs-<app>` (an app key can) |
 | `release` | tag creation on the dataset: people or admins, not an app key |
 | `create_dataset`, `creator.publish` / `publish_tree` (repository, draft branch, pull request) | people or admins, not an app key |
@@ -88,6 +129,9 @@ downloaded.
 3. the browser login session of `kubecore login` (a person's Zitadel token), cached in
    `~/.config/kubecore-ml/lakefs-session.json`
 
+Another project's lakeFS gets its own chain (`credentials.resolve_peer`), without step 1; see
+"Datasets shared with your project".
+
 The lakeFS URL comes from `--url`, `LAKEFS_ENDPOINT`/`LAKEFS_URL`, or `.kubecore/dataset-config.yaml`
 (written into every app repo by the platform, which also carries the login settings).
 
@@ -96,11 +140,11 @@ The lakeFS URL comes from `--url`, `LAKEFS_ENDPOINT`/`LAKEFS_URL`, or `.kubecore
 ```
 kubecore login
 kubecore dataset create <name> --classes a,b,c [--description ...]
-kubecore dataset list
+kubecore dataset list [--shared]
 kubecore dataset versions <repo>
 kubecore dataset release <repo>
 kubecore dataset push <dir> <repo> -m "message" [--no-validate]   # validates, draft branch, pull request
-kubecore dataset pull <repo>@<version> [dest]
+kubecore dataset pull [<owner>/]<repo>@<version> [dest]
 kubecore dataset validate <dir>
 ```
 
@@ -122,9 +166,11 @@ A fake lakeFS (`tests/fake_lakefs.py`) runs the real client over an in-memory tr
 | `config.py` | per-app config discovery, lakeFS URL, OIDC settings |
 | `credentials.py` | the credential chain, session cache, browser login |
 | `oidc.py` | PKCE browser login to Zitadel (ported from `dataset_tools`) |
+| `zitadel.py` | machine-key token (JWT-profile grant), extra `kubecore[zitadel]` |
+| `peers.py` | the other projects (`/kaos/v1/peers`) and what they share (`/kaos/v1/shared`) |
 | `lakefs.py` | lakeFS REST client |
 | `transfer.py` | mirror plan, upload, download of file trees |
-| `datasets.py` | refs, resolve, list, versions, release, create, publish via PR, materialize |
+| `datasets.py` | refs (`[<owner>/]<repo>@<ref>`), resolve, list, versions, release, create, publish via PR, materialize |
 | `formats/` | format registry; `ultralytics.py` creator + consumer |
 | `outputs.py` | `outputs-<app>` writes |
 | `cli.py` | the `kubecore` command |
