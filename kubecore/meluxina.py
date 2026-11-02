@@ -436,7 +436,7 @@ def lakefs_pages(url, wallet, params):
 
 
 def is_dataset_path(path):
-    # The ultralytics layout the steps read: data.yaml, images/, labels/ at the
+    # The YOLO layout the steps read: data.yaml, images/, labels/ at the
     # root of the dataset repository. README and notes are not staged.
     return path == 'data.yaml' or path.split('/', 1)[0] in ('images', 'labels')
 
