@@ -47,18 +47,20 @@ class RawConsumer:
                     commit: Optional[str] = None, prefix: Optional[str] = None) -> pathlib.Path:
         """Local folder holding the whole tree (or only ``prefix``, with the prefix removed) of ``ref``.
 
-        Cached by (repo, commit, prefix) in ``dest`` (default: the cache); a second call is free. A staged
-        copy (KUBECORE_STAGED_DIR holding the commit) is used in place.
+        Cached by (owner, repo, commit, prefix) in ``dest`` (default: the cache); a second call is free. A
+        staged copy (KUBECORE_STAGED_DIR holding the commit) is used in place. A shared reference
+        (``<owner>/dataset-x@v1``) is read from the owner's lakeFS.
         """
+        ref, client = datasets.source(ref, client)
         commit = datasets.resolve(ref, client, commit)
         pre = (prefix.strip("/") + "/") if prefix and prefix.strip("/") else None
-        staged = local.staged_dir(commit)
+        staged = local.staged_dir(commit, repo=ref.repo, owner=ref.owner)
         if staged and (not pre or (staged / pre).is_dir()):
             return staged / pre if pre else staged
-        target = pathlib.Path(dest) if dest else local.cache_dir(ref.repo, commit, pre)
-        if local.marker_matches(target, ref.repo, commit, pre):
+        target = pathlib.Path(dest) if dest else local.cache_dir(ref.repo, commit, pre, ref.owner)
+        if local.marker_matches(target, ref.repo, commit, pre, owner=ref.owner):
             return target
-        local.fetch(client, ref.repo, commit, [pre or ""], target, pre, strip=pre or "",
+        local.fetch(client, ref.repo, commit, [pre or ""], target, pre, strip=pre or "", owner=ref.owner,
                     empty_message=f"{ref} holds no files" + (f" under {pre}" if pre else "") + ".")
         return target
 

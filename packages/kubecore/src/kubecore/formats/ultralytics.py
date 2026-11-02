@@ -229,7 +229,9 @@ class UltralyticsCreator:
         Creates ``repo`` first when missing (labels kaos.kind=dataset, kaos.template=ultralytics).
         Raises ValidationFailed with every problem when the dataset is invalid
         (``validate_first=False`` skips the check). ``metadata`` is recorded on the commit.
+        A dataset another project shares (``<owner>/dataset-x``) is refused before anything else.
         """
+        datasets.refuse_shared(repo, "push to")
         if validate_first:
             report = validate(local_dir)
             if not report.ok:
@@ -262,18 +264,21 @@ class UltralyticsConsumer:
         Only data.yaml, images/ and labels/ are downloaded, at the pinned commit. Data lives in
         ``dest`` (default ``<cache>/<repo>/<commit>``); a second call for the same commit is free.
         ``commit`` (or ``ref.commit``) pins the version. A staged copy (KUBECORE_STAGED_DIR holding
-        the commit) is used in place, nothing downloaded. ``prefix`` is only for the raw format.
+        the commit) is used in place, nothing downloaded. ``prefix`` is only for the raw format. A shared
+        reference (``<owner>/dataset-x@v1``) is read from the owner's lakeFS and cached under
+        ``<cache>/<owner>/<repo>/<commit>``.
         """
         if prefix:
             raise DatasetError("prefix= is only supported by the raw format (fmt_name='raw').")
+        ref, client = datasets.source(ref, client)
         commit = datasets.resolve(ref, client, commit)
-        target = pathlib.Path(dest) if dest else local.cache_dir(ref.repo, commit)
-        staged = local.staged_dir(commit, "data.yaml")
+        target = pathlib.Path(dest) if dest else local.cache_dir(ref.repo, commit, owner=ref.owner)
+        staged = local.staged_dir(commit, "data.yaml", repo=ref.repo, owner=ref.owner)
         if staged:
             return _write_data_yaml(staged / "data.yaml", target / "data.yaml", staged)
-        if local.marker_matches(target, ref.repo, commit, None, "data.yaml"):
+        if local.marker_matches(target, ref.repo, commit, None, "data.yaml", owner=ref.owner):
             return target / "data.yaml"
-        local.fetch(client, ref.repo, commit, DOWNLOAD_PREFIXES, target,
+        local.fetch(client, ref.repo, commit, DOWNLOAD_PREFIXES, target, owner=ref.owner,
                     finalize=lambda tmp: _write_data_yaml(tmp / "data.yaml", tmp / "data.yaml", target.resolve()),
                     empty_message=f"{ref} holds no ultralytics files (data.yaml, images/, labels/).")
         return target / "data.yaml"
