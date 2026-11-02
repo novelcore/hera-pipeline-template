@@ -1,0 +1,8 @@
+# The kaos-lib versions this app's code works with: a PEP 440 version specifier.
+#
+# The platform picks the kaos-lib version your step images install and rebuilds them
+# when it moves, with no commit in this repository, but ONLY to a version inside this
+# range. A version outside it arrives as a pull request on the branch
+# kaos-lib/bump-<version> that changes this line: merge it to take the new version.
+# See docs/kaos-lib-versions.md.
+kaos-lib: ">=0.2,<0.3"

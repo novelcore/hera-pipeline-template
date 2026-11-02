@@ -11,6 +11,7 @@ It downloads nothing: the data is read by the step that uses it (see hello_world
 
 import argparse
 import json
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import yaml
@@ -30,7 +31,18 @@ def pin(dataset: str, client=None) -> dict:
             "dataset_commit": commit}
 
 
+def kaos_lib_version() -> str:
+    """The installed kaos-lib version (distribution `kaos-lib`, or `kubecore` before its first release)."""
+    for dist in ("kaos-lib", "kubecore"):
+        try:
+            return version(dist)
+        except PackageNotFoundError:
+            pass
+    return "unknown"
+
+
 def main() -> None:
+    print(f"kaos-lib {kaos_lib_version()}", flush=True)  # the package this image runs
     parser = argparse.ArgumentParser()
     parser.add_argument("--params", required=True,
                         help="Resolved params.yaml content (from compose-and-validate).")
