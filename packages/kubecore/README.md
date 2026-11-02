@@ -32,8 +32,10 @@ The pipeline dropdown lists only `dataset-*` repositories.
   `main`. A run picks `<dataset-repo>@<version>`.
 - Changes reach `main` only through a pull request (the only direct commit is the starter layout written by
   `create`, as the kaos-lake UI does: repo, starter files on main, then labels). New repositories are placed at `<storage_namespace_prefix kaos-lake publishes>/<repo>`, or `$KUBECORE_STORAGE_NAMESPACE_BASE`.
-- Each ML app writes results to `outputs-<app>`, on `main`, one commit per run (a merge from the
-  run's own branch `run-<run>`, so simultaneous runs never mix), under `checkpoints/<experiment>/<run>/`.
+- Each ML app writes results to `outputs-<app>`, on `main`, one commit per step per run (a merge from
+  the step's own branch `run-<run>-<kind>`, so simultaneous runs never mix), under
+  `<kind>/<experiment>/<run>/` (`kind` is `checkpoints` by default). `finish()` returns the merge
+  commit id on `main`.
 
 ## Python API
 
