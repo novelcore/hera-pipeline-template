@@ -12,7 +12,7 @@ This template is the source new pipeline apps are seeded from.
 - [The pipeline in one file](#the-pipeline-in-one-file)
 - [Datasets](#datasets)
 - [Results](#results)
-- [The `kubecore` package](#the-kubecore-package)
+- [kaos-lib, the platform library](#kaos-lib-the-platform-library)
 - [Running on MeluXina](#running-on-meluxina)
 - [Local iteration](#local-iteration-no-cluster)
 - [Where to read next](#where-to-read-next)
@@ -57,7 +57,6 @@ config/                THE config tree — all your parameters
   dataset.yaml           the `dataset` field: <dataset-repo>@<version>
 steps/<name>/          your step code + Dockerfile (one dir per step)
 kubecore/              platform-owned engine — SEEDED, DO NOT EDIT
-packages/kubecore/     the kubecore Python PACKAGE: datasets, run outputs, the `kubecore` command
 tests/, step_tests/    engine tests; step-code tests (two commands, see DEVELOPER.md §15)
 docs/                  the guides (see "Where to read next")
 pyproject.toml         PEP 621, pinned render deps
@@ -79,16 +78,16 @@ one, `dataset-default`.
   never reads "whatever is there now": it picks one version, and every step of that run
   reads exactly that commit.
 - **Changes** reach `main` through a **pull request**. After a pull request is merged,
-  `kubecore dataset release` tags the next version.
+  `kaos-cli dataset release` tags the next version.
 - **Pick it in the pipeline.** The run form has a `dataset` field, a dropdown of
   `<dataset-repo>@<version>` choices, newest first (`dataset-cats@v2`, `dataset-cats@v1`,
   `dataset-cats@latest`, …). The default is `dataset-default`'s newest version. The list
   is refreshed when a dataset or a version changes. The field comes from
   `config/dataset.yaml`; keep a field named exactly `dataset` in your pipeline.
-- **Templates are optional.** `kubecore dataset create` can start a repository from a
+- **Templates are optional.** `kaos-cli dataset create` can start a repository from a
   format template (the starter layout, for example `ultralytics`), but you do not need
   one: any repository named `dataset-<something>` that you create by hand in lakeFS
-  becomes a dataset after its first commit (`kubecore dataset create <name> --template none`
+  becomes a dataset after its first commit (`kaos-cli dataset create <name> --template none`
   makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
   repository can be read from code too: `datasets.materialize("<repo>@<ref>")` (see the
   package section). A repository with no template label is read as plain files.
@@ -111,7 +110,7 @@ writes there with the package's **run writer**:
   newest checkpoint it already saved.
 
 ```python
-from kubecore import outputs
+from kaos_lib import outputs
 with outputs.run("my-app", experiment, run_id) as r:
     resume = r.latest("last.pt")                 # None on a first attempt
     ...                                          # train; on every checkpoint:
@@ -121,16 +120,17 @@ with outputs.run("my-app", experiment, run_id) as r:
 
 Writing a step that reads a dataset and writes results: [docs/write-a-step.md](docs/write-a-step.md).
 
-## The `kubecore` package
+## kaos-lib, the platform library
 
-`packages/kubecore/` is the Python package behind all of this. Install it on your
-computer inside a virtual environment, from this repository, at the commit your step
-images use (`KUBECORE_PKG_COMMIT` in `steps/*/Dockerfile`):
+[kaos-lib](https://github.com/kaos-io/kaos-lib) (`kaos_lib`, formerly the `kubecore` package) is
+the Python library behind all of this, with the `kaos-cli` command. Install it on your computer
+inside a virtual environment, at the commit your step images use (`KAOS_LIB_PACKAGE` in
+`steps/*/Dockerfile`):
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "git+https://github.com/novelcore/hera-pipeline-template@<commit>#subdirectory=packages/kubecore"
-kubecore login                    # opens your browser once
+pip install "kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip"
+kaos-cli login                    # opens your browser once
 ```
 
 Run the commands inside your app folder: it carries the file that tells the tool where
@@ -138,12 +138,12 @@ your project's lakeFS is.
 
 | command | what it does |
 |---|---|
-| `kubecore dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
-| `kubecore dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
-| `kubecore dataset validate <dir> --format ultralytics` | check a folder against a format |
-| `kubecore dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
-| `kubecore dataset release <repo>` | tag the head of `main` as the next version |
-| `kubecore dataset list` / `versions <repo>` | what exists |
+| `kaos-cli dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
+| `kaos-cli dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
+| `kaos-cli dataset validate <dir> --format ultralytics` | check a folder against a format |
+| `kaos-cli dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
+| `kaos-cli dataset release <repo>` | tag the head of `main` as the next version |
+| `kaos-cli dataset list` / `versions <repo>` | what exists |
 
 **Validation follows the template label.** `push` checks your folder against the format
 the repository is labelled with (`kaos.template`). A repository with **no template label
@@ -155,7 +155,7 @@ From code (a step, a notebook), any repository and any ref (`vN`, `latest`, a br
 tag or a commit id):
 
 ```python
-from kubecore import datasets
+from kaos_lib import datasets
 entry = datasets.materialize("dataset-cats@v2")    # ultralytics: the data.yaml; no label: the folder
 folder = datasets.materialize("my-repo@main")      # a repository you made by hand
 fmt = datasets.format_of("dataset-cats")           # "ultralytics", or "raw" when there is no label

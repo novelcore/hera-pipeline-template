@@ -4,7 +4,7 @@ import json
 import pytest
 import yaml
 from conftest import load_step
-from kubecore.errors import DatasetError
+from kaos_lib.errors import DatasetError
 
 CFG = {"experiment": {"name": "exp1"}, "dataset": "dataset-default@latest"}
 

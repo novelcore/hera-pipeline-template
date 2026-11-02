@@ -33,13 +33,13 @@ message that says what is wrong and what exists.
 
 ## Templates are optional
 
-`kubecore dataset create <name>` starts a repository from a **format template**. The only one
+`kaos-cli dataset create <name>` starts a repository from a **format template**. The only one
 today is `ultralytics` (the YOLO layout: `data.yaml`, `images/`, `labels/`); a template is the
 starter layout plus the checks `validate` and `push` run.
 
 You can do without it:
 
-- `kubecore dataset create <name> --template none` makes an empty `dataset-<name>`.
+- `kaos-cli dataset create <name> --template none` makes an empty `dataset-<name>`.
 - A repository named `dataset-<something>` created by hand in lakeFS becomes a dataset after
   its first commit.
 - A repository with **no template label validates nothing**; `push` takes the files as they are.
@@ -51,14 +51,14 @@ You can do without it:
 ## The commands
 
 ```bash
-kubecore login
-kubecore dataset create <name> [--classes a,b] [--template ultralytics|none]
-kubecore dataset list
-kubecore dataset versions <repo>
-kubecore dataset pull <repo>@<ref> [dir] [--prefix folder/]
-kubecore dataset validate <dir> --format ultralytics
-kubecore dataset push <dir> <repo> -m "message" [--format ultralytics]
-kubecore dataset release <repo>
+kaos-cli login
+kaos-cli dataset create <name> [--classes a,b] [--template ultralytics|none]
+kaos-cli dataset list
+kaos-cli dataset versions <repo>
+kaos-cli dataset pull <repo>@<ref> [dir] [--prefix folder/]
+kaos-cli dataset validate <dir> --format ultralytics
+kaos-cli dataset push <dir> <repo> -m "message" [--format ultralytics]
+kaos-cli dataset release <repo>
 ```
 
 Every command prints the next step and the link to what it made. Exit codes: 0 ok, 1 something
