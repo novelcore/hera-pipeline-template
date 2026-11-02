@@ -101,7 +101,7 @@ def test_validate_requires_train_and_val_images(tmp_path):
 
 def test_publish_opens_pull_request_and_never_writes_main(fake, client, dataset_dir):
     result = creator.publish(dataset_dir, "dataset-default", "add images", client=client)
-    assert result.branch.startswith("draft/") and result.pull_id == "1"
+    assert result.branch.startswith("draft-") and result.pull_id == "1"
     assert result.pull_url == "http://lakefs.test/repositories/dataset-default/pulls/1"
     r = fake.repos["dataset-default"]
     assert r["pulls"][0]["source_branch"] == result.branch and r["pulls"][0]["destination_branch"] == "main"

@@ -96,6 +96,17 @@ def test_raw_creator_has_no_skeleton_validates_nothing_publishes_as_is(fake, cli
     assert "anything.bin" in fake.tree("my-repo", result.branch)
 
 
+def test_pulled_copy_pushes_back_without_its_marker(repo, fake, client, tmp_path):
+    """A folder made by pull carries the cache marker; pushing it unchanged has nothing to publish."""
+    out = datasets.materialize(repo, tmp_path / "copy", client=client)
+    assert (out / ".kubecore-dataset.json").is_file()
+    with pytest.raises(DatasetError, match="nothing to publish"):
+        datasets.publish_tree(out, "my-repo", "unchanged", client=client)
+    (out / "new.txt").write_bytes(b"N")
+    result = datasets.publish_tree(out, "my-repo", "one more", client=client)
+    assert set(fake.tree("my-repo", result.branch)) == set(FILES) | {"new.txt"}
+
+
 # ---- label-driven format choice
 def labelled(fake, name, template, files):
     fake.add_repo(name, ns=f"gs://b/x/{name}", metadata={"kaos.template": template} if template else {}, files=files)

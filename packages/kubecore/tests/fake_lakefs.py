@@ -15,6 +15,8 @@ from requests.adapters import BaseAdapter
 from kubecore import credentials
 from kubecore.lakefs import LakeFS
 
+BRANCH_ID = re.compile(r"^\w[-\w]*$")  # lakeFS's branch id rule
+
 
 class FakeLakeFS(BaseAdapter):
     """Repos with branches (committed + staged), commits, tags, metadata and pulls."""
@@ -128,7 +130,7 @@ class FakeLakeFS(BaseAdapter):
         kind = rest[0]
         if kind == "metadata":
             if m == "GET":
-                return 200, {"metadata": r["metadata"]}
+                return 200, dict(r["metadata"])  # lakeFS: a flat object, not {"metadata": ...}
             r["metadata"].update(body["metadata"])
             return 204, None
         if kind == "branches":
@@ -155,6 +157,8 @@ class FakeLakeFS(BaseAdapter):
 
     def _branches(self, m, repo, r, rest, body, req, q):
         if not rest:
+            if not BRANCH_ID.match(body["name"]):  # lakeFS refuses any other branch id
+                return 400, {"message": "argument branch: branch id: invalid value: validation error"}
             base = self._resolve(repo, body["source"])
             r["branches"][body["name"]] = {"commit": base, "base": base, "staged": {}}
             return 201, body["name"]
