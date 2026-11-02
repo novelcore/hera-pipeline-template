@@ -34,7 +34,7 @@ message that says what is wrong and what exists.
 ## Templates are optional
 
 `kaosctl dataset create <name>` starts a repository from a **format template**. The only one
-today is `ultralytics` (the YOLO layout: `data.yaml`, `images/`, `labels/`); a template is the
+today is `yolo` (YOLO, images + labels: `data.yaml`, `images/`, `labels/`); a template is the
 starter layout plus the checks `validate` and `push` run.
 
 You can do without it:
@@ -43,7 +43,7 @@ You can do without it:
 - A repository named `dataset-<something>` created by hand in lakeFS becomes a dataset after
   its first commit.
 - A repository with **no template label validates nothing**; `push` takes the files as they are.
-  Pass `--format ultralytics` to `push` or `validate` to get the YOLO checks anyway.
+  Pass `--format yolo` to `push` or `validate` to get the YOLO checks anyway.
 - Code can read **any** repository: `datasets.materialize("<repo>@<ref>")` with `<ref>` one of
   `vN`, `latest`, a branch, a tag or a commit id. The dropdown lists only `dataset-*`
   repositories.
@@ -52,12 +52,12 @@ You can do without it:
 
 ```bash
 kaosctl login
-kaosctl dataset create <name> [--classes a,b] [--template ultralytics|none]
+kaosctl dataset create <name> [--classes a,b] [--template yolo|none]
 kaosctl dataset list
 kaosctl dataset versions <repo>
 kaosctl dataset pull <repo>@<ref> [dir] [--prefix folder/]
-kaosctl dataset validate <dir> --format ultralytics
-kaosctl dataset push <dir> <repo> -m "message" [--format ultralytics]
+kaosctl dataset validate <dir> --format yolo
+kaosctl dataset push <dir> <repo> -m "message" [--format yolo]
 kaosctl dataset release <repo>
 ```
 
@@ -72,7 +72,7 @@ for you to fix (one `ERROR:` line), 2 an invalid dataset.
 
 | the repository's label (`kaos.template`) | `materialize` returns |
 |---|---|
-| `ultralytics` | the local `data.yaml`, ready for Ultralytics to train on |
+| `yolo` | the local `data.yaml`, ready to train on |
 | none | a local folder with the files at that commit (`prefix=` for one folder) |
 
 The first call downloads and keeps the copy by repository and commit; the next call is free. On

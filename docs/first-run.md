@@ -39,7 +39,7 @@ kaosctl dataset create cats --classes cat,kitten
 ```
 
 This makes the lakeFS repository `dataset-cats` with a starter layout for the
-`ultralytics` (YOLO) format: `data.yaml`, `images/` and `labels/`. The command prints a
+`yolo` format (YOLO, images + labels): `data.yaml`, `images/` and `labels/`. The command prints a
 link to it.
 
 !!! note "Templates are optional"
@@ -55,14 +55,14 @@ Download the dataset, add your files, check them, and send them back.
 kaosctl dataset pull dataset-cats@latest ./dataset-cats
 # copy your images into ./dataset-cats/images/train and images/val
 # and one label file per image into ./dataset-cats/labels/train and labels/val
-kaosctl dataset validate ./dataset-cats --format ultralytics
+kaosctl dataset validate ./dataset-cats --format yolo
 kaosctl dataset push ./dataset-cats dataset-cats -m "first 200 images"
 ```
 
 - `validate` lists every problem it finds (a label for no image, a class number outside
   `names`, and so on). Fix them and run it again.
 - `push` uploads your folder to a draft and opens a **pull request**. It prints the link.
-- A repository with no template label validates nothing; add `--format ultralytics` to
+- A repository with no template label validates nothing; add `--format yolo` to
   `push` as well to get the YOLO checks there.
 
 ## 4. Merge the pull request and release a version

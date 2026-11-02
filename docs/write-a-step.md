@@ -42,7 +42,7 @@ args, _ = parser.parse_known_args()
 info = json.loads(args.dataset_info)
 
 ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(info["dataset_commit"])
-entry = datasets.materialize(ref)       # ultralytics: the data.yaml path; no label: a folder
+entry = datasets.materialize(ref)       # yolo: the data.yaml path; no label: a folder
 ```
 
 `with_commit` makes the call read exactly the commit `dataset-loading` pinned. The format

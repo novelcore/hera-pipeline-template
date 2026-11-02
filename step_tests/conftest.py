@@ -31,7 +31,7 @@ def fake():
     f = FakeLakeFS()
     data = {"data.yaml": b"path: .\ntrain: images/train\nval: images/val\nnc: 2\nnames:\n  0: a\n  1: b\n",
             "images/train/x.jpg": b"img", "labels/train/x.txt": b"0 0.5 0.5 0.1 0.1\n"}
-    f.add_repo("dataset-default", metadata={"kaos.kind": "dataset", "kaos.template": "ultralytics"}, files=data)
+    f.add_repo("dataset-default", metadata={"kaos.kind": "dataset", "kaos.template": "yolo"}, files=data)
     f.tag("dataset-default", "v1")
     f.add_repo("outputs-myapp", metadata={"kaos.kind": "outputs"})
     return f

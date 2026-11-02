@@ -31,7 +31,7 @@ READS = ["experiment", "dataset"]
 def read_dataset(info: dict, client=None) -> Path:
     """Local entry point of the pinned dataset commit (downloaded once, or the staged copy).
 
-    For a labelled dataset such as an ultralytics one it is the `data.yaml`; for a plain
+    For a labelled dataset such as a yolo one it is the `data.yaml`; for a plain
     repository it is the folder holding the files.
     """
     commit = info.get("dataset_commit") or ""
