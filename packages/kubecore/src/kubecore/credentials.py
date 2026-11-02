@@ -7,6 +7,9 @@ Order (first hit wins):
 
 The session cache is ~/.config/kubecore-ml/lakefs-session.json (0600), the file
 the earlier ``kubecore-dataset`` CLI wrote, so an existing login keeps working.
+
+Another project's lakeFS (shared datasets) gets ``resolve_peer`` instead: a bearer token only,
+never the own project's access key.
 """
 from __future__ import annotations
 
@@ -75,6 +78,30 @@ def resolve(base_url: str) -> Credential:
         raise AuthError(
             "not signed in. Run `kubecore login`, or set LAKEFS_ACCESS_KEY/LAKEFS_SECRET_KEY "
             "(or LAKEFS_BEARER_TOKEN) in the environment.")
+    return cred
+
+
+def resolve_peer(own_base_url: str) -> Credential:
+    """The credential for ANOTHER project's lakeFS: always a bearer token, never the access key.
+
+    Order (first hit wins):
+      1. LAKEFS_BEARER_TOKEN
+      2. a Zitadel token minted from ZITADEL_MACHINE_KEY_FILE + ZITADEL_DOMAIN + ZITADEL_MLFLOW_PROJECT_ID
+         (pipeline steps; needs the ``kubecore[zitadel]`` extra)
+      3. the cached browser-login session of the own lakeFS at ``own_base_url`` (laptop)
+    """
+    token = os.environ.get("LAKEFS_BEARER_TOKEN")
+    if token:
+        return Credential(token=token)
+    from . import zitadel
+    if os.environ.get(zitadel.KEY_FILE_ENV):
+        return Credential(token=zitadel.mint_from_env())
+    cred = load_session(own_base_url)
+    if cred is None:
+        raise AuthError(
+            "cannot read another project's datasets: no token. Run `kubecore login`, or set LAKEFS_BEARER_TOKEN "
+            f"or {zitadel.KEY_FILE_ENV} (with {zitadel.DOMAIN_ENV} and {zitadel.PROJECT_ENV}). "
+            "LAKEFS_ACCESS_KEY is never sent to another project.")
     return cred
 
 
