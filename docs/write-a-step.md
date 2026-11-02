@@ -21,8 +21,8 @@ pick itself: `latest` can move during a run.
 In `steps/my_step/Dockerfile`, copy the lines from `steps/hello_world/Dockerfile`:
 
 ```dockerfile
-ARG KAOS_LIB_PACKAGE="@ https://github.com/kaos-io/kaos-lib/archive/<the commit used by the template>.zip"
-RUN pip install --no-cache-dir "kaos-lib[zitadel] ${KAOS_LIB_PACKAGE}"
+ARG KAOS_LIB_PACKAGE="<the requirement the template pins>"   # the platform CI passes its own
+RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ```
 

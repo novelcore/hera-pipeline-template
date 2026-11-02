@@ -9,18 +9,19 @@ Python 3.9 or newer.
 
 ## 1. Install the tool and sign in
 
-The `kaos-cli` tool comes with kaos-lib, a Python package. Install it once, inside a small private Python
+The `kaosctl` tool comes with kaos-lib, a Python package. Install it once, inside a small private Python
 space for this project (a "virtual environment"), in your app folder.
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install "kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip"
-kaos-cli login
+pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
+    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel]==0.4.0"
+kaosctl login
 ```
 
-`<commit>` is the commit in `KAOS_LIB_PACKAGE` in `steps/hello_world/Dockerfile`: the
-same version your steps use. On Windows, the second line is `.venv\Scripts\activate`.
+kaos-lib comes from the platform's public package index (the second line takes its dependencies from PyPI). Your
+platform contact can tell you the version your project's steps use. On Windows, the second line is `.venv\Scripts\activate`.
 Your browser opens once and asks you to sign in. Log in, close the tab, and go back to the
 Terminal. The tool remembers you.
 
@@ -34,7 +35,7 @@ which tells the tool where your project's lakeFS is. You never need a link or a 
 ## 2. Create a dataset
 
 ```bash
-kaos-cli dataset create cats --classes cat,kitten
+kaosctl dataset create cats --classes cat,kitten
 ```
 
 This makes the lakeFS repository `dataset-cats` with a starter layout for the
@@ -42,7 +43,7 @@ This makes the lakeFS repository `dataset-cats` with a starter layout for the
 link to it.
 
 !!! note "Templates are optional"
-    You do not have to use a template. `kaos-cli dataset create cats --template none`
+    You do not have to use a template. `kaosctl dataset create cats --template none`
     makes an empty `dataset-cats`, and a `dataset-*` repository you create by hand in
     lakeFS becomes a dataset after its first commit. The rest of this page works the same.
 
@@ -51,11 +52,11 @@ link to it.
 Download the dataset, add your files, check them, and send them back.
 
 ```bash
-kaos-cli dataset pull dataset-cats@latest ./dataset-cats
+kaosctl dataset pull dataset-cats@latest ./dataset-cats
 # copy your images into ./dataset-cats/images/train and images/val
 # and one label file per image into ./dataset-cats/labels/train and labels/val
-kaos-cli dataset validate ./dataset-cats --format ultralytics
-kaos-cli dataset push ./dataset-cats dataset-cats -m "first 200 images"
+kaosctl dataset validate ./dataset-cats --format ultralytics
+kaosctl dataset push ./dataset-cats dataset-cats -m "first 200 images"
 ```
 
 - `validate` lists every problem it finds (a label for no image, a class number outside
@@ -70,8 +71,8 @@ Open the pull request link, look at the change, and merge it. Nothing changes on
 until you do. Then tag the new state as a version:
 
 ```bash
-kaos-cli dataset release dataset-cats      # prints v1
-kaos-cli dataset versions dataset-cats
+kaosctl dataset release dataset-cats      # prints v1
+kaosctl dataset versions dataset-cats
 ```
 
 A run reads a version, not "whatever is there now", so a result always points back to its
@@ -106,7 +107,7 @@ small `hello.json` there, naming the dataset and the commit it read. To get the 
 computer:
 
 ```bash
-kaos-cli dataset pull outputs-<app>@main ./results --prefix checkpoints/<experiment>/<run>/
+kaosctl dataset pull outputs-<app>@main ./results --prefix checkpoints/<experiment>/<run>/
 ```
 
 The commit's message and details name the run, the dataset and its commit, so you can find

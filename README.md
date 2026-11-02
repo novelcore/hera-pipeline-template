@@ -78,16 +78,16 @@ one, `dataset-default`.
   never reads "whatever is there now": it picks one version, and every step of that run
   reads exactly that commit.
 - **Changes** reach `main` through a **pull request**. After a pull request is merged,
-  `kaos-cli dataset release` tags the next version.
+  `kaosctl dataset release` tags the next version.
 - **Pick it in the pipeline.** The run form has a `dataset` field, a dropdown of
   `<dataset-repo>@<version>` choices, newest first (`dataset-cats@v2`, `dataset-cats@v1`,
   `dataset-cats@latest`, …). The default is `dataset-default`'s newest version. The list
   is refreshed when a dataset or a version changes. The field comes from
   `config/dataset.yaml`; keep a field named exactly `dataset` in your pipeline.
-- **Templates are optional.** `kaos-cli dataset create` can start a repository from a
+- **Templates are optional.** `kaosctl dataset create` can start a repository from a
   format template (the starter layout, for example `ultralytics`), but you do not need
   one: any repository named `dataset-<something>` that you create by hand in lakeFS
-  becomes a dataset after its first commit (`kaos-cli dataset create <name> --template none`
+  becomes a dataset after its first commit (`kaosctl dataset create <name> --template none`
   makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
   repository can be read from code too: `datasets.materialize("<repo>@<ref>")` (see the
   package section). A repository with no template label is read as plain files.
@@ -123,14 +123,15 @@ Writing a step that reads a dataset and writes results: [docs/write-a-step.md](d
 ## kaos-lib, the platform library
 
 [kaos-lib](https://github.com/kaos-io/kaos-lib) (`kaos_lib`, formerly the `kubecore` package) is
-the Python library behind all of this, with the `kaos-cli` command. Install it on your computer
-inside a virtual environment, at the commit your step images use (`KAOS_LIB_PACKAGE` in
-`steps/*/Dockerfile`):
+the Python library behind all of this, with the `kaosctl` command, published to the platform's public
+package index (the step images pin theirs in `KAOS_LIB_PACKAGE`, `steps/*/Dockerfile`). Install it on your
+computer inside a virtual environment:
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip"
-kaos-cli login                    # opens your browser once
+pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
+    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel]==0.4.0"
+kaosctl login                    # opens your browser once
 ```
 
 Run the commands inside your app folder: it carries the file that tells the tool where
@@ -138,12 +139,12 @@ your project's lakeFS is.
 
 | command | what it does |
 |---|---|
-| `kaos-cli dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
-| `kaos-cli dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
-| `kaos-cli dataset validate <dir> --format ultralytics` | check a folder against a format |
-| `kaos-cli dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
-| `kaos-cli dataset release <repo>` | tag the head of `main` as the next version |
-| `kaos-cli dataset list` / `versions <repo>` | what exists |
+| `kaosctl dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
+| `kaosctl dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
+| `kaosctl dataset validate <dir> --format ultralytics` | check a folder against a format |
+| `kaosctl dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
+| `kaosctl dataset release <repo>` | tag the head of `main` as the next version |
+| `kaosctl dataset list` / `versions <repo>` | what exists |
 
 **Validation follows the template label.** `push` checks your folder against the format
 the repository is labelled with (`kaos.template`). A repository with **no template label

@@ -454,7 +454,7 @@ Open the workflow template in the Argo UI, press **Submit**:
   (`experiment-name`, `train-epochs`, `dataset`, …), plus dropdowns the
   platform fills live (`cpu-class`/`gpu-class` list this cluster's node
   classes; `dataset` lists `<dataset-repo>@<version>` choices — the
-  datasets of your project, `kaos-cli dataset list`) and
+  datasets of your project, `kaosctl dataset list`) and
   fixed-choice fields it validates (e.g. `data-source`).
 - **Per-step sizing** — `{step}-cpu` / `{step}-mem`.
 - **`config` (ADVANCED)** — normally empty. When non-empty it is an
@@ -572,11 +572,11 @@ There are two test commands, on purpose:
 
 ```bash
 python -m pytest                                   # the engine: tests/ (the vendored kubecore/)
-pip install "kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip" pytest
+pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
 pytest step_tests                                  # step code that imports kaos_lib
 ```
 
-`<commit>` is the one in `KAOS_LIB_PACKAGE` in `steps/*/Dockerfile`.
+That installs exactly the requirement in `KAOS_LIB_PACKAGE` in `steps/*/Dockerfile` (run it from the repo root).
 
 **Why two.** The platform's engine in `kubecore/` (render, compose, enhance; it runs in CI and is
 never in a step image) is imported as `kubecore`; the step code imports kaos-lib as `kaos_lib`. For

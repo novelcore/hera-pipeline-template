@@ -6,7 +6,7 @@ The steps import **kaos-lib** (`kaos_lib`: datasets, run outputs), the platform 
 
 ```bash
 python -m pytest tests                                       # engine (vendored kubecore/)
-pip install "kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip" pytest
+pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
 pytest step_tests                                            # step code
 ```
 
