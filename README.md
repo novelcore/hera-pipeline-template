@@ -86,7 +86,7 @@ one, `dataset-default`.
   is refreshed when a dataset or a version changes. The field comes from
   `config/dataset.yaml`; keep a field named exactly `dataset` in your pipeline.
 - **Templates are optional.** `kubecore dataset create` can start a repository from a
-  format template (the starter layout, for example `ultralytics`), but you do not need
+  format template (the starter layout, for example `yolo`), but you do not need
   one: any repository named `dataset-<something>` that you create by hand in lakeFS
   becomes a dataset after its first commit (`kubecore dataset create <name> --template none`
   makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
@@ -138,16 +138,16 @@ your project's lakeFS is.
 
 | command | what it does |
 |---|---|
-| `kubecore dataset create <name> [--classes a,b] [--template ultralytics\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
+| `kubecore dataset create <name> [--classes a,b] [--template yolo\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
 | `kubecore dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
-| `kubecore dataset validate <dir> --format ultralytics` | check a folder against a format |
-| `kubecore dataset push <dir> <repo> -m "message" [--format ultralytics]` | upload to a draft and open a pull request |
+| `kubecore dataset validate <dir> --format yolo` | check a folder against a format |
+| `kubecore dataset push <dir> <repo> -m "message" [--format yolo]` | upload to a draft and open a pull request |
 | `kubecore dataset release <repo>` | tag the head of `main` as the next version |
 | `kubecore dataset list` / `versions <repo>` | what exists |
 
 **Validation follows the template label.** `push` checks your folder against the format
 the repository is labelled with (`kaos.template`). A repository with **no template label
-validates nothing** and takes the files as they are. Add `--format ultralytics` to get the
+validates nothing** and takes the files as they are. Add `--format yolo` to get the
 YOLO checks (detection, segmentation and pose labels, `nc` against `names`, an image for
 every label) on a repository that has no label.
 
@@ -156,9 +156,9 @@ tag or a commit id):
 
 ```python
 from kubecore import datasets
-entry = datasets.materialize("dataset-cats@v2")    # ultralytics: the data.yaml; no label: the folder
+entry = datasets.materialize("dataset-cats@v2")    # yolo: the data.yaml; no label: the folder
 folder = datasets.materialize("my-repo@main")      # a repository you made by hand
-fmt = datasets.format_of("dataset-cats")           # "ultralytics", or "raw" when there is no label
+fmt = datasets.format_of("dataset-cats")           # "yolo", or "raw" when there is no label
 ```
 
 `materialize` downloads once and reuses the copy; on MeluXina it uses the copy the
