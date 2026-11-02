@@ -91,6 +91,7 @@ nav:
       - First dataset to results: first-run.md
       - Datasets: datasets.md
       - Write a step that uses a dataset: write-a-step.md
+      - Package versions and upgrades: kaos-lib-versions.md
   - Ship it:
       - Send your change in: send-it-in.md
       - Go live: go-live.md

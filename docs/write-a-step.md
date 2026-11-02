@@ -21,11 +21,14 @@ pick itself: `latest` can move during a run.
 In `steps/my_step/Dockerfile`, copy the lines from `steps/hello_world/Dockerfile`:
 
 ```dockerfile
-ARG KUBECORE_PKG_COMMIT=<the commit used by the template>
-RUN pip install --no-cache-dir \
-    "https://github.com/novelcore/hera-pipeline-template/archive/${KUBECORE_PKG_COMMIT}.zip#subdirectory=packages/kubecore"
+ARG KAOS_LIB_PACKAGE="<the value in steps/hello_world/Dockerfile>"
+RUN pip install --no-cache-dir "kubecore[zitadel] ${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ```
+
+Keep the `ARG` name `KAOS_LIB_PACKAGE`: the platform's build passes the package version it
+chose through it, so your new step moves with the others ([Package versions and
+upgrades](kaos-lib-versions.md)). A step without it keeps the default forever.
 
 Copy only `app/`. Do not copy the template's `kubecore/` folder into a step image: it is the
 platform's engine, it has the same import name as the package, and the two must never be on
