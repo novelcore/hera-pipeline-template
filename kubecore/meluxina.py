@@ -734,7 +734,7 @@ def submit():
     # Only when set: step code reads os.environ.get(..., default), so an empty
     # value would override its own default.
     env += [k + '=' + os.environ[k] for k in
-            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID')
+            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID', 'KUBECORE_WORKFLOW_NAME')
             if os.environ.get(k)]
     global WALLET, WALLET_EXP
     wallet = WALLET = mint_wallet()
@@ -1294,6 +1294,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)},
                 {"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()},
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
+                {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
             ],
         },
         # slurm-job-id plus the union of every routed step's declared outputs

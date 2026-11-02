@@ -477,6 +477,7 @@ def enhance_env(step: dict, ctx: dict, annots: dict) -> None:
     add({"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)})
     add({"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()})
     add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
+    add({"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"})
 
 
 # How long a step may sit Pending before the platform calls it unschedulable.
