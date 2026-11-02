@@ -22,7 +22,7 @@ In `steps/my_step/Dockerfile`, copy the lines from `steps/hello_world/Dockerfile
 
 ```dockerfile
 ARG KAOS_LIB_PACKAGE="<the value in steps/hello_world/Dockerfile>"
-RUN pip install --no-cache-dir "kubecore[zitadel] ${KAOS_LIB_PACKAGE}"
+RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ```
 

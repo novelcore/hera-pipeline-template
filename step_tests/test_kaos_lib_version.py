@@ -14,7 +14,8 @@ import yaml
 from conftest import ROOT, load_step
 
 PACKAGE_STEPS = ["dataset_loading", "hello_world"]  # compose_and_validate runs the vendored engine
-SPEC_RE = re.compile(r'^ARG KAOS_LIB_PACKAGE="(==\S+|@ https://\S+)"$', re.M)
+# The ARG holds the whole requirement: name[extras] then ==X.Y.Z or " @ <url>".
+SPEC_RE = re.compile(r'^ARG KAOS_LIB_PACKAGE="([A-Za-z0-9._-]+(?:\[[A-Za-z0-9,._-]+\])?(?: ?==\S+| @ https://\S+))"$', re.M)
 PARAMS = yaml.safe_dump({"experiment": {"name": "exp1"}, "dataset": "dataset-default@v1"})
 INSTALLED = version("kubecore")  # the package in this repo, still named kubecore until kaos-lib's first release
 
@@ -23,7 +24,8 @@ INSTALLED = version("kubecore")  # the package in this repo, still named kubecor
 def test_every_package_step_takes_the_platform_spec(step):
     text = (ROOT / "steps" / step / "Dockerfile").read_text()
     assert SPEC_RE.search(text), "ARG KAOS_LIB_PACKAGE with a ==X.Y.Z or @ <url> default"
-    assert 'RUN pip install --no-cache-dir "kubecore[zitadel] ${KAOS_LIB_PACKAGE}"' in text
+    assert 'RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"' in text
+    assert SPEC_RE.search(text).group(1).startswith("kubecore[zitadel] @ "), "the default names the package and its extras"
     assert "KUBECORE_PKG_COMMIT" not in text
 
 

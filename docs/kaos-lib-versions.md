@@ -11,8 +11,8 @@ new version reaches your app, how to hold a version, and what a bump pull reques
 version it chose to each step Dockerfile:
 
 ```dockerfile
-ARG KAOS_LIB_PACKAGE="@ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
-RUN pip install --no-cache-dir "kubecore[zitadel] ${KAOS_LIB_PACKAGE}"
+ARG KAOS_LIB_PACKAGE="kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
+RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 ```
 
 The value in the `ARG` line is only the default for a build on your own computer. In the
@@ -20,9 +20,11 @@ platform's build it is replaced, so changing it does not change what your pipeli
 Keep the name `KAOS_LIB_PACKAGE` in every step that installs the package: a step without
 it keeps its default forever.
 
-The version is a pip requirement: `==0.2.3` (a released version) or
-`@ https://github.com/…/archive/<commit>.zip…` (a commit of the package, used until the
-package is published).
+The value is a whole pip requirement: the package's name and extras, then the version.
+Today it is `kubecore[zitadel] @ https://github.com/…/archive/<commit>.zip…`, a commit of the package
+under its former name. From kaos-lib's first release the platform passes
+`kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/releases/…/vX.Y.Z/<file>`, with
+no change in your repository.
 
 ## Your range: `.kaos/compat.yaml`
 
