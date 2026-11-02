@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import requests
 from requests.adapters import BaseAdapter
 
-from kubecore import credentials
+from kubecore import credentials, lakefs
 from kubecore.lakefs import LakeFS
 
 BRANCH_ID = re.compile(r"^\w[-\w]*$")  # lakeFS's branch id rule
@@ -23,10 +23,14 @@ class FakeLakeFS(BaseAdapter):
 
     BASE = "http://lakefs.test"
 
-    def __init__(self):
+    def __init__(self, base: str = BASE):
         super().__init__()
+        self.base = base
         self.repos: dict = {}
         self.calls: list = []        # (method, path-without-query)
+        self.auth: list = []         # the Authorization header of every request (None when absent)
+        self.kaos: dict = {}         # "/kaos/v1/..." -> (status, JSON body or raw bytes); others: 404 HTML
+        self.deny = None             # an HTTP status every /api/v1 call answers (a token this server refuses)
         self.writes: list = []       # (kind, repo, branch, path) for object uploads/deletes
         self.storage_prefix = "gs://bucket/lakefs"   # None: kaos-lake publishes no prefix
         self._ids = itertools.count(1)
@@ -54,10 +58,13 @@ class FakeLakeFS(BaseAdapter):
     def tree(self, repo, ref):
         return self._view(repo, ref)
 
-    def client(self, bearer="t"):
-        s = requests.Session()
+    def client(self, bearer="t", credential=None):
+        """A real client (real session code, so real auth headers) whose every request reaches this fake."""
+        cred = credential or credentials.Credential(token=bearer)
+        s = lakefs._session(cred, 8)
         s.mount("http://", self)
-        return LakeFS(self.BASE, credentials.Credential(token=bearer), session=s, concurrency=4)
+        s.mount("https://", self)
+        return LakeFS(self.base, cred, session=s, concurrency=4)
 
     # ---- state
     def _resolve(self, repo, ref):
@@ -88,8 +95,13 @@ class FakeLakeFS(BaseAdapter):
         u = urlsplit(request.url)
         path, q = u.path.removeprefix("/api/v1"), {k: v[0] for k, v in parse_qs(u.query).items()}
         self.calls.append((request.method, path))
+        self.auth.append(request.headers.get("Authorization"))
         try:
+            if self.deny and not path.startswith("/kaos/"):
+                raise PermissionError
             status, body = self._route(request, path, q)
+        except PermissionError:
+            status, body = self.deny, {"message": "insufficient permissions"}
         except KeyError:
             status, body = 404, {"message": "not found"}
         resp = requests.Response()
@@ -109,6 +121,8 @@ class FakeLakeFS(BaseAdapter):
             if self.storage_prefix is None:
                 return 404, {}
             return 200, {"storage_namespace_prefix": self.storage_prefix, "templates": []}
+        if path.startswith("/kaos/"):
+            return self.kaos.get(path, (404, b"<html><body>404 page not found</body></html>"))
         m, body = req.method, (json.loads(req.body) if req.body and not _is_multipart(req) else {})
         parts = [unquote(p) for p in path.strip("/").split("/")]
         if parts == ["repositories"]:
