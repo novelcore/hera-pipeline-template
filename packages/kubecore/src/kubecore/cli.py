@@ -2,6 +2,7 @@
 
     kubecore login
     kubecore dataset create|list|versions|release|push|pull|validate
+    kubecore dataset list --shared     datasets other projects share with yours (read-only)
 
 User errors print one ``ERROR:`` line (exit 1; validation problems exit 2), never a
 traceback. Every successful command prints the next useful step and a link.
@@ -14,7 +15,7 @@ from typing import Optional
 
 import requests
 
-from . import __version__, credentials, datasets
+from . import __version__, credentials, datasets, peers
 from .config import resolve_endpoint
 from .errors import KubecoreError, ValidationFailed
 from .formats import format_names, get_format
@@ -51,6 +52,7 @@ def _repo(c: LakeFS, name: str) -> str:
 
 
 def cmd_create(args) -> int:
+    datasets.refuse_shared(args.name, "create")
     c = _connect(args)
     classes = [x.strip() for x in (args.classes or "").split(",") if x.strip()]
     repo = datasets.create_dataset(args.name, args.template, args.description or "", c,
@@ -69,7 +71,32 @@ def cmd_create(args) -> int:
     return 0
 
 
+def cmd_list_shared(args) -> int:
+    c = _connect(args)
+    answers = peers.shared(c)
+    rows = [r for a in answers for r in a.datasets]
+    for a in answers:
+        if a.note:
+            print(f"NOTE: {a.peer}: {a.note}; nothing listed from it.", file=sys.stderr)
+    if not rows:
+        print("No datasets are shared with your project yet. The owner shares one from its dataset page in lakeFS.")
+        return 0
+    names = [f"{r.owner}/{r.repo}" for r in rows]
+    width = max(len(n) for n in names)
+    for name, r in zip(names, rows):
+        print(f"{name:<{width}}  {', '.join(r.versions) or 'no versions':<12}  {r.description}")
+    pick = next(((n, r) for n, r in zip(names, rows) if r.versions), None)
+    if pick:
+        print(f"Pick one in the pipeline:  dataset = {pick[0]}@{pick[1].versions[0]}")
+        print(f"Or download it:  kubecore dataset pull {pick[0]}@{pick[1].versions[0]}")
+    else:
+        print(f"Next: kubecore dataset pull {names[0]}@{datasets.LATEST}")
+    return 0
+
+
 def cmd_list(args) -> int:
+    if args.shared:
+        return cmd_list_shared(args)
     rows = datasets.list_datasets(_connect(args))
     if not rows:
         print("No datasets yet. Create one with: kubecore dataset create <name> --classes a,b,c")
@@ -95,6 +122,7 @@ def cmd_versions(args) -> int:
 
 
 def cmd_release(args) -> int:
+    datasets.refuse_shared(args.repo, "release")
     c = _connect(args)
     repo = _repo(c, args.repo)
     version = datasets.release(repo, c)
@@ -105,6 +133,7 @@ def cmd_release(args) -> int:
 
 
 def cmd_push(args) -> int:
+    datasets.refuse_shared(args.repo, "push to")
     c = _connect(args)
     repo = _repo(c, args.repo)
     fmt_name = args.format or datasets.format_of(repo, c)   # no template label: raw, validates nothing
@@ -169,7 +198,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--description", help="what the dataset is for")
     sp.add_argument("--template", default="ultralytics", choices=fmts + ["yolo", datasets.NO_TEMPLATE],
                     help=f"starter layout ({', '.join(fmts)}), or none for an empty repository (default ultralytics)")
-    add(dsub, "list", cmd_list, "list the datasets you can read")
+    add(dsub, "list", cmd_list, "list the datasets you can read").add_argument(
+        "--shared", action="store_true", help="list the datasets other projects share with yours (read-only)")
     add(dsub, "versions", cmd_versions, "list a dataset's versions").add_argument("repo")
     add(dsub, "release", cmd_release, "tag the head of main with the next version").add_argument("repo")
     sp = add(dsub, "push", cmd_push, "validate a local folder and open a pull request into the dataset")
@@ -181,7 +211,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--format", choices=fmts + ["yolo"],
                     help="format to validate with (default: the repository's template label; none means raw)")
     sp = add(dsub, "pull", cmd_pull, "download a dataset version for training")
-    sp.add_argument("ref", help="<repository>@<ref>, e.g. dataset-default@v2 or my-repo@main")
+    sp.add_argument("ref", help="<repository>@<ref>, e.g. dataset-default@v2, my-repo@main "
+                                "or <project>/dataset-x@v1 (shared with your project)")
     sp.add_argument("dest", nargs="?", help="folder to download into (default: a per-commit cache)")
     sp.add_argument("--format", choices=fmts + ["yolo"], help="default: the repository's template label, else raw")
     sp.add_argument("--prefix", help="download only this folder of the repository (raw format)")

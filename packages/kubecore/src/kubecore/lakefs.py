@@ -1,8 +1,9 @@
 """Thin lakeFS REST client (API v1) for kaos-lake. One class, no business logic.
 
 Authentication comes from ``credentials.resolve``: a bearer token, or an
-access-key pair sent as Basic auth. HTTP failures become ``LakeFSError``
-subclasses whose messages tell the user what to do next.
+access-key pair sent as Basic auth. ``for_owner`` returns a client for another
+project's lakeFS that carries only a bearer token (``credentials.resolve_peer``).
+HTTP failures become ``LakeFSError`` subclasses whose messages tell the user what to do next.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from . import credentials
 from .config import resolve_endpoint
 from .errors import AuthError, LakeFSError, NotFoundError
 
-USER_AGENT = "kubecore/0.1"
+USER_AGENT = "kubecore/0.2"
 
 
 def _q(value: str) -> str:
@@ -50,20 +51,46 @@ def _session(cred: credentials.Credential, pool: int) -> requests.Session:
 
 
 class LakeFS:
-    """A lakeFS server reachable at ``base_url`` with one credential."""
+    """A lakeFS server reachable at ``base_url`` with one credential.
+
+    ``owner`` is None for the own project's lakeFS, else the project whose lakeFS this is.
+    """
 
     def __init__(self, base_url: str, credential: credentials.Credential,
-                 session: Optional[requests.Session] = None, timeout: int = 300, concurrency: int = 16):
+                 session: Optional[requests.Session] = None, timeout: int = 300, concurrency: int = 16,
+                 owner: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.concurrency = concurrency
+        self.owner = owner
         self.session = session or _session(credential, concurrency * 2)
+        self._peer_clients: dict = {}
 
     @classmethod
     def connect(cls, url: Optional[str] = None, start: Optional[str] = None) -> "LakeFS":
         """Resolve the endpoint and the credential chain and return a ready client."""
         base = resolve_endpoint(url, start)
         return cls(base, credentials.resolve(base))
+
+    def for_owner(self, owner: str) -> "LakeFS":
+        """A client for the lakeFS of project ``owner`` (this client when ``owner`` is the own project).
+
+        The address comes from the own lakeFS's peers (``/kaos/v1/peers``): the in-cluster endpoint when
+        this client's base is an in-cluster ``.svc`` address, else the public URL. The credential is a
+        bearer token (``credentials.resolve_peer``), never this project's access key.
+        """
+        from . import peers
+        if self.owner:
+            raise LakeFSError(f"this client reads project {self.owner}; ask the own project's client for {owner}.")
+        if owner in self._peer_clients:
+            return self._peer_clients[owner]
+        if owner == peers.load(self).project:
+            return self
+        base = peers.base_for(self.base_url, peers.peer(self, owner))
+        client = LakeFS(base, credentials.resolve_peer(self.base_url), timeout=self.timeout,
+                        concurrency=self.concurrency, owner=owner)
+        self._peer_clients[owner] = client
+        return client
 
     # -- plumbing --------------------------------------------------------
     def _call(self, method: str, path: str, ok=(200, 201, 204), what: str = "", **kw):
