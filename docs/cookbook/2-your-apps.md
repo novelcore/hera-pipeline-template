@@ -67,11 +67,6 @@ The status comes from the app's `PipelineReady` condition. A first build takes s
 most of it building the step images. You can create and upload a dataset before the build is done
 ([chapter 5](5-your-data.md)).
 
-!!! warning "Ignore the upload command on the build card"
-    The **First pipeline build** card shows `python3 scripts/upload-dataset.py <folder> [name]`.
-    That script is not in the templates any more. Upload with `kaosctl` instead
-    ([chapter 5](5-your-data.md)).
-
 ## If it isn't there
 
 - **No New pipeline button, or your project is not offered:** the project has no ML stack, so it
