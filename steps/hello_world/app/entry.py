@@ -26,7 +26,10 @@ from typing import Optional
 
 import yaml
 from kaos_lib import datasets, outputs
-from kaos_lib.errors import EmptyDataset
+try:
+    from kaos_lib.errors import EmptyDataset
+except ImportError:  # kaos-lib before 0.4.0rc3 (an app pinned to it): an empty dataset still fails the step
+    EmptyDataset = ()
 
 # The config sections this step reads (must exist in the config/ tree).
 READS = ["experiment", "dataset"]

@@ -41,3 +41,13 @@ def test_should_report_a_dataset_with_no_files_instead_of_failing(client, fake, 
     assert "holds no files yet" in capsys.readouterr().out
     tree = fake.tree("outputs-myapp", fake.head("outputs-myapp"))
     assert json.loads(tree["checkpoints/exp1/wf-empty/hello.json"])["files"] == 0
+
+
+def test_should_still_run_on_a_kaos_lib_without_empty_dataset(client, fake, monkeypatch):
+    # An app pinned to kaos-lib before 0.4.0rc3 builds this step against a kaos-lib with no
+    # EmptyDataset: the step must import and read a dataset that has files.
+    import kaos_lib.errors
+    monkeypatch.delattr(kaos_lib.errors, "EmptyDataset")
+    hello = load_step("hello_world")
+    info = load_step("dataset_loading").pin("dataset-default@v1", client)
+    assert hello.describe(hello.read_dataset(info, client)) == {"classes": {0: "a", 1: "b"}}
