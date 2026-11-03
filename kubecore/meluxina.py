@@ -1280,6 +1280,23 @@ resubmits = 0
 # for the whole 2.5 h budget, reason unknown).
 pending_reason = None
 hosted = None   # PRD-1609: the host that took this job, as last printed
+# PRD-1609: how often this run started over because its host died with it.
+LOST_HOST_RESUBMITS = 3
+lost_hosts = 0
+HOST_ALIVE = ('PENDING', 'RUNNING', 'SUSPENDED', 'COMPLETING')
+
+
+def host_gone(host):
+    """True only when accounting says the host job ended: an unreadable record
+    is not a death (the host keeps running; the next poll asks again)."""
+    try:
+        h = (get(SDB + '/job/' + str(host)).get('jobs') or [{}])[0]
+    except Exception:
+        return False
+    hst = (h.get('state') or {}).get('current') or []
+    return bool(hst) and not any(x in HOST_ALIVE for x in hst)
+
+
 while True:
     time.sleep(30)
     try:
@@ -1310,6 +1327,19 @@ while True:
                 share = share_state(comment_of(live)) or share
             except Exception:
                 pass
+        if ('PENDING' in st and share.get('kaos-state') == 'taken' and share.get('host')
+                and lost_hosts < LOST_HOST_RESUBMITS and host_gone(share['host'])):
+            # PRD-1609: the host died without handing this job back (node failure,
+            # crash): it stays held forever. Start over as a new job — the same
+            # cancel + submit as the wallet resubmit, so no new Slurm call.
+            lost_hosts += 1
+            print('host job', share['host'], 'is gone with this step - resubmitting'
+                  ' (%d/%d)' % (lost_hosts, LOST_HOST_RESUBMITS), flush=True)
+            cancel(jid)
+            jid = submit()
+            open('/tmp/slurm-job-id', 'w').write(str(jid))
+            hosted = None
+            continue
         # A job a host took stays queued (held) while its step runs: never
         # resubmit it. The host checked its token outlives the step (D-07).
         if ('PENDING' in st and share.get('kaos-state') != 'taken' and WALLET_EXP
