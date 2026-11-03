@@ -54,8 +54,12 @@ def test_per_job_paths_key_on_the_steps_own_job():
     lines = _job_script_lines()
     assert lines.index("set +e") < lines.index("KAOS_JOB_ID=${KAOS_JOB_ID:-$SLURM_JOB_ID}") \
         < next(i for i, l in enumerate(lines) if l.startswith("fail(){"))
-    uses = [l for l in lines if "$SLURM_JOB_ID" in l]
-    # Only the default itself and the pull's private temp name (unique per process anyway).
+    # The batch step's own id is used only by the default itself, the pull's private
+    # temp name (unique per process anyway) and the host hook (F-03), which runs in the
+    # batch step before any step exists.
+    hook = lines[lines.index('if [ -z "$KAOS_IN_STEP" ] && [ -n "$KAOS_SLOTS_B64" ]; then'):]
+    hook = hook[:hook.index("fi") + 1]
+    uses = [l for l in lines if "$SLURM_JOB_ID" in l and l not in hook]
     assert len(uses) == 2 and any(l.startswith("KAOS_JOB_ID=") for l in uses) \
         and any("SIF_TMP=" in l for l in uses), uses
     assert any("kaos-work/$KAOS_JOB_ID" in l for l in lines)
@@ -155,7 +159,7 @@ def test_a_taken_job_is_never_resubmitted_for_its_token():
 
 def test_a_hosts_done_comment_is_the_steps_result():
     loop = _loop()
-    terminal = loop[loop.index("if any(x in TERMINAL for x in st):"):]
+    terminal = loop[loop.index("if any(x in TERMINAL for x in st)"):]
     done = terminal.index("if share.get('kaos-state') == 'done':")
     assert done < terminal.index("if 'FAILED' in st and rc == 231"), \
         "a host's pull failure still gets the fresh-credentials resubmit"

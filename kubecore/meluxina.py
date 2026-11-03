@@ -313,8 +313,293 @@ def comment_of(job):
 
 def share_state(comment):
     """D-04: what a host wrote into this job's comment, as a dict ({} when no host
-    took it): kaos-state (taken|done), host, slot, attempt, rc."""
-    return dict(re.findall(r'(?:^|\s)(kaos-state|host|slot|attempt|rc)=(\S+)', comment))
+    took it): kaos-state (taken|done|requeued), host, slot, attempt, rc, reason."""
+    return dict(re.findall(r'(?:^|\s)(kaos-state|host|slot|attempt|rc|reason)=(\S+)', comment))
+
+
+# PRD-1609 F-03: the slot manager. With sharing on, a job's batch step runs this
+# instead of its own step (MeluXina compute nodes: Python 3.6, standard library only).
+# It runs its own step and waiting jobs of the same scope as Slurm job steps, one GPU
+# each, and reports each in that job's comment. Rides to the node base64-encoded.
+SLOTS = r"""
+import os, re, signal, subprocess, sys, time
+
+# A step's environment: Slurm's own variables, the GPU it was given and the login
+# basics. Nothing of the host's inputs reaches a guest; each script exports its own.
+STEP_ENV = re.compile(r'^(SLURM_|CUDA_VISIBLE_DEVICES$|GPU_DEVICE_ORDINAL$|ROCR_VISIBLE_DEVICES$'
+                      r'|PATH$|HOME$|USER$|LANG$|LC_)')
+
+if sys.argv[1:2] == ['--step']:
+    script, job = sys.argv[2], sys.argv[3]
+    env = dict((k, v) for k, v in os.environ.items() if STEP_ENV.match(k))
+    env.update(KAOS_IN_STEP='1', KAOS_JOB_ID=job)
+    os.chdir(env.get('HOME') or '/')
+    os.execve('/bin/bash', ['bash', '-l', script], env)
+
+ME = os.environ['SLURM_JOB_ID']
+OWN_SCRIPT = sys.argv[1]
+SCOPE = os.environ['KAOS_SCOPE']
+PREFIX = 'kaos-' + SCOPE + '-'
+HEADER = '# kaos-job v2 scope=' + SCOPE
+CLAIMS = os.path.join(os.environ['KAOS_SCR'], 'kaos-claims')
+HOME = os.environ.get('HOME') or '/'
+GPUS = max(1, int(os.environ.get('HPC_GPUS') or 1))
+CPUS = max(1, int(os.environ.get('SLURM_CPUS_ON_NODE') or GPUS) // GPUS)
+IDLE_S = int(os.environ.get('KAOS_IDLE_S') or 120)
+MARGIN_S = 300          # a guest must end this long before the host's own limit
+TOKEN_MARGIN_S = 1800   # ... and this long before its own token expires (D-07)
+HELD = ('JobHeld', 'Dependency', 'BeginTime')
+POLL_S = float(os.environ.get('KAOS_POLL_S') or 2)   # watchdog cadence; queue every 5 polls
+
+
+def log(*a):
+    print(time.strftime('%H:%M:%S'), 'slots:', *a, flush=True)
+
+
+def run(*cmd):
+    p = subprocess.run(list(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                       universal_newlines=True)
+    return p.returncode, p.stdout.strip()
+
+
+def q(job, fmt):
+    rc, out = run('squeue', '-h', '-j', job, '-o', fmt)
+    return out if rc == 0 else ''
+
+
+def comment(job):
+    c = q(job, '%k')
+    return '' if c == '(null)' else c
+
+
+def set_comment(job, text):
+    run('scontrol', 'update', 'JobId=' + job, 'Comment=' + text)
+
+
+def lease(c):
+    m = re.search(r'kaos-commit=\S+', c)
+    return m.group(0) + ' ' if m else ''
+
+
+def err_part(c):
+    m = re.search(r'(?:^|\s)(err\d+:.*)$', c)
+    return ' ' + m.group(1) if m else ''
+
+
+def attempt(c):
+    m = re.search(r'(?:^|\s)attempt=(\d+)', c)
+    return int(m.group(1)) if m else 1
+
+
+def mem_share_bytes():
+    mb = int(os.environ.get('SLURM_MEM_PER_NODE') or 0)
+    if not mb:
+        with open('/proc/meminfo') as f:
+            mb = int(f.readline().split()[1]) // 1024
+    return mb * 1024 * 1024 // GPUS
+
+
+def limit_s(text):
+    # squeue %l: UNLIMITED, D-HH:MM:SS, HH:MM:SS, MM:SS or MM
+    if not text or text in ('UNLIMITED', 'INVALID', 'NOT_SET'):
+        return None
+    days, _, rest = text.rpartition('-')
+    try:
+        parts = [int(x) for x in rest.split(':')]
+    except ValueError:
+        return None
+    if len(parts) == 1:
+        h, m, s = 0, parts[0], 0
+    elif len(parts) == 2:
+        h, m, s = 0, parts[0], parts[1]
+    else:
+        h, m, s = parts[-3:]
+    return int(days or 0) * 86400 + h * 3600 + m * 60 + s
+
+
+def end_epoch():
+    e = q(ME, '%e')
+    try:
+        return time.mktime(time.strptime(e, '%Y-%m-%dT%H:%M:%S'))
+    except ValueError:
+        return time.time() + 3600
+
+
+PART = q(ME, '%P')
+HOST_END = end_epoch()
+SHARE = mem_share_bytes()
+PAGE = os.sysconf('SC_PAGE_SIZE')
+slots = {}      # slot -> {'job', 'proc', 'claim', 'name', 'memkill'}
+own_rc = None
+skip = set()    # jobs looked at and not ours to take
+
+
+def launch(slot, job, script, log_to, limit=None):
+    cmd = ['srun', '--exact', '-N1', '-n1', '--gpus=1', '-c', str(CPUS), '--job-name', 'kaos-' + job]
+    if limit:
+        cmd.append('--time=%d' % max(1, (limit + 59) // 60))
+    cmd += ['python3', sys.argv[0], '--step', script, job]
+    out = open(log_to, 'a') if log_to else None
+    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT if out else None)
+    return proc
+
+
+def step_id(job):
+    rc, out = run('squeue', '-s', '-j', ME, '-h', '-o', '%i %j')
+    for line in out.splitlines():
+        sid, _, name = line.partition(' ')
+        if name == 'kaos-' + job:
+            return sid
+    return None
+
+
+def step_rss():
+    # Memory per step, from /proc (psslurm has no slurmd tooling: scontrol listpids fails).
+    rss = {}
+    for pid in os.listdir('/proc'):
+        if not pid.isdigit():
+            continue
+        try:
+            with open('/proc/%s/environ' % pid, 'rb') as f:
+                env = dict(kv.split(b'=', 1) for kv in f.read().split(b'\0') if b'=' in kv)
+            if env.get(b'SLURM_JOB_ID') != ME.encode() or b'SLURM_STEP_ID' not in env:
+                continue
+            with open('/proc/%s/statm' % pid) as f:
+                pages = int(f.read().split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+        sid = env[b'SLURM_STEP_ID'].decode()
+        rss[sid] = rss.get(sid, 0) + pages * PAGE
+    return rss
+
+
+def take(slot, job, name, limit):
+    # The claim folder is a lock: only its owner holds or releases the job, so two
+    # hosts never undo each other. A taken job stays held, so it never also starts alone.
+    now = time.time()
+    if limit is None or now + limit + MARGIN_S > HOST_END:
+        return False
+    if not os.path.isdir(CLAIMS):
+        os.makedirs(CLAIMS, exist_ok=True)
+    c = comment(job)
+    k = attempt(c)
+    claim = os.path.join(CLAIMS, '%s-a%d' % (job, k))
+    try:
+        os.mkdir(claim)
+    except OSError:
+        return False                       # another host is deciding or runs it
+    keep = False
+    try:
+        run('scontrol', 'hold', job)
+        if not q(job, '%T|%r').startswith('PENDING|JobHeld'):
+            return False                   # it started on its own node meanwhile
+        script = os.path.join(claim, 'job.sh')
+        rc, _ = run('scontrol', 'write', 'batch_script', job, script)
+        text = open(script).read() if rc == 0 and os.path.exists(script) else ''
+        if HEADER not in text.split('\n')[:3]:
+            skip.add(job)
+            log('not taking', job, '(no', HEADER + ')')
+            return False
+        m = re.search(r'^export KAOS_TOKEN_EXP=(\d+)$', text, re.M)
+        if m and now + limit + MARGIN_S > int(m.group(1)) - TOKEN_MARGIN_S:
+            return False
+        set_comment(job, '%skaos-state=taken host=%s slot=%d attempt=%d' % (lease(c), ME, slot, k))
+        slots[slot] = {'job': job, 'claim': claim, 'name': name, 'memkill': False, 'attempt': k,
+                       'proc': launch(slot, job, script, os.path.join(HOME, 'slurm-%s.out' % job), limit)}
+        keep = True
+        log('took', job, name, 'on slot', slot)
+        return True
+    finally:
+        if not keep:
+            run('scontrol', 'release', job)
+            try:
+                for f in os.listdir(claim):
+                    os.remove(os.path.join(claim, f))
+                os.rmdir(claim)
+            except OSError:
+                pass
+
+
+def finish(slot, rc):
+    global own_rc
+    s = slots.pop(slot)
+    job = s['job']
+    reason = ' reason=memkill' if s['memkill'] else ''
+    if job == ME:
+        own_rc = rc
+        c = comment(ME)
+        set_comment(ME, '%skaos-state=done rc=%d%s%s' % (lease(c), rc, reason, err_part(c)))
+        log('own step ended rc=%d%s' % (rc, reason))
+        return
+    if q(job, '%T') != 'PENDING':
+        log('guest', job, 'was stopped; its step ended rc=%d' % rc)
+        return
+    c = comment(job)
+    set_comment(job, '%skaos-state=done rc=%d host=%s%s%s' % (lease(c), rc, ME, reason, err_part(c)))
+    run('scancel', job)
+    log('guest', job, 'done rc=%d%s' % (rc, reason))
+
+
+def requeue_all(signum, frame):
+    # Host cancelled or out of time (Slurm sends TERM, KILL 30 s later): every guest
+    # goes back to the queue with the next attempt number, still leasing its dataset.
+    for s in list(slots.values()):
+        if s['job'] != ME and q(s['job'], '%T') == 'PENDING':
+            c = comment(s['job'])
+            set_comment(s['job'], '%skaos-state=requeued attempt=%d' % (lease(c), s['attempt'] + 1))
+            run('scontrol', 'release', s['job'])
+            log('requeued', s['job'])
+    sys.exit(own_rc if own_rc is not None else 143)
+
+
+signal.signal(signal.SIGTERM, requeue_all)
+slots[0] = {'job': ME, 'claim': None, 'name': 'own', 'memkill': False, 'attempt': 1,
+            'proc': launch(0, ME, OWN_SCRIPT, None)}
+log('host', ME, 'partition', PART, 'slots', GPUS, 'cpus/slot', CPUS, 'mem/slot %d MiB' % (SHARE >> 20))
+idle_since, tick = None, 0
+while True:
+    time.sleep(POLL_S)
+    tick += 1
+    for slot, s in list(slots.items()):
+        rc = s['proc'].poll()
+        if rc is not None:
+            finish(slot, rc)
+    rss = step_rss()
+    for s in slots.values():
+        sid = s.get('sid') or step_id(s['job'])
+        s['sid'] = sid
+        if sid and rss.get(sid.split('.')[-1], 0) > SHARE and not s['memkill']:
+            log('memory: step', sid, 'of', s['job'], 'uses %d MiB > %d MiB share' % (rss[sid.split('.')[-1]] >> 20, SHARE >> 20))
+            s['memkill'] = True
+            run('scancel', sid)
+    if tick % 5:
+        continue
+    for slot, s in list(slots.items()):
+        if s['job'] != ME and q(s['job'], '%T') != 'PENDING' and s.get('sid'):
+            log('guest', s['job'], 'stopped by its run: cancelling step', s['sid'])
+            run('scancel', s['sid'])
+    free = [i for i in range(GPUS) if i not in slots]
+    if free:
+        rc, out = run('squeue', '-u', os.environ.get('USER', ''), '-h', '-t', 'PENDING',
+                      '--sort=-p,i', '-o', '%i|%j|%r|%l|%P')
+        for line in out.splitlines():
+            if not free:
+                break
+            job, name, reason, lim, part = (line.split('|') + [''] * 5)[:5]
+            if (job == ME or job in skip or not name.startswith(PREFIX) or part != PART
+                    or reason.startswith(HELD)):
+                continue
+            if take(free[0], job, name, limit_s(lim)):
+                free.pop(0)
+    busy = bool(slots)
+    if busy:
+        idle_since = None
+    elif idle_since is None:
+        idle_since = time.time()
+    elif time.time() - idle_since >= IDLE_S or HOST_END - time.time() < MARGIN_S + 60:
+        log('idle: releasing the node')
+        sys.exit(own_rc or 0)
+"""
 
 
 API = 'https://slurm-api.lxp.lu/slurm/v0.0.44'
@@ -702,6 +987,14 @@ def submit():
         # job COMMENT — readable over REST from the waiter and by operators.
         # The dataset lease (kaos-commit=, PRD-1541 D-06) stays first.
         'fail(){ scontrol update JobId=$KAOS_JOB_ID Comment="${KAOS_COMMIT:+kaos-commit=$KAOS_COMMIT }err$1:$(tail -c 700 slurm-$KAOS_JOB_ID.out 2>/dev/null | tr "\\n" "|")" 2>/dev/null; exit $1; }',
+        # PRD-1609 F-03: with sharing on, the job's batch step is the host. It runs
+        # this same script as one Slurm job step per slot (its own step and taken
+        # guests' scripts), each with KAOS_IN_STEP=1 and that step's KAOS_JOB_ID.
+        'if [ -z "$KAOS_IN_STEP" ] && [ -n "$KAOS_SLOTS_B64" ]; then',
+        '  printf %s "$KAOS_SLOTS_B64" | base64 -d > /tmp/kaos-slots-$SLURM_JOB_ID.py',
+        '  scontrol write batch_script $SLURM_JOB_ID /tmp/kaos-job-$SLURM_JOB_ID.sh >/dev/null || fail 233',
+        '  exec python3 /tmp/kaos-slots-$SLURM_JOB_ID.py /tmp/kaos-job-$SLURM_JOB_ID.sh',
+        'fi',
         'for f in /usr/share/lmod/lmod/init/bash /etc/profile.d/lmod.sh; do'
         ' [ -r "$f" ] && source "$f" && break; done',
         'module load Apptainer 2>/dev/null || module load apptainer 2>/dev/null',
@@ -826,6 +1119,12 @@ def submit():
     commit = pinned_commit()
     if commit:
         env.append('KAOS_COMMIT=' + commit)   # fail() keeps the dataset lease
+    if SHARING and int(HPC.get('gpus') or 0) > 0:
+        # F-03: the batch step becomes the host (slot manager); one slot per GPU.
+        env += ['KAOS_SLOTS_B64=' + base64.b64encode(SLOTS.encode()).decode(),
+                'KAOS_SCOPE=' + SCOPE, 'KAOS_SCR=' + ident['scratch']]
+        if WALLET_EXP:
+            env.append('KAOS_TOKEN_EXP=%d' % WALLET_EXP)   # the host's fit rule (D-07)
     if SHARING:
         batch, env = inputs_in_script(batch, env)
     body = {'job': {'name': jobname, 'partition': HPC['partition'],
@@ -970,6 +1269,14 @@ while True:
                 print('running on a shared node: host job', share.get('host'),
                       'slot', share.get('slot'), flush=True)
                 hosted = share
+        elif 'RUNNING' in st and SHARING:
+            # PRD-1609 F-03: a host keeps its node while its guests run; its own
+            # step's result is in its comment as soon as that step ends.
+            try:
+                live = (get(API + '/job/' + str(jid)).get('jobs') or [{}])[0]
+                share = share_state(comment_of(live)) or share
+            except Exception:
+                pass
         # A job a host took stays queued (held) while its step runs: never
         # resubmit it. The host checked its token outlives the step (D-07).
         if ('PENDING' in st and share.get('kaos-state') != 'taken' and WALLET_EXP
@@ -982,7 +1289,7 @@ while True:
             jid = submit()
             open('/tmp/slurm-job-id', 'w').write(str(jid))
             continue
-        if any(x in TERMINAL for x in st):
+        if any(x in TERMINAL for x in st) or ('RUNNING' in st and share.get('kaos-state') == 'done'):
             rc = ((job.get('exit_code') or {}).get('return_code')
                   or {}).get('number')
             print('terminal:', st, 'exit:', rc, flush=True)
