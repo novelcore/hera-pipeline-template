@@ -192,3 +192,5 @@ def test_the_operators_switch_reaches_the_waiter():
     ctx = dict(CONTEXT, hpc=dict(CONTEXT.get("hpc") or {}, sharing="on", scope="a1b2c3d4e5"))
     env = _twin_env(ctx)
     assert env["HPC_SHARING"] == "on" and env["HPC_SCOPE"] == "a1b2c3d4e5"
+    assert meluxina.sharing_env({"hpc": {"sharing": True, "scope": "a1b2c3d4e5"}})[0]["value"] == "on", \
+        "a bare YAML on (read as True) still means on"

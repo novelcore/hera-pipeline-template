@@ -65,7 +65,7 @@ class Node:
                     "SLURM_JOB_ID": "100", "SLURM_CPUS_ON_NODE": "128", "SLURM_MEM_PER_NODE": str(mem_mb),
                     "HPC_GPUS": "4", "KAOS_SCOPE": SCOPE, "KAOS_SCR": str(tmp_path / "scratch"),
                     "KAOS_IDLE_S": "1", "KAOS_POLL_S": "0.2", "OUT": str(self.out),
-                    "HOST_SECRET": "the host's own token", **(extra_env or {})}
+                    "HOST_SECRET": "the host's own token", "SLURM_EXPORT_ENV": "NONE", **(extra_env or {})}
         self.log = tmp_path / "host.log"
         self.proc = subprocess.Popen([sys.executable, str(slots), str(own)], env=self.env,
                                      stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
@@ -252,3 +252,21 @@ def test_a_guests_own_output_is_on_disk_when_its_step_reads_it(tmp_path):
     rc, log = node.finish()
     assert rc == 0, log
     assert "boom-from-the-step" in (node.out / "tail").read_text()
+
+
+def test_every_step_has_its_login_basics(tmp_path):
+    """Live 2026-11-03 (job 5417729): in a job with an explicit environment, a plain srun
+    started the step with no HOME and cwd /, so fail()'s tail and every relative path broke.
+    The slot manager exports its environment to the step; the launcher keeps only the basics."""
+    guests = {"101": _job("kaos-%s-wf1-train" % SCOPE,
+                          'echo "home=$HOME user=$USER pwd=$(pwd) path=${PATH:+set}" > $OUT/101\nexit 0\n',
+                          comment="kaos-commit=bbbbbbb2")}
+    node = Node(tmp_path, guests)
+    rc, log = node.finish()
+    assert rc == 0, log
+    home = str(tmp_path / "home")
+    got = (node.out / "101").read_text().split()
+    import pwd
+    # A login shell may reset USER from `id -un` (Fedora's /etc/profile); on MeluXina both are the job's user.
+    assert got[0] == "home=" + home and got[1] in ("user=u104378", "user=" + pwd.getpwuid(os.getuid()).pw_name)
+    assert got[2:] == ["pwd=" + home, "path=set"], got

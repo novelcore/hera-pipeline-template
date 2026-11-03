@@ -330,8 +330,14 @@ STEP_ENV = re.compile(r'^(SLURM_|CUDA_VISIBLE_DEVICES$|GPU_DEVICE_ORDINAL$|ROCR_
                       r'|PATH$|HOME$|USER$|LANG$|LC_)')
 
 if sys.argv[1:2] == ['--step']:
+    import pwd
     script, job = sys.argv[2], sys.argv[3]
     env = dict((k, v) for k, v in os.environ.items() if STEP_ENV.match(k))
+    # The login basics, also when Slurm passed none (SLURM_EXPORT_ENV=NONE).
+    me = pwd.getpwuid(os.getuid())
+    env.setdefault('HOME', me.pw_dir)
+    env.setdefault('USER', me.pw_name)
+    env.setdefault('PATH', '/usr/bin:/bin:/usr/local/bin')
     env.update(KAOS_IN_STEP='1', KAOS_JOB_ID=job)
     os.chdir(env.get('HOME') or '/')
     if len(sys.argv) > 4:
@@ -441,7 +447,11 @@ skip = set()    # jobs looked at and not ours to take
 
 
 def launch(slot, job, script, log_to, limit=None):
-    cmd = ['srun', '--exact', '-N1', '-n1', '--gpus=1', '-c', str(CPUS), '--job-name', 'kaos-' + job]
+    # --export=ALL: a job with an explicit environment (REST) has SLURM_EXPORT_ENV=NONE,
+    # and a plain srun would start the step without HOME or PATH (live 2026-11-03,
+    # job 5417729). The launcher then keeps only Slurm's variables and the basics.
+    cmd = ['srun', '--export=ALL', '--exact', '-N1', '-n1', '--gpus=1', '-c', str(CPUS),
+           '--job-name', 'kaos-' + job]
     if limit:
         cmd.append('--time=%d' % max(1, (limit + 59) // 60))
     cmd += ['python3', sys.argv[0], '--step', script, job] + ([log_to] if log_to else [])
@@ -1441,7 +1451,8 @@ def sharing_env(ctx: dict) -> list:
     (sharing: on, scope: the project's hash). Nothing is added unless it is on, so a
     project without sharing renders the waiter exactly as before."""
     hpc = ctx.get("hpc") or {}
-    if str(hpc.get("sharing") or "") != "on" or not hpc.get("scope"):
+    # "on" as the operator renders it (quoted); a YAML 1.1 reader turns a bare on into True.
+    if hpc.get("sharing") not in ("on", True) or not hpc.get("scope"):
         return []
     return [{"name": "HPC_SHARING", "value": "on"},
             {"name": "HPC_SCOPE", "value": str(hpc["scope"])}]

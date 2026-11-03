@@ -111,10 +111,13 @@ def scancel(st):
 
 
 def srun():
-    cmd, name, i = [], "step", 0
+    cmd, name, export, i = [], "step", None, 0
     while i < len(ARGS):
         a = ARGS[i]
-        if a in ("-c", "--job-name"):
+        if a.startswith("--export="):
+            export = a.split("=", 1)[1]
+            i += 1
+        elif a in ("-c", "--job-name"):
             if a == "--job-name":
                 name = ARGS[i + 1]
             i += 2
@@ -130,7 +133,15 @@ def srun():
         st["next_step"][job] = n + 1
         return n
     n = locked(register)
-    env = dict(os.environ, SLURM_STEP_ID=str(n), CUDA_VISIBLE_DEVICES=str(n % 4))
+    # Like MeluXina: in a job submitted with an explicit environment (REST, or sbatch
+    # --export=NONE) SLURM_EXPORT_ENV=NONE, and a plain srun then starts the step with
+    # Slurm's own variables only (live 2026-11-03: HOME empty, cwd /).
+    mode = export or os.environ.get("SLURM_EXPORT_ENV") or "ALL"
+    if mode.split(",")[0] == "NONE":
+        base = dict((k, v) for k, v in os.environ.items() if k.startswith("SLURM_"))
+    else:
+        base = dict(os.environ)
+    env = dict(base, SLURM_STEP_ID=str(n), CUDA_VISIBLE_DEVICES=str(n % 4))
     # Like srun's I/O forwarding as seen live: the step's output reaches srun's stdout
     # only later (here: after the step exits).
     proc = subprocess.Popen(cmd, env=env, start_new_session=True, stdout=subprocess.PIPE,
