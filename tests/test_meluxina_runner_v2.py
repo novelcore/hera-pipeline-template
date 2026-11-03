@@ -232,3 +232,16 @@ def test_a_job_whose_host_died_starts_over_with_the_proven_calls():
     assert "lost_hosts += 1" in lost, "bounded: a run starts over at most LOST_HOST_RESUBMITS times"
     assert "share.get('kaos-state') == 'taken'" in loop[loop.index("if ('PENDING' in st and share.get('kaos-state') == 'taken'"):][:200]
     assert "LOST_HOST_RESUBMITS = 3" in MELUXINA_SUBMIT_CODE
+
+
+def test_a_sharing_job_asks_for_twice_its_step_time_capped_by_the_class():
+    sub = MELUXINA_SUBMIT_CODE
+    body = sub[sub.index("    step_limit = int(os.environ.get('SLURM_TIME_LIMIT') or 240)"):sub.index("    body = {'job':")]
+    assert "'KAOS_STEP_LIMIT_MIN=%d' % step_limit" in body
+    assert "cap = int(HPC.get('maxTimeLimitMinutes') or 0)" in body
+    assert "job_limit = max(step_limit, min(2 * step_limit, cap))" in body
+    assert "'time_limit': job_limit," in sub
+    # the computation itself
+    for step, cap, want in [(240, 2880, 480), (240, 300, 300), (240, 0, 240), (240, 100, 240)]:
+        job = max(step, min(2 * step, cap)) if cap else step
+        assert job == want, (step, cap, job)

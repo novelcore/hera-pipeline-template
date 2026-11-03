@@ -132,9 +132,11 @@ def test_a_host_runs_waiting_jobs_of_its_scope_and_reports_each(tmp_path):
     assert jobs["103"]["comment"] == "kaos-commit=ccccccc4"
     calls = json.loads(node.state.read_text())["calls"]
     assert not [c for c in calls if c[:2] in (["scontrol", "hold"], ["scontrol", "release"]) and c[2] in ("103", "105")]
-    # The v1 job was looked at under its lock, then handed back: released, lock removed.
-    assert ["scontrol", "release", "104"] in calls
+    # The v1 job was only read (its script), never locked or held.
+    assert not [c for c in calls if c[:2] in (["scontrol", "hold"], ["scontrol", "release"]) and c[2] == "104"]
     assert not list((tmp_path / "scratch" / "kaos-claims").glob("104-*"))
+    # Done jobs leave no lock behind.
+    assert not list((tmp_path / "scratch" / "kaos-claims").glob("10[12]-*"))
     assert (tmp_path / "home" / "slurm-101.out").exists(), "each guest logs to its own job's output file"
 
 
@@ -190,7 +192,9 @@ def test_a_requeued_job_is_claimed_under_its_new_attempt(tmp_path):
     rc, log = node.finish()
     assert rc == 0, log
     assert node.jobs()["101"]["comment"] == "kaos-commit=bbbbbbb2 kaos-state=done rc=0 host=100"
-    assert (tmp_path / "scratch" / "kaos-claims" / "101-a2").is_dir()
+    assert "took 101" in log, "taken although the dead host's attempt-1 lock is still there"
+    assert (tmp_path / "scratch" / "kaos-claims" / "101-a1").is_dir(), "the dead host's lock is not ours to remove"
+    assert not (tmp_path / "scratch" / "kaos-claims" / "101-a2").exists(), "our lock is removed once the job is done"
 
 
 def test_squeue_time_limits_parse():
@@ -270,3 +274,40 @@ def test_every_step_has_its_login_basics(tmp_path):
     # A login shell may reset USER from `id -un` (Fedora's /etc/profile); on MeluXina both are the job's user.
     assert got[0] == "home=" + home and got[1] in ("user=u104378", "user=" + pwd.getpwuid(os.getuid()).pw_name)
     assert got[2:] == ["pwd=" + home, "path=set"], got
+
+
+def test_a_guest_fits_on_its_step_limit_not_its_padded_job_limit(tmp_path):
+    """With sharing on every job asks Slurm for twice its step's time (so a host has room);
+    the host fits a guest on the guest's own step limit (KAOS_STEP_LIMIT_MIN). With equal
+    step limits the padded job limits alone would never fit."""
+    pad = "export KAOS_STEP_LIMIT_MIN=10\n"
+    guests = {
+        # padded job limit 2 h > the host's remaining 1 h, but its step (10 min) fits
+        "101": _job("kaos-%s-wf1-train" % SCOPE, pad + "exit 0\n", comment="kaos-commit=bbbbbbb2", limit="2:00:00"),
+        # its step (3 h) does not fit: read once, never locked or held, skipped for good
+        "102": _job("kaos-%s-wf2-train" % SCOPE, "export KAOS_STEP_LIMIT_MIN=180\nexit 0\n",
+                    comment="kaos-commit=bbbbbbb3", limit="6:00:00"),
+    }
+    node = Node(tmp_path, guests, own_body="sleep 3\nexit 0\n", extra_env={"KAOS_IDLE_S": "2"})
+    rc, log = node.finish()
+    assert rc == 0, log
+    jobs = node.jobs()
+    assert jobs["101"]["comment"] == "kaos-commit=bbbbbbb2 kaos-state=done rc=0 host=100", log
+    assert jobs["102"]["state"] == "PENDING" and not jobs["102"]["held"]
+    calls = json.loads(node.state.read_text())["calls"]
+    assert not [c for c in calls if c[:2] == ["scontrol", "hold"] and c[2] == "102"]
+    reads = [c for c in calls if c[:3] == ["scontrol", "write", "batch_script"] and c[3] == "102"]
+    assert len(reads) == 1, "a job that does not fit is not re-read every scan"
+    steps = json.loads(node.state.read_text()).get("ended_steps", [])
+    srun_101 = [c for c in calls if c[0] == "srun" and "kaos-101" in c]
+    assert srun_101 and "--time=10" in srun_101[0], "the guest runs with its own step limit"
+
+
+def test_memory_is_counted_as_pss(tmp_path):
+    g = {}
+    code = _slots_code()
+    exec(code.split("ME = os.environ")[0] + "\nPAGE = os.sysconf('SC_PAGE_SIZE')\n"
+         + code[code.index("def pss_bytes(pid):"):code.index("def step_rss():")], g)
+    used = g["pss_bytes"](str(os.getpid()))
+    assert 1 << 20 < used < 1 << 34, used
+    assert "smaps_rollup" in code and "Pss:" in code

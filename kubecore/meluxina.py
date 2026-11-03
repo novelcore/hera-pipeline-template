@@ -469,6 +469,20 @@ def step_id(job):
     return None
 
 
+def pss_bytes(pid):
+    # PSS shares a page between the processes that map it, so the forked data-loader
+    # workers of one training are not counted many times over (RSS would be).
+    try:
+        with open('/proc/%s/smaps_rollup' % pid) as f:
+            for line in f:
+                if line.startswith('Pss:'):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    with open('/proc/%s/statm' % pid) as f:      # kernels without smaps_rollup
+        return int(f.read().split()[1]) * PAGE
+
+
 def step_rss():
     # Memory per step, from /proc (psslurm has no slurmd tooling: scontrol listpids fails).
     rss = {}
@@ -480,23 +494,46 @@ def step_rss():
                 env = dict(kv.split(b'=', 1) for kv in f.read().split(b'\0') if b'=' in kv)
             if env.get(b'SLURM_JOB_ID') != ME.encode() or b'SLURM_STEP_ID' not in env:
                 continue
-            with open('/proc/%s/statm' % pid) as f:
-                pages = int(f.read().split()[1])
+            used = pss_bytes(pid)
         except (OSError, ValueError, IndexError):
             continue
         sid = env[b'SLURM_STEP_ID'].decode()
-        rss[sid] = rss.get(sid, 0) + pages * PAGE
+        rss[sid] = rss.get(sid, 0) + used
     return rss
 
 
-def take(slot, job, name, limit):
-    # The claim folder is a lock: only its owner holds or releases the job, so two
-    # hosts never undo each other. A taken job stays held, so it never also starts alone.
+def step_limit_of(text):
+    # The step's own time limit in seconds, from its script (KAOS_STEP_LIMIT_MIN). Its job
+    # asks Slurm for more (padded, so a host has room for guests); the step needs only this.
+    m = re.search(r'^export KAOS_STEP_LIMIT_MIN=(\d+)$', text, re.M)
+    return int(m.group(1)) * 60 if m else None
+
+
+def take(slot, job, name, job_limit):
+    # Take one waiting job onto slot. Its script is read first (no side effect); only a
+    # job of this scope whose STEP fits the host's remaining time and its own token is
+    # locked, held and run. A job that does not fit now never will on this host (its
+    # remaining time only shrinks), so it is skipped for good.
     now = time.time()
-    if limit is None or now + limit + MARGIN_S > HOST_END:
-        return False
     if not os.path.isdir(CLAIMS):
         os.makedirs(CLAIMS, exist_ok=True)
+    peek = os.path.join(CLAIMS, '.peek-%s-%s.sh' % (ME, job))
+    rc, _ = run('scontrol', 'write', 'batch_script', job, peek)
+    text = open(peek).read() if rc == 0 and os.path.exists(peek) else ''
+    try:
+        os.remove(peek)
+    except OSError:
+        pass
+    if HEADER not in text.split('\n')[:3]:
+        skip.add(job)
+        log('not taking', job, '(no', HEADER + ')')
+        return False
+    limit = step_limit_of(text) or job_limit
+    m = re.search(r'^export KAOS_TOKEN_EXP=(\d+)$', text, re.M)
+    if (limit is None or now + limit + MARGIN_S > HOST_END
+            or (m and now + limit + MARGIN_S > int(m.group(1)) - TOKEN_MARGIN_S)):
+        skip.add(job)
+        return False
     c = comment(job)
     k = attempt(c)
     claim = os.path.join(CLAIMS, '%s-a%d' % (job, k))
@@ -504,6 +541,8 @@ def take(slot, job, name, limit):
         os.mkdir(claim)
     except OSError:
         return False                       # another host is deciding or runs it
+    # The claim folder is a lock: only its owner holds or releases the job, so two
+    # hosts never undo each other. A taken job stays held, so it never also starts alone.
     keep = False
     try:
         run('scontrol', 'hold', job)
@@ -511,13 +550,7 @@ def take(slot, job, name, limit):
             return False                   # it started on its own node meanwhile
         script = os.path.join(claim, 'job.sh')
         rc, _ = run('scontrol', 'write', 'batch_script', job, script)
-        text = open(script).read() if rc == 0 and os.path.exists(script) else ''
-        if HEADER not in text.split('\n')[:3]:
-            skip.add(job)
-            log('not taking', job, '(no', HEADER + ')')
-            return False
-        m = re.search(r'^export KAOS_TOKEN_EXP=(\d+)$', text, re.M)
-        if m and now + limit + MARGIN_S > int(m.group(1)) - TOKEN_MARGIN_S:
+        if rc != 0 or HEADER not in open(script).read().split('\n')[:3]:
             return False
         set_comment(job, '%skaos-state=taken host=%s slot=%d attempt=%d' % (lease(c), ME, slot, k))
         slots[slot] = {'job': job, 'claim': claim, 'name': name, 'memkill': False, 'attempt': k,
@@ -528,12 +561,19 @@ def take(slot, job, name, limit):
     finally:
         if not keep:
             run('scontrol', 'release', job)
-            try:
-                for f in os.listdir(claim):
-                    os.remove(os.path.join(claim, f))
-                os.rmdir(claim)
-            except OSError:
-                pass
+            unlock(claim)
+
+
+def unlock(claim):
+    # Remove a claim folder (the lock and the script copy in it).
+    if not claim:
+        return
+    try:
+        for f in os.listdir(claim):
+            os.remove(os.path.join(claim, f))
+        os.rmdir(claim)
+    except OSError:
+        pass
 
 
 def requeue(s):
@@ -543,6 +583,7 @@ def requeue(s):
         set_comment(s['job'], '%skaos-state=requeued attempt=%d' % (lease(c), s['attempt'] + 1))
         run('scontrol', 'release', s['job'])
         log('requeued', s['job'], 'as attempt', s['attempt'] + 1)
+    unlock(s.get('claim'))
 
 
 def finish(slot, rc):
@@ -558,6 +599,7 @@ def finish(slot, rc):
         return
     if q(job, '%T') != 'PENDING':
         log('guest', job, 'was stopped; its step ended rc=%d' % rc)
+        unlock(s.get('claim'))
         return
     if q(ME, '%T') != 'RUNNING':
         # The host itself is going away (cancelled, out of time): Slurm may end the
@@ -568,6 +610,7 @@ def finish(slot, rc):
     c = comment(job)
     set_comment(job, '%skaos-state=done rc=%d host=%s%s%s' % (lease(c), rc, ME, reason, err_part(c)))
     run('scancel', job)
+    unlock(s.get('claim'))
     log('guest', job, 'done rc=%d%s' % (rc, reason))
 
 
@@ -582,7 +625,7 @@ def requeue_all(signum, frame):
 
 signal.signal(signal.SIGTERM, requeue_all)
 slots[0] = {'job': ME, 'claim': None, 'name': 'own', 'memkill': False, 'attempt': 1,
-            'proc': launch(0, ME, OWN_SCRIPT, None)}
+            'proc': launch(0, ME, OWN_SCRIPT, None, int(os.environ.get('KAOS_STEP_LIMIT_MIN') or 0) * 60 or None)}
 log('host', ME, 'partition', PART, 'slots', GPUS, 'cpus/slot', CPUS, 'mem/slot %d MiB' % (SHARE >> 20))
 idle_since, tick = None, 0
 while True:
@@ -1152,10 +1195,21 @@ def submit():
     commit = pinned_commit()
     if commit:
         env.append('KAOS_COMMIT=' + commit)   # fail() keeps the dataset lease
+    step_limit = int(os.environ.get('SLURM_TIME_LIMIT') or 240)
+    job_limit = step_limit
     if SHARING and int(HPC.get('gpus') or 0) > 0:
         # F-03: the batch step becomes the host (slot manager); one slot per GPU.
         env += ['KAOS_SLOTS_B64=' + base64.b64encode(SLOTS.encode()).decode(),
-                'KAOS_SCOPE=' + SCOPE, 'KAOS_SCR=' + ident['scratch']]
+                'KAOS_SCOPE=' + SCOPE, 'KAOS_SCR=' + ident['scratch'],
+                'KAOS_STEP_LIMIT_MIN=%d' % step_limit]
+        # A host can only take steps that end before its own time limit, so with equal
+        # limits nothing would ever fit: the job asks Slurm for twice its step's time,
+        # capped by the class's maximum (partition/QOS). Every step still runs with its
+        # own limit, and the host releases the node 2 minutes after its last step.
+        # No known maximum: no padding (a request above the QOS cap would pend forever).
+        cap = int(HPC.get('maxTimeLimitMinutes') or 0)
+        if cap:
+            job_limit = max(step_limit, min(2 * step_limit, cap))
         if WALLET_EXP:
             env.append('KAOS_TOKEN_EXP=%d' % WALLET_EXP)   # the host's fit rule (D-07)
     if SHARING:
@@ -1163,7 +1217,7 @@ def submit():
     body = {'job': {'name': jobname, 'partition': HPC['partition'],
                     'account': ident['account'],
                     'qos': HPC.get('qos') or 'default',
-                    'time_limit': int(os.environ.get('SLURM_TIME_LIMIT') or 240),
+                    'time_limit': job_limit,
                     'current_working_directory': ident['home'],
                     'environment': env, 'tasks': 1, 'nodes': '1'},
             'script': batch}
