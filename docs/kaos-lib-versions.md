@@ -1,8 +1,7 @@
 # Package versions and upgrades
 
 Your step images install **kaos-lib**, the platform's Python package for datasets and run
-outputs (until its first release it is still installed under its former name, `kubecore`,
-and your code keeps importing `kubecore`). This page explains who picks its version, how a
+outputs (`import kaos_lib`; formerly the `kubecore` package). This page explains who picks its version, how a
 new version reaches your app, how to hold a version, and what a bump pull request is.
 
 ## Who picks the version
@@ -11,7 +10,7 @@ new version reaches your app, how to hold a version, and what a bump pull reques
 version it chose to each step Dockerfile:
 
 ```dockerfile
-ARG KAOS_LIB_PACKAGE="kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
+ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/<commit>.zip"
 RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 ```
 
@@ -21,9 +20,8 @@ Keep the name `KAOS_LIB_PACKAGE` in every step that installs the package: a step
 it keeps its default forever.
 
 The value is a whole pip requirement: the package's name and extras, then the version.
-Today it is `kubecore[zitadel] @ https://github.com/…/archive/<commit>.zip…`, a commit of the package
-under its former name. From kaos-lib's first release the platform passes
-`kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/releases/…/vX.Y.Z/<file>`, with
+In the platform's build it is the requirement of the newest kaos-lib release on the platform's channel,
+for example `kaos-lib[zitadel] @ https://<registry>/kaos_lib-X.Y.Z-py3-none-any.whl#sha256=<hex>`, with
 no change in your repository.
 
 ## Your range: `.kaos/compat.yaml`
@@ -84,5 +82,5 @@ requirement from the step Dockerfile (or the one from the image label):
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
+pip install "<the requirement from the step Dockerfile>"
 ```

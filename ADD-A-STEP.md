@@ -84,7 +84,7 @@ def main() -> None:
     #   cfg["platform"]["mlflow"]["tracking_uri"]
     #   cfg["platform"]["lakefs"]["endpoint"] / ["repository"]
     # You do NOT need to configure credentials — the platform injects them into
-    # the step's environment, and the kubecore package reads them (see
+    # the step's environment, and kaos-lib (`kaos_lib`) reads them (see
     # docs/write-a-step.md for reading a dataset and writing results).
 
     print(f"[model-evaluation] split={evaluation['split']} "

@@ -12,7 +12,7 @@ This template is the source new pipeline apps are seeded from.
 - [The pipeline in one file](#the-pipeline-in-one-file)
 - [Datasets](#datasets)
 - [Results](#results)
-- [The `kubecore` package](#the-kubecore-package)
+- [kaos-lib, the platform library](#kaos-lib-the-platform-library)
 - [Running on MeluXina](#running-on-meluxina)
 - [Local iteration](#local-iteration-no-cluster)
 - [Where to read next](#where-to-read-next)
@@ -57,7 +57,6 @@ config/                THE config tree — all your parameters
   dataset.yaml           the `dataset` field: <dataset-repo>@<version>
 steps/<name>/          your step code + Dockerfile (one dir per step)
 kubecore/              platform-owned engine — SEEDED, DO NOT EDIT
-packages/kubecore/     the kubecore Python PACKAGE: datasets, run outputs, the `kubecore` command
 tests/, step_tests/    engine tests; step-code tests (two commands, see DEVELOPER.md §15)
 docs/                  the guides (see "Where to read next")
 pyproject.toml         PEP 621, pinned render deps
@@ -79,16 +78,16 @@ one, `dataset-default`.
   never reads "whatever is there now": it picks one version, and every step of that run
   reads exactly that commit.
 - **Changes** reach `main` through a **pull request**. After a pull request is merged,
-  `kubecore dataset release` tags the next version.
+  `kaosctl dataset release` tags the next version.
 - **Pick it in the pipeline.** The run form has a `dataset` field, a dropdown of
   `<dataset-repo>@<version>` choices, newest first (`dataset-cats@v2`, `dataset-cats@v1`,
   `dataset-cats@latest`, …). The default is `dataset-default`'s newest version. The list
   is refreshed when a dataset or a version changes. The field comes from
   `config/dataset.yaml`; keep a field named exactly `dataset` in your pipeline.
-- **Templates are optional.** `kubecore dataset create` can start a repository from a
+- **Templates are optional.** `kaosctl dataset create` can start a repository from a
   format template (the starter layout, for example `yolo`), but you do not need
   one: any repository named `dataset-<something>` that you create by hand in lakeFS
-  becomes a dataset after its first commit (`kubecore dataset create <name> --template none`
+  becomes a dataset after its first commit (`kaosctl dataset create <name> --template none`
   makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
   repository can be read from code too: `datasets.materialize("<repo>@<ref>")` (see the
   package section). A repository with no template label is read as plain files.
@@ -111,7 +110,7 @@ writes there with the package's **run writer**:
   newest checkpoint it already saved.
 
 ```python
-from kubecore import outputs
+from kaos_lib import outputs
 with outputs.run("my-app", experiment, run_id) as r:
     resume = r.latest("last.pt")                 # None on a first attempt
     ...                                          # train; on every checkpoint:
@@ -121,22 +120,18 @@ with outputs.run("my-app", experiment, run_id) as r:
 
 Writing a step that reads a dataset and writes results: [docs/write-a-step.md](docs/write-a-step.md).
 
-## The `kubecore` package
+## kaos-lib, the platform library
 
-`packages/kubecore/` is the Python package behind all of this (kaos-lib, still named
-`kubecore` until its first release). The platform picks the
-version your step images install, inside the range in `.kaos/compat.yaml`, and passes
-it to every step Dockerfile as `KAOS_LIB_PACKAGE`. A version outside the range arrives as a
-pull request on `kaos-lib/bump-<version>`: see
-[docs/kaos-lib-versions.md](docs/kaos-lib-versions.md).
-
-Install it on your computer inside a virtual environment, with the requirement in
-`KAOS_LIB_PACKAGE` of `steps/hello_world/Dockerfile`:
+[kaos-lib](https://github.com/kaos-io/kaos-lib) (`kaos_lib`, formerly the `kubecore` package) is
+the Python library behind all of this, with the `kaosctl` command, published to the platform's public
+package index (the step images pin theirs in `KAOS_LIB_PACKAGE`, `steps/*/Dockerfile`). Install it on your
+computer inside a virtual environment:
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
-kubecore login                    # opens your browser once
+pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
+    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel]==0.4.0"
+kaosctl login                    # opens your browser once
 ```
 
 Run the commands inside your app folder: it carries the file that tells the tool where
@@ -144,12 +139,12 @@ your project's lakeFS is.
 
 | command | what it does |
 |---|---|
-| `kubecore dataset create <name> [--classes a,b] [--template yolo\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
-| `kubecore dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
-| `kubecore dataset validate <dir> --format yolo` | check a folder against a format |
-| `kubecore dataset push <dir> <repo> -m "message" [--format yolo]` | upload to a draft and open a pull request |
-| `kubecore dataset release <repo>` | tag the head of `main` as the next version |
-| `kubecore dataset list` / `versions <repo>` | what exists |
+| `kaosctl dataset create <name> [--classes a,b] [--template yolo\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
+| `kaosctl dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
+| `kaosctl dataset validate <dir> --format yolo` | check a folder against a format |
+| `kaosctl dataset push <dir> <repo> -m "message" [--format yolo]` | upload to a draft and open a pull request |
+| `kaosctl dataset release <repo>` | tag the head of `main` as the next version |
+| `kaosctl dataset list` / `versions <repo>` | what exists |
 
 **Validation follows the template label.** `push` checks your folder against the format
 the repository is labelled with (`kaos.template`). A repository with **no template label
@@ -161,7 +156,7 @@ From code (a step, a notebook), any repository and any ref (`vN`, `latest`, a br
 tag or a commit id):
 
 ```python
-from kubecore import datasets
+from kaos_lib import datasets
 entry = datasets.materialize("dataset-cats@v2")    # yolo: the data.yaml; no label: the folder
 folder = datasets.materialize("my-repo@main")      # a repository you made by hand
 fmt = datasets.format_of("dataset-cats")           # "yolo", or "raw" when there is no label

@@ -33,6 +33,6 @@ compose-and-validate = "kubecore.compose:main"
 packages = ["kubecore"]
 
 [tool.pytest.ini_options]
-# Engine tests only. Step code imports the kubecore PACKAGE, which shares its name with the
-# vendored engine, so it has its own run: see step_tests/README.md.
+# Engine tests only. Step code imports kaos-lib (kaos_lib), installed separately; it has its own
+# run: see step_tests/README.md.
 testpaths = ["tests"]

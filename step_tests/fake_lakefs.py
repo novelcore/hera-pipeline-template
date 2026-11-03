@@ -1,3 +1,5 @@
+# Vendored from kaos-io/kaos-lib tests/fake_lakefs.py at dc24f292029bb2a49a2cdf5c24eb169d7706d9a5 (test fake only, never in step images).
+# Re-vendor it when the template's kaos-lib pin (KAOS_LIB_PACKAGE in steps/*/Dockerfile) moves.
 """In-memory lakeFS for tests: a requests transport adapter, so the real client code runs unchanged."""
 from __future__ import annotations
 
@@ -12,8 +14,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import requests
 from requests.adapters import BaseAdapter
 
-from kubecore import credentials, lakefs
-from kubecore.lakefs import LakeFS
+from kaos_lib import credentials, lakefs
+from kaos_lib.lakefs import LakeFS
 
 BRANCH_ID = re.compile(r"^\w[-\w]*$")  # lakeFS's branch id rule
 

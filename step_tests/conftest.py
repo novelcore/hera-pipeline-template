@@ -1,21 +1,17 @@
-"""Fixtures: the package's in-memory lakeFS, and a guard against the vendored engine shadowing the package."""
+"""Fixtures: kaos-lib's in-memory lakeFS (vendored as fake_lakefs.py) for the step code's tests."""
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "packages" / "kubecore" / "tests"))  # fake_lakefs.py
-
-import kubecore  # noqa: E402
-
-if not (Path(kubecore.__path__[0]) / "datasets.py").is_file():
-    raise pytest.UsageError(
-        "`kubecore` resolved to the vendored engine, not the package. Run `pytest step_tests` "
-        "(not `python -m pytest`) with the package installed: pip install ./packages/kubecore")
+try:
+    import kaos_lib  # noqa: F401
+except ImportError:
+    raise pytest.UsageError("step tests need kaos-lib: see step_tests/README.md for the pip install line") from None
 
 from fake_lakefs import FakeLakeFS  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
 
 ENV_VARS = ("LAKEFS_ENDPOINT", "LAKEFS_URL", "LAKEFS_ACCESS_KEY", "LAKEFS_SECRET_KEY", "LAKEFS_BEARER_TOKEN",
             "KUBECORE_STAGED_DIR", "KUBECORE_CACHE_DIR", "KUBECORE_DATASET_CONFIG", "CHECKPOINT_BUCKET",

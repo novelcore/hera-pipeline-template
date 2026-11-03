@@ -4,13 +4,13 @@ Every step is a small container that receives the resolved params.yaml (the comp
 config tree) on --params, and the outputs of the steps it needs (here `--dataset-info`
 from dataset-loading). This one:
 
-  1. reads the dataset at the commit dataset-loading pinned, through the kubecore
+  1. reads the dataset at the commit dataset-loading pinned, through kaos-lib
      package (`datasets.materialize`). The package picks the dataset's format from its
      `kaos.template` label (an unlabelled repository is read as plain files) and returns
      the local entry point. On MeluXina the platform stages the commit and the package
      uses that copy;
   2. writes a small result to the app's own outputs repository `outputs-<app>` with the run
-     writer `kubecore.outputs.run` (one merge commit on main per step per run).
+     writer `kaos_lib.outputs.run` (one merge commit on main per step per run).
 
 Replace the body with your own logic, and add your runtime dependencies to the Dockerfile.
 """
@@ -23,7 +23,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import yaml
-from kubecore import datasets, outputs
+from kaos_lib import datasets, outputs
 
 # The config sections this step reads (must exist in the config/ tree).
 READS = ["experiment", "dataset"]
