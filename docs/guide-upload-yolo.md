@@ -10,7 +10,7 @@ and your images with one YOLO label file each.
 List the classes in label-id order. The first one is id `0`.
 
 ```bash
-kaosctl dataset create cats --classes cat,kitten --description "street cats, 2026"
+kaosctl dataset create cats --layout yolo --classes cat,kitten --description "street cats, 2026"
 ```
 
 In the browser: lakeFS → **Datasets** → **New dataset** → layout **yolo**, one class per line.
