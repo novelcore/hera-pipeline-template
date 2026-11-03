@@ -8,7 +8,8 @@ from dataset-loading). This one:
      package (`datasets.materialize`). The package picks the dataset's format from its
      `kaos.template` label (an unlabelled repository is read as plain files) and returns
      the local entry point. On MeluXina the platform stages the commit and the package
-     uses that copy;
+     uses that copy. A dataset with no files yet (a new project's `dataset-default`) is
+     reported, not an error, so the first run of a new app succeeds;
   2. writes a small result to the app's own outputs repository `outputs-<app>` with the run
      writer `kaos_lib.outputs.run` (one merge commit on main per step per run).
 
@@ -21,9 +22,11 @@ import os
 import tempfile
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from kaos_lib import datasets, outputs
+from kaos_lib.errors import EmptyDataset
 
 # The config sections this step reads (must exist in the config/ tree).
 READS = ["experiment", "dataset"]
@@ -42,14 +45,16 @@ def read_dataset(info: dict, client=None) -> Path:
     return datasets.materialize(ref, client=client)  # the format comes from the repository's label
 
 
-def describe(entry: Path) -> dict:
+def describe(entry: Optional[Path]) -> dict:
     """What a person wants to see about the data: its classes (a YAML entry point) or its file count."""
+    if entry is None:  # the dataset holds no files yet
+        return {"files": 0}
     if entry.is_file():
         return {"classes": (yaml.safe_load(entry.read_text()) or {}).get("names")}
     return {"files": sum(1 for p in entry.rglob("*") if p.is_file() and not p.name.startswith("."))}
 
 
-def write_result(cfg: dict, info: dict, entry: Path, client=None) -> str:
+def write_result(cfg: dict, info: dict, entry: Optional[Path], client=None) -> str:
     """Write the result to outputs-<app>/checkpoints/<experiment>/<run>/ and return the commit."""
     result = {"dataset": info["dataset"], "dataset_commit": info["dataset_commit"],
               **describe(entry), "experiment": cfg["experiment"]["name"]}
@@ -86,8 +91,13 @@ def main() -> None:
     cfg = yaml.safe_load(args.params) or {}
     info = json.loads(args.dataset_info or "{}")
 
-    entry = read_dataset(info)
-    print(f"[hello-world] {info['dataset']} @ {info['dataset_commit']} -> {entry}")
+    try:
+        entry = read_dataset(info)
+        print(f"[hello-world] {info['dataset']} @ {info['dataset_commit']} -> {entry}")
+    except EmptyDataset:
+        entry = None
+        print(f"[hello-world] {info['dataset']} @ {info['dataset_commit']} holds no files yet. Add yours with "
+              f"`kaosctl dataset push <folder> <dataset>` (docs/first-run.md), then run again.")
     commit = write_result(cfg, info, entry)
     print(f"[hello-world] result committed to outputs: {commit}")
 
