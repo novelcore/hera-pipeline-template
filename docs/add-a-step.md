@@ -143,7 +143,10 @@ This renders your pipeline the same way the platform will. It does not run it. R
 
 That is the whole job. You made a folder, wrote a small program, wrote a Dockerfile, and added one line. 
 
-Next you will send this in and watch it get checked. Go to [Send your change in](send-it-in.md).
+Next you will send this in and watch it get checked. Go to [Send your change in and go live](send-it-in.md).
 
 !!! tip "Need one step to hand data to the next?"
-    Steps do not share a disk. If a step needs a result from the step before it, the first step writes a small file and declares it as an output. The next step receives it automatically. See [When something breaks](troubleshooting.md) for the short version, or ask your Novelcore contact to point you at the developer notes.
+    Steps do not share a disk. If a step needs a small result from the step before it, the first step writes a small file and declares it with `outputs=`. The next step receives it automatically (DEVELOPER.md §9). Files and checkpoints go to `outputs-<app>` instead ([Write results from a step](write-a-step.md)).
+
+!!! tip "A step that reads the dataset"
+    This page adds a step with no data. For one that reads the dataset and writes a result, follow [the guide](guide-step-with-data.md).

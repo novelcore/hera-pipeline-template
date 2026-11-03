@@ -1,59 +1,12 @@
-# Write a step that uses a dataset
+# Write results from a step
 
-A step that trains or analyses data does three things with kaos-lib (`kaos_lib`): reads the
-dataset the run pinned, writes its results, and (for long steps) saves progress so a retry
-resumes. The template's `steps/hello_world/` is a working example; this page explains it.
+**Goal:** a step that writes its results to your app's outputs repository, saves progress as it
+goes, and continues where it stopped when it is retried.
 
-## 1. Wire it in `pipeline.py`
+**You need:** a step that installs kaos-lib ([Use a dataset in a step](dataset-in-a-step.md),
+part 2). The template's `steps/hello_world/` writes a result this way; copy it.
 
-```python
-load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-mine  = step("my-step", reads=["experiment", "dataset"], needs=[load])
-```
-
-`dataset-loading` resolves the run's `dataset` pick to a commit and outputs
-`dataset-info`: `{dataset, dataset_repo, dataset_version, dataset_commit}`. A step that
-`needs=[load]` receives it as `--dataset-info`. Always use the commit from there, never the
-pick itself: `latest` can move during a run.
-
-## 2. Install the package in the step image
-
-In `steps/my_step/Dockerfile`, copy the lines from `steps/hello_world/Dockerfile`:
-
-```dockerfile
-ARG KAOS_LIB_PACKAGE="<the requirement the template pins>"   # the platform CI passes its own
-RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
-COPY app/ ./app/
-```
-
-Keep the `ARG` name `KAOS_LIB_PACKAGE`: the platform's build passes the package version it
-chose through it, so your new step moves with the others ([Package versions and
-upgrades](kaos-lib-versions.md)). A step without it keeps the default forever.
-
-Copy only `app/`. Do not copy the template's `kubecore/` folder into a step image: it is the
-platform's engine, not something a step uses.
-
-## 3. Read the dataset
-
-```python
-import argparse, json
-from kaos_lib import datasets
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--params", required=True)
-parser.add_argument("--dataset-info", default="{}")
-args, _ = parser.parse_known_args()
-info = json.loads(args.dataset_info)
-
-ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(info["dataset_commit"])
-entry = datasets.materialize(ref)       # yolo: the data.yaml path; no label: a folder
-```
-
-`with_commit` makes the call read exactly the commit `dataset-loading` pinned. The format
-comes from the repository's label. The credentials and the lakeFS address come from the step's
-environment: you write none of that.
-
-## 4. Write results
+## 1. Write results
 
 ```python
 import os
@@ -63,18 +16,20 @@ app = os.environ["CHECKPOINT_BUCKET"]        # outputs-<app>, set by the platfor
 run = os.environ["KUBECORE_RUN_ID"]          # the Argo run name
 
 with outputs.run(app, experiment, run) as r:
-    r.save("./results")                      # a folder or files, committed on the run branch
-    r.finish({"dataset_ref": info["dataset"], "dataset_commit": info["dataset_commit"]})
+    r.save("./results")                      # a folder or files
+    commit = r.finish({"dataset_ref": info["dataset"], "dataset_commit": info["dataset_commit"]})
 ```
 
-The files end up in `outputs-<app>` under `checkpoints/<experiment>/<run>/`, in **one merge
-commit on `main`** whose details carry what you passed to `finish`. Use `kind=` for another top
-folder: `outputs.run(app, experiment, run, "reports")`.
+The files land in `outputs-<app>` under `checkpoints/<experiment>/<run>/`, in **one merge commit
+on `main`**. The commit's details carry what you passed to `finish`. For another top folder, pass
+the kind: `outputs.run(app, experiment, run, "reports")` writes under `reports/<experiment>/<run>/`.
 
-## 5. Save progress and resume
+A step never writes to a dataset. Results always go to `outputs-<app>`.
 
-For a long step, save as you go. Every `save` is committed on the run's own branch
-`run-<run>-<kind>`, so it survives a lost pod or a retry. `finish` merges once, at the end.
+## 2. Save progress and resume
+
+For a long step, save as you go. Every `save` is committed on the run's own branch,
+`run-<run>-<kind>`, so it survives a lost pod. `finish` merges once, at the end.
 
 ```python
 with outputs.run(app, experiment, run) as r:
@@ -88,18 +43,26 @@ with outputs.run(app, experiment, run) as r:
     r.finish({"dataset_ref": info["dataset"]})
 ```
 
-- An exception inside the `with` block neither merges nor deletes the branch, so the retry
-  continues from it.
+- An exception inside the `with` block neither merges nor deletes the branch. **Retry** in Argo
+  reruns the step under the same run name, and `latest` finds what it saved.
+- **Resubmit** is a new run with a new name, so it starts fresh.
 - Saving identical content again, and finishing twice, are not errors.
 
-## 6. MeluXina
+## 3. Link the result to MLflow
 
-Nothing changes in your code. Choose a `meluxina-*` class for the step on the submit form: the
-platform stages the dataset commit before the job starts, `materialize` finds it, and the step
-writes its results with the same run writer.
+Pass the MLflow run id to `finish`, and tag the MLflow run with where the files are. Then each side
+names the other ([Results](results.md#log-to-mlflow-from-a-step)).
 
-## 7. Test it without a cluster
+## 4. On MeluXina
 
-Step code that imports `kaos_lib` runs in its own test command, apart from the engine tests: see
-`step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS,
-vendored as `step_tests/fake_lakefs.py`.
+Nothing changes in your code. When a person picks a `meluxina-*` class for the step, the step
+writes with the same run writer, and the commit appears in `outputs-<app>` as for a step in the
+cluster ([MeluXina](meluxina.md)).
+
+## 5. Test it without a cluster
+
+Step code that imports `kaos_lib` has its own test command, separate from the engine tests: see
+`step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS, vendored
+as `step_tests/fake_lakefs.py`.
+
+**Next:** [Results](results.md).

@@ -1,120 +1,59 @@
-# First dataset, first run, your results
+# Guide: your first dataset and run
 
-This page takes you from nothing to a finished run and its results, with every command. It
-uses the pipeline that ships in this template (`dataset-loading`, then `hello-world`), so
-you can do it before you write any code of your own.
+**Goal:** from nothing to a finished run on your own data, and its result on your computer. It uses
+the pipeline this template ships with (`dataset-loading`, then `hello-world`), so you can do it
+before you write any code.
 
-You need your app cloned on your computer ([Get the project](get-the-project.md)) and
-Python 3.9 or newer.
+**You need:** your app cloned and `kaosctl` signed in ([chapters 2 to 4](cookbook/2-your-apps.md)).
+Your role is `dev`, `ops` or `admin`.
 
-## 1. Install the tool and sign in
+## 1. Run once on the empty `dataset-default`
 
-The `kaosctl` tool comes with kaos-lib, a Python package. Install it once, inside a small private Python
-space for this project (a "virtual environment"), in your app folder.
+Console → **Pipelines** → your app → **Run** → **Submit**, with every field left as it is.
 
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
-    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel]==0.4.0"
-kaosctl login
-```
+**You should see** both steps go green. The `hello-world` log says
+`dataset-default@latest @ <commit> holds no files yet`. An empty dataset is not an error.
 
-kaos-lib comes from the platform's public package index (the second line takes its dependencies from PyPI). Your
-platform contact can tell you the version your project's steps use. On Windows, the second line is `.venv\Scripts\activate`.
-Your browser opens once and asks you to sign in. Log in, close the tab, and go back to the
-Terminal. The tool remembers you.
-
-!!! tip "Why the virtual environment?"
-    Many computers no longer let `pip install` change the system's own Python (a message
-    that mentions `externally-managed-environment`). The virtual environment avoids that.
-
-Run every `kubecore` command inside your app folder: it carries `.kubecore/dataset-config.yaml`,
-which tells the tool where your project's lakeFS is. You never need a link or a password.
-
-## 2. Create a dataset
+## 2. Create a dataset and put files in
 
 ```bash
-kaosctl dataset create cats --classes cat,kitten
+kaosctl dataset create notes --layout none
+mkdir -p notes && cp ~/some-files/* notes/
+kaosctl dataset push ./notes dataset-notes -m "first files"
 ```
 
-This makes the lakeFS repository `dataset-cats` with a starter layout for the
-`yolo` format (YOLO, images + labels): `data.yaml`, `images/` and `labels/`. The command prints a
-link to it.
+`push` opens a pull request and prints its link. For images and labels, follow
+[Upload images and labels for yolo](guide-upload-yolo.md) instead.
 
-!!! note "Templates are optional"
-    You do not have to use a template. `kaosctl dataset create cats --template none`
-    makes an empty `dataset-cats`, and a `dataset-*` repository you create by hand in
-    lakeFS becomes a dataset after its first commit. The rest of this page works the same.
+## 3. Merge and release
 
-## 3. Put your files in
-
-Download the dataset, add your files, check them, and send them back.
+Open the link, check the change in lakeFS, and **Merge**. Then click **Release version** on the
+dataset in lakeFS, or:
 
 ```bash
-kaosctl dataset pull dataset-cats@latest ./dataset-cats
-# copy your images into ./dataset-cats/images/train and images/val
-# and one label file per image into ./dataset-cats/labels/train and labels/val
-kaosctl dataset validate ./dataset-cats --format yolo
-kaosctl dataset push ./dataset-cats dataset-cats -m "first 200 images"
+kaosctl dataset release dataset-notes        # prints v1
 ```
 
-- `validate` lists every problem it finds (a label for no image, a class number outside
-  `names`, and so on). Fix them and run it again.
-- `push` uploads your folder to a draft and opens a **pull request**. It prints the link.
-- A repository with no template label validates nothing; add `--format yolo` to
-  `push` as well to get the YOLO checks there.
+## 4. Run on `v1`
 
-## 4. Merge the pull request and release a version
+Submit again. In the **`dataset`** dropdown pick `dataset-notes@v1`. If it is not there yet, wait a
+few minutes and reopen the form.
 
-Open the pull request link, look at the change, and merge it. Nothing changes on `main`
-until you do. Then tag the new state as a version:
+**You should see** the `hello-world` log name `dataset-notes@v1`, its commit, and the folder it
+read. `dataset-loading` pinned that commit at the start, so a merge during the run changes nothing.
+
+## 5. Get the result
 
 ```bash
-kaosctl dataset release dataset-cats      # prints v1
-kaosctl dataset versions dataset-cats
+kaosctl dataset pull outputs-<app>@main ./results --prefix checkpoints/my-experiment-v1/<run>/
+cat ./results/hello.json
 ```
 
-A run reads a version, not "whatever is there now", so a result always points back to its
-data.
+`<run>` is the run's name in Argo. `hello.json` names the dataset, the commit it read, and the
+number of files.
 
-## 5. Run the pipeline on it
+## If it isn't there
 
-Open your pipeline in the Argo UI and submit it ([Run your pipeline](run-it.md)). The form has
-a field called **`dataset`**, a dropdown of `<dataset>@<version>` choices:
+See [When things go wrong](cookbook/10-when-things-go-wrong.md): the *Data* and *The run* sections.
 
-```
-dataset-cats@v1
-dataset-cats@latest
-dataset-default@latest
-```
-
-Pick `dataset-cats@v1`. If the new version is not in the list yet, wait a few minutes: the
-list is refreshed when a dataset or a version changes.
-
-The first step, `dataset-loading`, turns your choice into one commit. Every later step reads
-that commit, even if someone merges a new change to `dataset-cats` while the run is going.
-
-## 6. Find your results
-
-Each app has its own repository, `outputs-<app>`. When the run finishes, every step that
-wrote results has added **one commit** to its `main` branch, under
-`checkpoints/<experiment>/<run>/` (`experiment` is the `experiment-name` field you set,
-`run` is the name of the Argo run).
-
-Open `outputs-<app>` in lakeFS, branch `main`, folder `checkpoints`. The example step wrote a
-small `hello.json` there, naming the dataset and the commit it read. To get the files on your
-computer:
-
-```bash
-kaosctl dataset pull outputs-<app>@main ./results --prefix checkpoints/<experiment>/<run>/
-```
-
-The commit's message and details name the run, the dataset and its commit, so you can find
-out later what any result was trained on.
-
-## What next
-
-- How datasets, versions and templates fit together: [Datasets](datasets.md).
-- Writing your own step that reads a dataset and writes results: [Write a step that uses a dataset](write-a-step.md).
-- Using a MeluXina class for a step: the "Running on MeluXina" section of the README.
+**Next:** [Add a step that reads the dataset and writes a result](guide-step-with-data.md).

@@ -183,8 +183,9 @@ Per step:
 
 ## 5. Add a step
 
-> **New here? Read [ADD-A-STEP.md](ADD-A-STEP.md)** — a complete, copy-paste,
-> zero-assumptions walkthrough (every command, every gotcha, how to verify).
+> **New here? Read [Add a step](https://novelcore.github.io/hera-pipeline-template/add-a-step/)**
+> (or [a step that reads the dataset](https://novelcore.github.io/hera-pipeline-template/guide-step-with-data/))
+> in the guide: a complete, copy-paste walkthrough with every command and how to verify it.
 > The version below is the quick reference once you know the shape.
 
 Three small edits — say we add `model-evaluation` after training:

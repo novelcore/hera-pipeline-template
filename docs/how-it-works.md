@@ -35,8 +35,17 @@ When you send your files in, the platform takes over. You do not set any of this
 - It builds each step into an image, which is a small self contained box.
 - It reads your `config/` and turns every setting into a field on a web page.
 - It picks the right machine for each step, with or without a graphics card.
-- It hands your steps the passwords they need to reach storage and tracking.
+- It hands your steps the addresses and credentials they need for lakeFS and MLflow.
 - It checks your work and tells you on GitHub if something is off.
+
+## Where data and results live
+
+- **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
+  picks one in the `dataset` field. Its first step, `dataset-loading`, pins it to one commit, and
+  every later step reads that commit ([Datasets](datasets.md)).
+- **Results** go to your app's `outputs-<app>` repository, one commit per step per run, written with
+  kaos-lib ([Results](results.md)).
+- A step never writes to a dataset.
 
 You describe what you want. The platform figures out how to run it.
 
@@ -44,8 +53,8 @@ You describe what you want. The platform figures out how to run it.
 
 ```mermaid
 graph TD
-    E["📝 You edit: pipeline.py, config/, steps/"] -->|push| P["🏗️ The platform builds and releases"]
-    P -->|about a minute| R["🖥️ Argo run page: your settings as a form"]
+    E["📝 You edit: pipeline.py, config/, steps/"] -->|"PR into dev: wft-render, then merge"| P["🏗️ kubecore-ml-ci builds and releases"]
+    P -->|a few minutes| R["🖥️ Argo run page: your settings as a form"]
     R -->|Submit| RUN["▶️ Your pipeline runs on real machines"]
 
     style E fill:#4a148c,stroke:#7b1fa2,color:#fff
@@ -63,4 +72,4 @@ The values you set on the form get combined with your settings into one file bef
 
 You never write a server address. You never write a password. You never pick a machine by hand. You say what your step needs, and the platform wires it up.
 
-Ready to build something. Go to [Add a step](add-a-step.md).
+Ready to build something. Go to [Add a step](add-a-step.md), or follow [the guide](guide-step-with-data.md) for a step that reads the dataset.
