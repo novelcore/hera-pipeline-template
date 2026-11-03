@@ -62,6 +62,8 @@ from pathlib import Path
 
 import yaml
 
+from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
+from kubecore.kaos_lib_support import support_value
 from kubecore.meluxina import enhance_hpc, hpc_classes
 from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
 
@@ -478,6 +480,10 @@ def enhance_env(step: dict, ctx: dict, annots: dict) -> None:
     add({"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()})
     add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
     add({"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"})
+    # kaos-lib support window (PRD novelcore/kaos#1147): checked by the step at start.
+    # Absent from the context = not injected, so the env is unchanged.
+    if support_value(ctx):
+        add({"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)})
 
 
 # How long a step may sit Pending before the platform calls it unschedulable.

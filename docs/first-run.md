@@ -15,12 +15,13 @@ space for this project (a "virtual environment"), in your app folder.
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install "git+https://github.com/novelcore/hera-pipeline-template@<commit>#subdirectory=packages/kubecore"
+pip install "<requirement>"
 kubecore login
 ```
 
-`<commit>` is the value of `KUBECORE_PKG_COMMIT` in `steps/hello_world/Dockerfile`: the
-same version your steps use. On Windows, the second line is `.venv\Scripts\activate`.
+`<requirement>` is the value of `KAOS_LIB_PACKAGE` in `steps/hello_world/Dockerfile`, for
+example `kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore`
+([Package versions and upgrades](kaos-lib-versions.md)). On Windows, the second line is `.venv\Scripts\activate`.
 Your browser opens once and asks you to sign in. Log in, close the tab, and go back to the
 Terminal. The tool remembers you.
 
