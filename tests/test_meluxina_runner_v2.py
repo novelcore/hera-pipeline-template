@@ -153,7 +153,8 @@ def _loop():
 
 def test_a_taken_job_is_never_resubmitted_for_its_token():
     loop = _loop()
-    resubmit = loop[loop.index("# A job a host took"):loop.index("cancel(jid)")]
+    start = loop.index("# A job a host took")
+    resubmit = loop[start:loop.index("cancel(jid)", start)]
     assert "share.get('kaos-state') != 'taken'" in resubmit
 
 
@@ -194,3 +195,40 @@ def test_the_operators_switch_reaches_the_waiter():
     assert env["HPC_SHARING"] == "on" and env["HPC_SCOPE"] == "a1b2c3d4e5"
     assert meluxina.sharing_env({"hpc": {"sharing": True, "scope": "a1b2c3d4e5"}})[0]["value"] == "on", \
         "a bare YAML on (read as True) still means on"
+
+
+# ---------------------------------------------------------------- lost host (PRD-1609)
+
+def _host_gone(records):
+    """host_gone() from the waiter, with accounting answered from `records`."""
+    tree = ast.parse(MELUXINA_SUBMIT_CODE)
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "host_gone")
+    alive = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                 and getattr(n.targets[0], "id", "") == "HOST_ALIVE")
+    g = {"SDB": "https://sdb"}
+
+    def get(url):
+        rec = records[url.rsplit("/", 1)[1]]
+        if isinstance(rec, Exception):
+            raise rec
+        return {"jobs": [{"state": {"current": rec}}]}
+    g["get"] = get
+    exec(compile(ast.Module(body=[alive, fn], type_ignores=[]), "waiter", "exec"), g)
+    return g["host_gone"]
+
+
+def test_a_host_is_gone_only_when_accounting_says_it_ended():
+    gone = _host_gone({"1": ["RUNNING"], "2": ["COMPLETING"], "3": ["NODE_FAIL"], "4": ["CANCELLED"],
+                       "5": ["COMPLETED"], "6": [], "7": OSError("REST down"), "8": ["PENDING"]})
+    assert not gone("1") and not gone("2") and not gone("8"), "a live host is never given up on"
+    assert gone("3") and gone("4") and gone("5"), "a host that ended without handing the job back is gone"
+    assert not gone("6") and not gone("7"), "an unreadable or empty record is not a death"
+
+
+def test_a_job_whose_host_died_starts_over_with_the_proven_calls():
+    loop = _loop()
+    lost = loop[loop.index("lost_hosts < LOST_HOST_RESUBMITS"):loop.index("# A job a host took")]
+    assert "cancel(jid)" in lost and "jid = submit()" in lost and "continue" in lost
+    assert "lost_hosts += 1" in lost, "bounded: a run starts over at most LOST_HOST_RESUBMITS times"
+    assert "share.get('kaos-state') == 'taken'" in loop[loop.index("if ('PENDING' in st and share.get('kaos-state') == 'taken'"):][:200]
+    assert "LOST_HOST_RESUBMITS = 3" in MELUXINA_SUBMIT_CODE
