@@ -1,91 +1,56 @@
-# Welcome
+# The engineer's cookbook
 
-This is your guide to building a **Hera pipeline** from this template.
+You are an ML or software engineer and you have just been added to a KAOS project. This cookbook
+takes you through your first day. By the end of it you have built a pipeline end to end, run it on
+your own data, and you are comparing the trained weights of two runs.
 
-A pipeline is just a list of steps that run in order. One step prepares some data. The next step trains a model. Another step saves the result. You decide what the steps are. You decide the order. You write it in Python, using a small library called Hera. Do not worry about that name. This guide shows you the few lines you need, and nothing more.
+Read the chapters in order the first time. Each one says what it is for, who is allowed to do it,
+what to click or paste, what you should see, what to do if you don't, and where to go next.
 
-The good news is simple. You describe the steps in plain files. You push those files. The platform does the hard part for you. It builds each step. It puts your settings on a web page with dropdowns. It runs the whole thing on real machines. You never touch servers or Kubernetes.
+| | chapter | at the end of it you have |
+|---|---|---|
+| 1 | [You're in](cookbook/1-youre-in.md) | signed in to the console; you have found your organisation, your project and your role |
+| 2 | [Your project's apps](cookbook/2-your-apps.md) | an ML app, either an existing one or one you created from this template, cloned on your computer |
+| 3 | [Your tools](cookbook/3-your-tools.md) | Argo, lakeFS, MLflow, the console's Datasets page and GitHub open in your browser |
+| 4 | [Install kaosctl and sign in](cookbook/4-install-kaosctl.md) | the `kaosctl` command, signed in to your project |
+| 5 | [Your data](cookbook/5-your-data.md) | a dataset with your files, released as `v1` and ready to share |
+| 6 | [Your pipeline](cookbook/6-your-pipeline.md) | the shipped pipeline run once, and then your own step added, checked and live |
+| 7 | [Run it](cookbook/7-run-it.md) | a run started from the form, watched, its logs read, and retried if needed |
+| 8 | [Results and weights](cookbook/8-results-and-weights.md) | your run's outputs and its MLflow run, with two runs compared |
+| 9 | [The yolo use case](cookbook/9-the-yolo-use-case.md) | the same day with the yolo template: labelled images, two trainings compared, weights picked |
+| 10 | [When things go wrong](cookbook/10-when-things-go-wrong.md) | a fix for the symptom in front of you |
 
 ## The loop you will repeat
 
 ```mermaid
-graph TD
-    A["📝 You edit a few files"] --> B["⬆️ You push and open a request"]
-    B --> C["✅ The platform checks it"]
-    C --> D["🚀 You merge and it goes live"]
-    D --> E["▶️ You press Submit and run"]
-
-    style A fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style B fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style C fill:#6a1b9a,stroke:#9c27b0,color:#fff,stroke-width:2px
-    style D fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style E fill:#4a148c,stroke:#7b1fa2,color:#fff
+graph LR
+    D["Data: push, PR, release v1"] --> E["Code: edit steps and config"]
+    E --> P["PR into dev: the wft-render check"]
+    P --> M["Merge: kubecore-ml-ci builds the new version"]
+    M --> R["Run: the form in Argo"]
+    R --> O["Results: outputs-app and MLflow"]
+    O --> D
 ```
 
-You start at the top and work down. The platform handles the middle. You press Submit at the end. Every page in this guide is one part of this loop.
+## The rest of the site
 
-## What you will be able to do
+The cookbook links into these pages for the details:
 
-<div class="grid cards" markdown>
+- **Guides** walk one task from start to finish: [first dataset and run](first-run.md),
+  [upload images and labels for yolo](guide-upload-yolo.md),
+  [add a step that reads the dataset and writes a result](guide-step-with-data.md), and
+  [run on a released version and find the result](guide-run-on-a-version.md).
+- **Datasets**: [concepts](datasets.md), then one page per task (create, upload, validate, release,
+  pull, share, use in a step).
+- **Pipelines**: [how it works](how-it-works.md), and pages on adding, writing and removing a step,
+  changing a setting, sending a change in, and running.
+- **[Results](results.md)**, **[MeluXina](meluxina.md)**,
+  **[kaos-lib versions](kaos-lib-versions.md)** and a **[word list](glossary.md)**.
 
-- :material-book-open-variant: **Start here**
+kaos-lib, the library behind `kaosctl` and `import kaos_lib`, has its own reference:
+[the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
-    ---
-
-    Set up your computer and get the project. First time through, read these in order.
-
-    [:octicons-arrow-right-24: What you need](what-you-need.md)
-
-- :material-plus-box: **Add a step**
-
-    ---
-
-    The main event. Make a folder, write a small program, add one line.
-
-    [:octicons-arrow-right-24: Add a step](add-a-step.md)
-
-- :material-database: **Your first dataset**
-
-    ---
-
-    Make a dataset, run on it, find your results. Every command.
-
-    [:octicons-arrow-right-24: First dataset to results](first-run.md)
-
-- :material-tune: **Change a setting**
-
-    ---
-
-    Add a value people can change on the run page. One line does it.
-
-    [:octicons-arrow-right-24: Change a setting](change-a-setting.md)
-
-- :material-play-circle: **Run your pipeline**
-
-    ---
-
-    Open the web form, set a field or two, and press Submit.
-
-    [:octicons-arrow-right-24: Run your pipeline](run-it.md)
-
-- :material-lifebuoy: **When something breaks**
-
-    ---
-
-    Common problems and the plain fix for each one.
-
-    [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
-
-- :material-book-alphabet: **Word list**
-
-    ---
-
-    Every term in this guide, explained in one sentence.
-
-    [:octicons-arrow-right-24: Word list](glossary.md)
-
-</div>
-
-## Who this is for
-
-You do not need to be an engineer. If you can edit a text file and follow steps in order, you can do this. Start with [What you need](what-you-need.md).
+!!! note "Using the yolo template?"
+    The [yolo pipeline guide](https://novelcore.github.io/yolo-pipelines-template/) covers the same
+    day for the yolo training pipeline. It links back to these chapters for everything the two
+    templates share.

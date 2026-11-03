@@ -1,225 +1,69 @@
 # hera-pipeline-template
 
-A pipeline you author in **Python** ([Hera](https://github.com/argoproj-labs/hera))
-with parameters in a **[Hydra](https://github.com/facebookresearch/hydra) config tree**.
-Clone it, add your steps and parameters, push — the platform builds your images
-and releases a runnable pipeline. You never touch Kubernetes.
+A KAOS ML pipeline you write in **Python** ([Hera](https://github.com/argoproj-labs/hera)), with
+its settings in a **[Hydra](https://github.com/facebookresearch/hydra) config tree**. Add your
+steps and settings and open a pull request into `dev`. The platform checks it, builds your step
+images on merge, and releases a pipeline you run from a web form. You never touch Kubernetes.
 
-This template is the source new pipeline apps are seeded from.
+New ML apps are seeded from this template.
 
-## Contents
-
-- [The pipeline in one file](#the-pipeline-in-one-file)
-- [Datasets](#datasets)
-- [Results](#results)
-- [kaos-lib, the platform library](#kaos-lib-the-platform-library)
-- [Running on MeluXina](#running-on-meluxina)
-- [Local iteration](#local-iteration-no-cluster)
-- [Where to read next](#where-to-read-next)
+**The guide: [novelcore.github.io/hera-pipeline-template](https://novelcore.github.io/hera-pipeline-template/)**.
+It is built around *the engineer's cookbook*, which takes you from your first sign-in to comparing
+the trained weights of two runs.
 
 ## The pipeline in one file
 
-The whole DAG is **one small `pipeline.py`** and a tree of small YAML files. The
-template ships two example steps so you have a working pipeline from the first
-push — replace them with your own.
-
 ```python
-# pipeline.py — the ENTIRE pipeline definition
+# pipeline.py
 from kubecore.authoring import pipeline, step
 
-with pipeline("ml-pipeline") as p:  # platform renames to {app}-pipeline at release
+with pipeline("ml-pipeline") as p:  # the platform renames it <app>-pipeline
     load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
     hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
-`dataset-loading` pins the dataset the run picked; `hello-world` reads it and writes a
-result. Add more steps and wire dependencies as your pipeline grows:
-
-```python
-with pipeline("ml-pipeline") as p:
-    prep  = step("prepare", reads=["experiment"], outputs=["prepared"])
-    run   = step("run", gpu=True, needs=[prep], reads=["experiment", "train"],
-                 outputs=["result"])
-    report = step("report", needs=[run], reads=["experiment"])
-```
-
-**One rule: the `config/` tree IS the submit form.** Every scalar in `config/`
-becomes a form field; every group directory becomes a dropdown. Add a leaf → a
-field appears. No parameter wiring anywhere.
+`dataset-loading` pins the dataset version the run picked to one commit. `hello-world` reads it
+and writes a result to the app's `outputs-<app>` repository. **The `config/` tree is the submit
+form**: every plain value in `config/` becomes a field.
 
 ## Layout
 
 ```
-pipeline.py            the DAG (steps, reads=, gpu=, needs=, when=)
-config/                THE config tree — all your parameters
-  config.yaml            the defaults list (which group options are default)
-  experiment.yaml        a section of scalar leaves (add your own files/groups)
-  dataset.yaml           the `dataset` field: <dataset-repo>@<version>
-steps/<name>/          your step code + Dockerfile (one dir per step)
-kubecore/              platform-owned engine — SEEDED, DO NOT EDIT
-tests/, step_tests/    engine tests; step-code tests (two commands, see DEVELOPER.md §15)
-docs/                  the guides (see "Where to read next")
-pyproject.toml         PEP 621, pinned render deps
+pipeline.py            the steps and their order (reads=, gpu=, needs=, outputs=, when=)
+config/                every setting; each one is a field on the run form
+steps/<name>/          one folder per step: app/entry.py and a Dockerfile
+kubecore/              the platform's engine: seeded, do not edit
+tests/, step_tests/    engine tests; step-code tests (DEVELOPER.md §15)
+docs/                  the guide (mkdocs)
 ```
 
-## Two core moves (full guide: [DEVELOPER.md](DEVELOPER.md))
-
-- **Add a parameter** → add a leaf to `config/…`. Push. The form has it.
-- **Add a step** → `mkdir steps/<name>` + a Dockerfile + an entry that reads its
-  config slice, then one `step("<name>", reads=[…], needs=[…])` line in
-  `pipeline.py`. Push.
-
-## Datasets
-
-A **dataset is a lakeFS repository** named `dataset-<name>`. Your project starts with
-one, `dataset-default`.
-
-- **Versions** are tags on `main`: `v1`, `v2`, … `latest` means the head of `main`. A run
-  never reads "whatever is there now": it picks one version, and every step of that run
-  reads exactly that commit.
-- **Changes** reach `main` through a **pull request**. After a pull request is merged,
-  `kaosctl dataset release` tags the next version.
-- **Pick it in the pipeline.** The run form has a `dataset` field, a dropdown of
-  `<dataset-repo>@<version>` choices, newest first (`dataset-cats@v2`, `dataset-cats@v1`,
-  `dataset-cats@latest`, …). The default is `dataset-default`'s newest version. The list
-  is refreshed when a dataset or a version changes. The field comes from
-  `config/dataset.yaml`; keep a field named exactly `dataset` in your pipeline.
-- **Templates are optional.** `kaosctl dataset create` can start a repository from a
-  format template (the starter layout, for example `yolo`), but you do not need
-  one: any repository named `dataset-<something>` that you create by hand in lakeFS
-  becomes a dataset after its first commit (`kaosctl dataset create <name> --template none`
-  makes an empty one). The pipeline dropdown lists the `dataset-*` repositories. Any other
-  repository can be read from code too: `datasets.materialize("<repo>@<ref>")` (see the
-  package section). A repository with no template label is read as plain files.
-- A pipeline **never writes to a dataset**.
-
-Step by step, with every command: [first dataset → first run → your results](docs/first-run.md).
-Concepts and the commands in one place: [docs/datasets.md](docs/datasets.md).
-
-## Results
-
-Each app has its own repository, **`outputs-<app>`**, made by the platform. A step
-writes there with the package's **run writer**:
-
-- everything a step saves is committed on its own branch `run-<run>-<kind>` as it is saved,
-  so it survives a lost pod;
-- `finish()` merges the branch into `main`: **one merge commit per step per run**, under
-  `<kind>/<experiment>/<run>/` (`checkpoints/…` by default), and deletes the branch. The
-  commit records the app, experiment, run, and whatever you pass (dataset, MLflow run);
-- a retried step finds the branch and **resumes**: `r.latest("last.pt")` gives back the
-  newest checkpoint it already saved.
-
-```python
-from kaos_lib import outputs
-with outputs.run("my-app", experiment, run_id) as r:
-    resume = r.latest("last.pt")                 # None on a first attempt
-    ...                                          # train; on every checkpoint:
-    r.save("./last.pt")                          # committed on the run branch
-    r.finish({"dataset_ref": "dataset-cats@v2"}) # one merge commit on main
-```
-
-Writing a step that reads a dataset and writes results: [docs/write-a-step.md](docs/write-a-step.md).
-
-## kaos-lib, the platform library
-
-[kaos-lib](https://github.com/kaos-io/kaos-lib) (`kaos_lib`, formerly the `kubecore` package) is
-the Python library behind all of this, with the `kaosctl` command, published to the platform's public
-package index (the step images pin theirs in `KAOS_LIB_PACKAGE`, `steps/*/Dockerfile`). Install it on your
-computer inside a virtual environment:
+## Quick start
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
-    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel]==0.4.0"
-kaosctl login                    # opens your browser once
+./run.sh                                         # render the pipeline locally, no cluster
+python3 -m venv ~/.venvs/kaos && . ~/.venvs/kaos/bin/activate
+pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib-rc/simple/ \
+    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc5"
+kaosctl login                                    # inside the app folder
+kaosctl dataset push ./my-data dataset-my-data -m "first data"
 ```
 
-Run the commands inside your app folder: it carries the file that tells the tool where
-your project's lakeFS is.
-
-| command | what it does |
-|---|---|
-| `kaosctl dataset create <name> [--classes a,b] [--template yolo\|none]` | a new `dataset-<name>`: with a starter layout, or empty with `--template none` |
-| `kaosctl dataset pull <repo>@<ref> [dir]` | download a version (or `--prefix folder/`) to work on |
-| `kaosctl dataset validate <dir> --format yolo` | check a folder against a format |
-| `kaosctl dataset push <dir> <repo> -m "message" [--format yolo]` | upload to a draft and open a pull request |
-| `kaosctl dataset release <repo>` | tag the head of `main` as the next version |
-| `kaosctl dataset list` / `versions <repo>` | what exists |
-
-**Validation follows the template label.** `push` checks your folder against the format
-the repository is labelled with (`kaos.template`). A repository with **no template label
-validates nothing** and takes the files as they are. Add `--format yolo` to get the
-YOLO checks (detection, segmentation and pose labels, `nc` against `names`, an image for
-every label) on a repository that has no label.
-
-From code (a step, a notebook), any repository and any ref (`vN`, `latest`, a branch, a
-tag or a commit id):
-
-```python
-from kaos_lib import datasets
-entry = datasets.materialize("dataset-cats@v2")    # yolo: the data.yaml; no label: the folder
-folder = datasets.materialize("my-repo@main")      # a repository you made by hand
-fmt = datasets.format_of("dataset-cats")           # "yolo", or "raw" when there is no label
-```
-
-`materialize` downloads once and reuses the copy; on MeluXina it uses the copy the
-platform already staged.
-
-## Running on MeluXina
-
-When the project's pool is HPC-enabled, every step's `{step}-class` dropdown on the
-Argo submit form also offers the MeluXina classes:
-
-| class | what it is | typical use |
-|---|---|---|
-| `meluxina-gpu` | 4× A100-40GB, 2× EPYC 7452, 512 GB | GPU-heavy steps |
-| `meluxina-cpu` | 2× EPYC 7452 (128 cores), 512 GB | heavy CPU steps |
-| `meluxina-largemem` | 4 TB RAM | data that does not fit a node |
-
-Pick one for a step and only that step runs as a Slurm job on MeluXina; every other
-step keeps its in-cluster class. Nothing in this repository changes:
-
-- **The dataset is staged** on MeluXina before the job starts (once per version; a new
-  version copies only what changed), and your step reads it through the same
-  `datasets.materialize(...)` call.
-- **The step runs your image** and writes its results with the same run writer, so
-  checkpoints and the merge commit appear in `outputs-<app>` exactly as for an
-  in-cluster step; declared step outputs come back so the next step consumes them as usual.
-- Queue time is real (minutes to hours) — the pipeline waits; the `pipeline-info`
-  field on the form lists the classes and the account.
-- Give long steps a wall-clock limit in `pipeline.py`: `step(..., hpc_time_limit="12h")`
-  (default 4 h). See [DEVELOPER.md §8.1](DEVELOPER.md).
-- Steps pinned with a `compute-class` annotation stay in-cluster.
-
-## Local iteration (no cluster)
-
-```bash
-./run.sh                                       # venv + render + enhance + compose
-python -m kubecore.compose experiment.name=demo   # try config overrides locally
-```
-
-`out/params.yaml` is exactly what your steps receive at run time; a typo or a
-bad `reads=` fails locally with the same message the cluster gives you.
-
-## What the platform does for you (you never write this)
-
-Image supply-chain (container registry), tracking/artifact-store env + secrets,
-per-step compute-class selection + node scheduling from your pool's classes,
-per-run sizing knobs, `/dev/shm`, GitOps release, and the Argo submit form —
-all injected at release time. Your `pipeline.py` stays pure structure.
+`kaosctl` needs kaos-lib **0.4.0rc5** or newer
+([install](https://novelcore.github.io/hera-pipeline-template/cookbook/4-install-kaosctl/)).
+The library is documented at [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
 ## Where to read next
 
 | you want to | read |
 |---|---|
-| make your first dataset, run on it, find the results | [docs/first-run.md](docs/first-run.md) |
-| understand datasets, versions, templates and the commands | [docs/datasets.md](docs/datasets.md) |
-| write a step that reads a dataset and writes results | [docs/write-a-step.md](docs/write-a-step.md) |
-| add your first step | [ADD-A-STEP.md](ADD-A-STEP.md) |
-| the complete operating manual (config, tests, HPC) | [DEVELOPER.md](DEVELOPER.md) |
-| how the platform works internally | [MECHANISMS.md](MECHANISMS.md) |
+| start from zero: access, apps, tools, data, pipeline, results | [the cookbook](https://novelcore.github.io/hera-pipeline-template/) |
+| make a dataset, run on it, find the result | [guide: first dataset and run](https://novelcore.github.io/hera-pipeline-template/first-run/) |
+| add a step that reads the dataset | [guide: add a step](https://novelcore.github.io/hera-pipeline-template/guide-step-with-data/) |
+| run a step on MeluXina | [MeluXina](https://novelcore.github.io/hera-pipeline-template/meluxina/) |
+| the operating manual: config, tests, HPC | [DEVELOPER.md](DEVELOPER.md) |
+| how the platform works inside | [MECHANISMS.md](MECHANISMS.md), [PLATFORM.md](PLATFORM.md) |
 
 ## License
 
-This project is licensed under the Apache License, Version 2.0. See the
-[LICENSE](LICENSE) file for the full terms.
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file
+for the full terms.

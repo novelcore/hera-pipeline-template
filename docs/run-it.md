@@ -1,56 +1,47 @@
 # Run your pipeline
 
-This is the payoff. You open a web page, set a few fields, and press Submit. The platform runs your whole pipeline on real machines.
+**Goal:** a run started from the form and watched until it finishes.
+[Chapter 7](cookbook/7-run-it.md) has the full field list, retries and resume.
 
-## Step 1. Open the run page
+## 1. Open the form
 
-Your Novelcore contact will give you a link to the Argo web page. This page is run by a tool called Argo Workflows. You do not need to learn it. Open the link in your browser. This is where pipelines are run.
-
-Find your pipeline in the list. It is named after your project, with `-pipeline` on the end. Click it, then look for the **Submit** button.
+Console → **Pipelines** → your app → **Run**. Or in Argo: **Workflow Templates** →
+`<app>-pipeline` → **Submit**.
 
 ![The submit panel for the pipeline, with the Submit button](img/submit-form.png)
 
-## Step 2. Read the form
+## 2. Set the fields, or keep the defaults
 
-When you click Submit, a form opens. Every field on this form came from your `config/` folder. This is the same tree you edited, now as a page you can fill in.
+Every field came from your `config/` folder, plus a few the platform adds:
 
-You will see fields like these.
-
-- `experiment-name` and any other settings you added.
-- Dropdowns the platform fills in for you. The `dataset` field lists the datasets of your project and their versions, like `dataset-cats@v2`: pick the one to run on ([Datasets](datasets.md)).
-- Sizing fields for each step, so you can ask for a smaller run.
+- `pipeline-info` at the top is a read-only note. Leave it.
+- `experiment-name` and every other setting in `config/`, with dots turned into dashes.
+- **`dataset`**: a dropdown of your project's datasets and versions, such as `dataset-cats@v2`, and
+  of datasets shared with your project, such as `team-a/dataset-cats@v3`
+  ([Datasets](datasets.md)).
+- `<step>-class` for each step: the kind of machine it runs on, including `meluxina-*` on an
+  HPC-enabled pool ([MeluXina](meluxina.md)).
+- `<step>-cpu`, `<step>-mem` and `<step>-disk` to ask for less, for a quick test.
 
 ![The experiment fields on the submit form](img/form-experiment-fields.png)
 
-Scroll down and you also see a sizing field for each step. You can ask for a smaller run here.
-
 ![Per step sizing fields for each step](img/per-step-sizing.png)
 
-The first field is a read only note with a short summary. Leave it as it is.
+## 3. Submit and watch
 
-## Step 3. Set what you want, or change nothing
-
-You can press Submit right away. The defaults are ready to run as they are. Or change a field or two first. For a quick test, set a small number of rounds, or pick a smaller size.
-
-## Step 4. Press Submit
-
-Click **Submit**. The page switches to a live view of your run. Each step shows up as a box. A box turns green when its step finishes.
+Click **Submit**. Argo shows the run as boxes, one per step: blue while running, green when done,
+red when failed, and grey for *skipped* (its `when=` condition was false).
 
 ![A finished run, every step green](img/argo-running.png)
 
-## Step 5. Watch it finish
-
-Watch the boxes go green in order. If a step fails, its box turns red. Click the red box to read its log. The log tells you what went wrong.
-
-That is the full loop. You edited files. You sent them in. You merged. You ran it. 
+Click a box, then **Logs**, to read what the step printed. Read the last lines of a red step first.
+You can close the tab: the run continues.
 
 ## Where results go
 
-Depending on what your steps do, results land in a couple of places.
+- Files your steps write go to your app's `outputs-<app>` repository in lakeFS: one commit per step
+  per run, under `checkpoints/<experiment>/<run>/` ([Results](results.md)).
+- Numbers a step logs go to the project's MLflow
+  ([chapter 8](cookbook/8-results-and-weights.md)).
 
-- Numbers and charts from a run go to a tracking page called MLflow. Your contact can give you the link.
-- Files your steps write (checkpoints, reports) go to your app's `outputs-<app>` repository in lakeFS, one commit per step per run, under `checkpoints/<experiment>/<run>/`. [First dataset to results](first-run.md) shows how to find them.
-
-You do not manage any of that plumbing. Your steps ask for what they need, and the platform provides it.
-
-If a run does not behave, the next page has the common fixes. Go to [When something breaks](troubleshooting.md).
+If something fails, see [When things go wrong](cookbook/10-when-things-go-wrong.md).

@@ -2,7 +2,7 @@
 
 Plain meanings for the words in this guide. One sentence each. Come back here any time.
 
-**Argo Workflows.** The tool that runs your pipeline on real machines. It gives you the web page with the Submit button and shows each step as it runs. Your contact gives you the link to yours.
+**Argo Workflows.** The tool that runs your pipeline on real machines. It gives you the web page with the Submit button and shows each step as it runs. The console's **Pipelines** page links to it.
 
 **Branch.** A safe copy of the project where you make changes before they are accepted.
 
@@ -11,6 +11,10 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 **Commit.** A saved change with a short note describing it.
 
 **Config.** Your settings. They live in the `config/` folder, and each one becomes a field on the run page.
+
+**Data lock.** The record of every dataset commit a step read (`data.lock.json` on the MLflow run). `kaosctl run --lock` replays it.
+
+**Dataset.** A lakeFS repository called `dataset-<name>`. Its versions are tags (`v1`, `v2`, ...); a run picks one in the `dataset` field. Changes reach its `main` through pull requests.
 
 **Dockerfile.** A small recipe that says how to pack a step into a box the platform can run.
 
@@ -22,13 +26,27 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **GitHub.** The website where the project lives, with a full history of every change.
 
-**Hera.** The Python library you use to write your pipeline. It lets you describe steps and their order in a few plain lines.
+**Hera.** The Python library behind `pipeline.py`. It lets you describe steps and their order in a few plain lines. Also the name of this template.
 
 **Image.** The small self contained box a step becomes after it is built. It holds the code and everything it needs to run.
 
+**KAOS console.** The web app of your organisation: projects, apps, pipelines, datasets, models, and Identity & Access.
+
+**kaosctl.** The command-line tool that comes with kaos-lib: create, push, validate, release and pull datasets, and replay a run's data ([Install it](cookbook/4-install-kaosctl.md)).
+
+**kaos-lib.** The platform's Python package (`import kaos_lib`) for datasets, results and MLflow, with the `kaosctl` command (0.4.0rc5 or newer). Formerly the `kubecore` package. Reference: [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
+
+**kubecore-ml-ci.** The name of the build that runs after a merge into `dev`: it builds the changed step images and releases a new version of the pipeline.
+
+**lakeFS.** Your project's data store. It keeps every version of every file, like Git does for code. Datasets and `outputs-<app>` live there.
+
+**Layout.** The shape a dataset must have, such as `yolo` (images, labels, `data.yaml`). `validate` and `push` check it. `none` means any files.
+
+**MeluXina.** The Luxembourg supercomputer. On an HPC-enabled pool a step can run there by picking a `meluxina-*` class ([MeluXina](meluxina.md)).
+
 **Merge.** To accept a pull request, which makes the change part of the project for real.
 
-**MLflow.** A tracking page where numbers and charts from a run are stored.
+**MLflow.** Your project's tracking server: the metrics, parameters and artifacts of runs, and the registered models.
 
 **Needs.** The setting in `pipeline.py` that says which step must finish before another can start.
 
@@ -42,18 +60,18 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **Reads.** The setting that lists which settings a step looks at.
 
+**Release.** Tagging the head of a dataset's `main` as the next version, with **Release version** or `kaosctl dataset release`.
+
 **Render.** A preview of your pipeline that the platform builds to check your work. It does not run anything.
-
-**Step.** One job in your pipeline, like preparing data or training a model.
-
-**Dataset.** A lakeFS repository called `dataset-<name>`. Its versions are tags (`v1`, `v2`, ...); a run picks one in the `dataset` field.
 
 **Results.** What your steps write: one commit per step per run in your app's `outputs-<app>` repository.
 
-**Storage.** The place where files and datasets are kept, reached by your steps through kaos-lib (`kaos_lib`).
+**Role.** What a team gives its members on a project: `admin`, `ops`, `dev` or `business` ([You're in](cookbook/1-youre-in.md)).
+
+**Step.** One job in your pipeline, like preparing data or training a model.
 
 **Submit.** The button on the run page that starts a run.
 
 **Terminal.** The app where you type commands, like the ones in this guide.
 
-**wft-render.** The name of the check that runs on your pull request to confirm your pipeline is valid.
+**wft-render.** The name of the check that runs on your pull request into `dev` to confirm your pipeline is valid.
