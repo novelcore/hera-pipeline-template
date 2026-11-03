@@ -276,6 +276,47 @@ def fetch_workdir(image, reg_token):
         print('workdir: lookup failed (running from host cwd):', e, flush=True)
         return ''
 
+
+# PRD-1609 node sharing. Off unless the operator turned it on for this project
+# (pipeline context hpc.sharing) and gave its scope: a host on a shared node takes
+# only jobs whose name and script header carry its own scope.
+SCOPE = os.environ.get('HPC_SCOPE') or ''
+SHARING = os.environ.get('HPC_SHARING') == 'on' and re.fullmatch('[a-z0-9]{8,16}', SCOPE) is not None
+if os.environ.get('HPC_SHARING') == 'on' and not SHARING:
+    print('node sharing: scope %r is not 8-16 lowercase letters or digits - running alone' % SCOPE,
+          flush=True)
+# What stays in the Slurm environment when the inputs move into the script: the
+# login shell builds PATH from it, so it is never re-exported over the profile.
+SLURM_ENV_KEEP = ('PATH', 'HOME', 'USER')
+
+
+def inputs_in_script(batch, env):
+    """D-02: a host can read a waiting job's script, never its environment (probe
+    2026-11-03), so with sharing on the step's inputs ride in the script as export
+    lines after its header, and the Slurm environment keeps only SLURM_ENV_KEEP."""
+    keep, exports = [], []
+    for e in env:
+        k, v = e.split('=', 1)
+        if k in SLURM_ENV_KEEP:
+            keep.append(e)
+        else:
+            exports.append('export %s=%s' % (k, shlex.quote(v)))
+    lines = batch.split('\n')
+    return '\n'.join(lines[:3] + exports + lines[3:]), keep
+
+
+def comment_of(job):
+    """The job comment: a string from slurmctld, {'job': ...} from slurmdbd."""
+    c = job.get('comment') or ''
+    return (c.get('job') or '') if isinstance(c, dict) else c
+
+
+def share_state(comment):
+    """D-04: what a host wrote into this job's comment, as a dict ({} when no host
+    took it): kaos-state (taken|done), host, slot, attempt, rc."""
+    return dict(re.findall(r'(?:^|\s)(kaos-state|host|slot|attempt|rc)=(\S+)', comment))
+
+
 API = 'https://slurm-api.lxp.lu/slurm/v0.0.44'
 SDB = 'https://slurm-api.lxp.lu/slurmdb/v0.0.44'
 TOKEN_FILE = '/etc/meluxina-jwt/token'
@@ -340,7 +381,7 @@ def get(url):
     return json.load(urllib.request.urlopen(
         urllib.request.Request(url, headers=hdrs()), timeout=30))
 
-jobname = 'kaos-' + os.environ['WF_UID'] + '-' + os.environ['STEP_NAME']
+jobname = 'kaos-' + (SCOPE + '-' if SHARING else '') + os.environ['WF_UID'] + '-' + os.environ['STEP_NAME']
 img = os.environ['IMAGE_REF']
 # Apptainer rejects tag@digest refs ('Docker references with both a tag and
 # digest are currently not supported', live job 5140397). The platform pins
@@ -649,11 +690,18 @@ def submit():
     ident = hpc_identity()
     batch = '\n'.join([
         '#!/bin/bash -l',
+        # PRD-1609 F-01: the script's format and sharing scope ('-': sharing off).
+        # A host takes only jobs whose header carries its own scope.
+        '# kaos-job v2 scope=' + (SCOPE if SHARING else '-'),
         'set +e',
+        # The job this step belongs to: its own on its own node; on a shared node
+        # the host sets it to this step's job. Every per-job path keys on it.
+        'KAOS_JOB_ID=${KAOS_JOB_ID:-$SLURM_JOB_ID}',
         # Diagnostics without SSH (live job 5143859: exit 231 with no way to
         # see WHY): on any failure, tail this job's own output file into its
         # job COMMENT — readable over REST from the waiter and by operators.
-        'fail(){ scontrol update JobId=$SLURM_JOB_ID Comment="err$1:$(tail -c 700 slurm-$SLURM_JOB_ID.out 2>/dev/null | tr "\\n" "|")" 2>/dev/null; exit $1; }',
+        # The dataset lease (kaos-commit=, PRD-1541 D-06) stays first.
+        'fail(){ scontrol update JobId=$KAOS_JOB_ID Comment="${KAOS_COMMIT:+kaos-commit=$KAOS_COMMIT }err$1:$(tail -c 700 slurm-$KAOS_JOB_ID.out 2>/dev/null | tr "\\n" "|")" 2>/dev/null; exit $1; }',
         'for f in /usr/share/lmod/lmod/init/bash /etc/profile.d/lmod.sh; do'
         ' [ -r "$f" ] && source "$f" && break; done',
         'module load Apptainer 2>/dev/null || module load apptainer 2>/dev/null',
@@ -679,7 +727,7 @@ def submit():
         '  [ -n "$DATASET_STAGED" ] && echo "dataset: WARNING staged copy $DATASET_STAGED'
         ' not ready - downloading in-job on GPU time"',
         '  export DATASET_CACHE=$SCR/data-cache'
-        ' DATASET_DIRFILE=$SCR/kaos-tmp/ds-$SLURM_JOB_ID.dir',
+        ' DATASET_DIRFILE=$SCR/kaos-tmp/ds-$KAOS_JOB_ID.dir',
         '  printf %s "$STAGEIN_B64" | base64 -d | python3 - || fail 232',
         '  DATASET_DIR=$(cat "$DATASET_DIRFILE" 2>/dev/null)',
         'fi',
@@ -693,7 +741,7 @@ def submit():
         # Writable /work: the SIF is read-only, but steps write /work/output
         # (declared outputs), /work/runs, /work/dataset caches. Per-job scratch
         # on Lustre, removed after a successful stage-out.
-        'export KAOS_WORK=$SCR/kaos-work/$SLURM_JOB_ID; mkdir -p $KAOS_WORK/output',
+        'export KAOS_WORK=$SCR/kaos-work/$KAOS_JOB_ID; mkdir -p $KAOS_WORK/output',
         'BIND="$BIND -B $KAOS_WORK:/work"',
         # Last use of a cached SIF, before the cleanup below can see it.
         'touch -c "$SIF"',
@@ -776,6 +824,10 @@ def submit():
                     'STAGEOUT_B64='
                     + base64.b64encode(STAGEOUT.encode()).decode()]
     commit = pinned_commit()
+    if commit:
+        env.append('KAOS_COMMIT=' + commit)   # fail() keeps the dataset lease
+    if SHARING:
+        batch, env = inputs_in_script(batch, env)
     body = {'job': {'name': jobname, 'partition': HPC['partition'],
                     'account': ident['account'],
                     'qos': HPC.get('qos') or 'default',
@@ -895,22 +947,32 @@ resubmits = 0
 # that never left the queue says why (kaos e2e 2026-10-26: two jobs PENDING
 # for the whole 2.5 h budget, reason unknown).
 pending_reason = None
+hosted = None   # PRD-1609: the host that took this job, as last printed
 while True:
     time.sleep(30)
     try:
         job = (get(SDB + '/job/' + str(jid)).get('jobs') or [{}])[0]
         st = (job.get('state') or {}).get('current') or []
         print('state:', st, flush=True)
+        share = share_state(comment_of(job))
         if 'PENDING' in st:
             try:
-                reason = (get(API + '/job/' + str(jid)).get('jobs')
-                          or [{}])[0].get('state_reason') or ''
+                live = (get(API + '/job/' + str(jid)).get('jobs') or [{}])[0]
+                reason = live.get('state_reason') or ''
+                # The live comment: accounting may lag a host's update.
+                share = share_state(comment_of(live)) or share
             except Exception:
                 reason = pending_reason or ''
             if reason != pending_reason:
                 print('pending reason:', reason, flush=True)
                 pending_reason = reason
-        if ('PENDING' in st and WALLET_EXP
+            if share.get('kaos-state') == 'taken' and share != hosted:
+                print('running on a shared node: host job', share.get('host'),
+                      'slot', share.get('slot'), flush=True)
+                hosted = share
+        # A job a host took stays queued (held) while its step runs: never
+        # resubmit it. The host checked its token outlives the step (D-07).
+        if ('PENDING' in st and share.get('kaos-state') != 'taken' and WALLET_EXP
                 and time.time() > WALLET_EXP - WALLET_MARGIN_S):
             print('wallet expires within', WALLET_MARGIN_S // 60,
                   'min and the job is still queued - resubmitting with a'
@@ -925,6 +987,13 @@ while True:
                   or {}).get('number')
             print('terminal:', st, 'exit:', rc, flush=True)
             print('job comment:', job.get('comment'), flush=True)
+            if share.get('kaos-state') == 'done':
+                # PRD-1609 D-04: a host ran this step on a shared node and then
+                # cancelled this job; the step's result is in the comment.
+                rc = int(share['rc']) if share.get('rc', '').isdigit() else 1
+                print('ran on a shared node: host job', share.get('host'),
+                      'exit:', share.get('rc'), flush=True)
+                st = ['COMPLETED'] if rc == 0 else ['FAILED']
             if 'FAILED' in st and rc == 231 and resubmits < PULL_RESUBMITS:
                 # A cache-missing pull after a LONG queue wait runs with the
                 # registry token minted at submit time — GCP tokens live 1h,
@@ -1035,6 +1104,17 @@ POD_LOSS_MESSAGES = ("imminent node shutdown|node is shutting down|node is drain
                      "|Pod was rejected|Evicted|evicted|pod deleted|Pod was deleted")
 POD_LOSS_RETRY = ("lastRetry.status == 'Error' or lastRetry.message matches '.*(%s).*'"
                   % POD_LOSS_MESSAGES)
+
+
+def sharing_env(ctx: dict) -> list:
+    """PRD-1609 node sharing, as the operator published it in pipeline-context hpc.*
+    (sharing: on, scope: the project's hash). Nothing is added unless it is on, so a
+    project without sharing renders the waiter exactly as before."""
+    hpc = ctx.get("hpc") or {}
+    if str(hpc.get("sharing") or "") != "on" or not hpc.get("scope"):
+        return []
+    return [{"name": "HPC_SHARING", "value": "on"},
+            {"name": "HPC_SCOPE", "value": str(hpc["scope"])}]
 
 
 def parse_time_limit(value) -> int:
@@ -1310,7 +1390,8 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()},
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
                 {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
-            ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else []),
+            ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else [])
+              + sharing_env(ctx),
         },
         # slurm-job-id plus the union of every routed step's declared outputs
         # (one shared template; each twin fills its own, the rest default).
