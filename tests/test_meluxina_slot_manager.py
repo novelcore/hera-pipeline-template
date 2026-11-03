@@ -311,3 +311,14 @@ def test_memory_is_counted_as_pss(tmp_path):
     used = g["pss_bytes"](str(os.getpid()))
     assert 1 << 20 < used < 1 << 34, used
     assert "smaps_rollup" in code and "Pss:" in code
+
+
+def test_every_step_is_told_its_slot(tmp_path):
+    """PRD-1609 F-05: kaos_lib.runtime reads the step's share of the node from KUBECORE_SLOT_*."""
+    guests = {"101": _job("kaos-%s-wf1-train" % SCOPE,
+                          'echo "$KUBECORE_SLOT_GPUS $KUBECORE_SLOT_CPUS $KUBECORE_SLOT_MEM_GIB $KUBECORE_SLOT_SHARED" > $OUT/101\nexit 0\n',
+                          comment="kaos-commit=bbbbbbb2")}
+    node = Node(tmp_path, guests, mem_mb=491520)
+    rc, log = node.finish()
+    assert rc == 0, log
+    assert (node.out / "101").read_text().split() == ["1", "32", "120", "1"]
