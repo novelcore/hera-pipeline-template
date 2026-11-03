@@ -76,7 +76,7 @@ The WFT is a Crossplane `RepositoryFile` MR with
 `managementPolicies: [Observe, Create, Delete]` + `overwriteOnCreate: false`:
 Crossplane seeds a one-task placeholder **once** and never Updates, so CI's git
 commit of the real WFT is never reverted. ArgoCD `selfHeal` then keeps the live
-WFT equal to what CI committed (direct `kubectl` edits are reverted — everything
+WFT equal to what CI committed (manual changes made on the cluster are reverted — everything
 goes through git, by design).
 
 ## Platform operations

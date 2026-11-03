@@ -16,10 +16,13 @@ your-repo/
 ├── config/                  # THE experiment config tree (all your parameters)
 │   ├── config.yaml          #   defaults list (which group options are default)
 │   ├── experiment.yaml      #   a section of scalar leaves (add your own)
+│   ├── dataset.yaml         #   the `dataset` field: <dataset-repo>@<version>
 │   └── train/optimizer/{sgd,adam,adamw}.yaml     # a config GROUP (example)
-├── kubecore/                # platform-owned helpers (seeded — do not edit)
+├── kubecore/                # platform-owned engine (seeded — do not edit)
+├── tests/, step_tests/      # engine tests, step-code tests (two commands: §15)
 └── steps/
-    ├── hello_world/         # Dockerfile + entry point (your code)
+    ├── dataset_loading/     # pins the run's dataset to one commit
+    ├── hello_world/         # reads the dataset, writes a result (your code)
     └── ...
 ```
 
@@ -135,13 +138,14 @@ Push. The `train-optimizer` dropdown now offers `lion`.
 ## 4. Anatomy of pipeline.py (the whole file)
 
 `pipeline.py` declares structure and nothing else. This is the real,
-complete file from this repo — one example step:
+complete file from this repo — two example steps:
 
 ```python
 from kubecore.authoring import pipeline, step  # platform-owned, do not edit
 
 with pipeline("ml-pipeline") as p:  # platform renames to {app}-pipeline at release
-    hello = step("hello-world", reads=["experiment"])
+    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
 As your pipeline grows you add steps and wire them with `needs=`. An
@@ -179,8 +183,9 @@ Per step:
 
 ## 5. Add a step
 
-> **New here? Read [ADD-A-STEP.md](ADD-A-STEP.md)** — a complete, copy-paste,
-> zero-assumptions walkthrough (every command, every gotcha, how to verify).
+> **New here? Read [Add a step](https://novelcore.github.io/hera-pipeline-template/add-a-step/)**
+> (or [a step that reads the dataset](https://novelcore.github.io/hera-pipeline-template/guide-step-with-data/))
+> in the guide: a complete, copy-paste walkthrough with every command and how to verify it.
 > The version below is the quick reference once you know the shape.
 
 Three small edits — say we add `model-evaluation` after training:
@@ -395,7 +400,7 @@ contains it (you don't declare or read= it, it's just there):
 ```python
 cfg = yaml.safe_load(args.params)
 bucket = cfg["platform"]["checkpoints"]["bucket"]     # e.g. "my-project"
-prefix = cfg["platform"]["checkpoints"]["prefix"]     # "outputs/checkpoints" (the project's outputs branch)
+prefix = cfg["platform"]["checkpoints"]["prefix"]     # "main/checkpoints" (bucket = your app's outputs-<app> repository)
 repo   = cfg["platform"]["lakefs"]["repository"]
 ```
 
@@ -416,16 +421,19 @@ with mlflow.start_run():
     mlflow.log_metric("accuracy", 0.87)
 ```
 
-lakeFS speaks the S3 API (repo = bucket, `ref/path` = key):
+**Datasets and results use kaos-lib** (`kaos_lib`, the platform library from
+[kaos-io/kaos-lib](https://github.com/kaos-io/kaos-lib), installed in your step image at the pinned
+`KAOS_LIB_PACKAGE`; see `docs/write-a-step.md`). A run's
+`dataset` is `<dataset-repo>@<version>`; `dataset-loading` resolves it to a
+commit once and every step reads that commit (`datasets.materialize`, the staged
+copy on MeluXina). Results go to `outputs-<app>` with the run writer `outputs.run(...)`.
+Step images install kaos-lib and copy only `app/`; the vendored `kubecore/` engine
+never goes into a step image.
 
-```python
-import os, boto3
-s3 = boto3.client("s3",
-    endpoint_url=os.environ["LAKEFS_ENDPOINT"],
-    aws_access_key_id=os.environ["LAKEFS_ACCESS_KEY"],
-    aws_secret_access_key=os.environ["LAKEFS_SECRET_KEY"])
-s3.download_file("my-project", "main/dataset.yaml", "/work/dataset.yaml")
-```
+Anything else in lakeFS (a file in a repository, a folder of a dataset) is reached with the
+same package: `datasets.materialize("<repo>@<ref>", prefix="folder/")` downloads a folder of any
+repository at a pinned ref, and `kaos_lib.lakefs.LakeFS.connect()` is the client both use. You
+write no endpoint and no credential: the step's environment has them.
 
 When you run locally, the same `platform` section is filled from a
 local fallback file, so `python -m app.entry --params
@@ -444,10 +452,10 @@ Open the workflow template in the Argo UI, press **Submit**:
   leave untouched follow the group you pick; fields you explicitly
   change win over the group.
 - **Your scalar fields** — every leaf of your tree
-  (`experiment-name`, `train-epochs`, `data-ref`, …), plus dropdowns the
+  (`experiment-name`, `train-epochs`, `dataset`, …), plus dropdowns the
   platform fills live (`cpu-class`/`gpu-class` list this cluster's node
-  classes; `data-ref` is free text — `kubecore-dataset list` shows the
-  datasets that exist) and
+  classes; `dataset` lists `<dataset-repo>@<version>` choices — the
+  datasets of your project, `kaosctl dataset list`) and
   fixed-choice fields it validates (e.g. `data-source`).
 - **Per-step sizing** — `{step}-cpu` / `{step}-mem`.
 - **`config` (ADVANCED)** — normally empty. When non-empty it is an
@@ -556,3 +564,26 @@ that's normal; parameters live in the template, not the images.
 **"Can I put big things (file contents, long lists) in config?"**
 The resolved params.yaml is capped (200KB, checked with a clear error).
 Config is for knobs; bulk data goes through lakeFS/checkpoints (§9).
+
+---
+
+## 15. Running the tests
+
+There are two test commands, on purpose:
+
+```bash
+python -m pytest                                   # the engine: tests/ (the vendored kubecore/)
+pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
+pytest step_tests                                  # step code that imports kaos_lib
+```
+
+That installs exactly the requirement in `KAOS_LIB_PACKAGE` in `steps/*/Dockerfile` (run it from the repo root).
+
+**Why two.** The platform's engine in `kubecore/` (render, compose, enhance; it runs in CI and is
+never in a step image) is imported as `kubecore`; the step code imports kaos-lib as `kaos_lib`. For
+one release kaos-lib also ships a deprecated `kubecore` import shim, so the engine tests keep their
+own command with the repository root first on the path (`python -m pytest`). A step image copies
+only its `app/` folder and installs kaos-lib at the pinned spec.
+
+The step tests use kaos-lib's in-memory lakeFS (`step_tests/fake_lakefs.py`, vendored at the same
+pin), so no network or cluster is needed.

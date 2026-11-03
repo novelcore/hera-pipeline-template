@@ -5,4 +5,5 @@
 defaults:
   - _self_
   - experiment
+  - dataset
   - platform: live # platform-owned group (searchpath); NOT a form surface
