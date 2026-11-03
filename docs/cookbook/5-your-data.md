@@ -14,11 +14,15 @@ this in more detail.
 ## 1. Create it
 
 ```bash
-kaosctl dataset create cats --classes cat,kitten          # yolo layout: images, labels, data.yaml
-kaosctl dataset create notes --layout none                # empty, takes any files
+kaosctl dataset create cats --layout yolo --classes cat,kitten   # yolo layout: images, labels, data.yaml
+kaosctl dataset create notes                                     # no layout: empty, takes any files
 ```
 
+A new dataset has no layout unless you pick one: `--layout yolo` (or any layout from
+`kaosctl layout list`), or `--layout none` to say so.
+
 Or in the browser: lakeFS → **Datasets** → **New dataset** (name, description, layout, classes).
+**No layout** is chosen until you pick one.
 Details: [Create a dataset](../dataset-create.md).
 
 **You should see** `dataset-cats` with `data.yaml`, `images/{train,val,test}/` and
