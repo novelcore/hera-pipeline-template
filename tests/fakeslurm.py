@@ -131,12 +131,18 @@ def srun():
         return n
     n = locked(register)
     env = dict(os.environ, SLURM_STEP_ID=str(n), CUDA_VISIBLE_DEVICES=str(n % 4))
-    proc = subprocess.Popen(cmd, env=env, start_new_session=True)
+    # Like srun's I/O forwarding as seen live: the step's output reaches srun's stdout
+    # only later (here: after the step exits).
+    proc = subprocess.Popen(cmd, env=env, start_new_session=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
 
     def started(st):
         st.setdefault("steps", {})["%s.%d" % (job, n)] = {"name": name, "pid": proc.pid}
     locked(started)
+    forwarded = proc.stdout.read()
     rc = proc.wait()
+    sys.stdout.buffer.write(forwarded)
+    sys.stdout.flush()
 
     def ended(st):
         st["steps"].pop("%s.%d" % (job, n), None)

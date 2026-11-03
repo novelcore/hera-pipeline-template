@@ -218,3 +218,37 @@ def test_the_batch_step_becomes_the_host_only_with_slots():
     assert "if SHARING and int(HPC.get('gpus') or 0) > 0:" in sub
     assert sub.index("KAOS_SLOTS_B64") < sub.index("batch, env = inputs_in_script(batch, env)"), \
         "the slot manager rides in the script, like every input"
+
+
+def test_a_guest_killed_with_its_cancelled_host_is_requeued_not_failed(tmp_path):
+    """Live 2026-11-03 (host 5417697): cancelling the host, Slurm killed the steps before the
+    host's TERM handler ran, and the host recorded its guest's death as `done rc=143`. A run
+    whose host went away must go back to the queue, however Slurm orders its signals."""
+    guests = {"101": _job("kaos-%s-wf1-train" % SCOPE, "sleep 60\n", comment="kaos-commit=bbbbbbb2")}
+    node = Node(tmp_path, guests, own_body="sleep 60\n")
+    assert node.wait_for(lambda j: "kaos-state=taken" in j["101"]["comment"] and j["101"]["held"])
+    end = time.time() + 20   # both steps (own + guest) are registered by srun
+    while len(json.loads(node.state.read_text()).get("steps", {})) < 2 and time.time() < end:
+        time.sleep(0.1)
+    data = json.loads(node.state.read_text())
+    assert len(data.get("steps", {})) == 2, data.get("steps")
+    data["jobs"]["100"]["state"] = "CANCELLED"          # scancel of the host job ...
+    node.state.write_text(json.dumps(data))
+    for step in data.get("steps", {}).values():           # ... and Slurm TERMs its steps first
+        os.killpg(step["pid"], signal.SIGTERM)
+    node.finish()
+    j = node.jobs()["101"]
+    assert j["comment"] == "kaos-commit=bbbbbbb2 kaos-state=requeued attempt=2", j
+    assert j["state"] == "PENDING" and not j["held"]
+
+
+def test_a_guests_own_output_is_on_disk_when_its_step_reads_it(tmp_path):
+    """Live 2026-11-03: fail() tails slurm-<job>.out, but srun forwards a step's output
+    asynchronously, so the hosted error tail was empty. The step writes its log directly."""
+    guests = {"101": _job("kaos-%s-wf1-train" % SCOPE,
+                          "echo boom-from-the-step\ntail -c 200 $HOME/slurm-$KAOS_JOB_ID.out > $OUT/tail\nexit 0\n",
+                          comment="kaos-commit=bbbbbbb2")}
+    node = Node(tmp_path, guests)
+    rc, log = node.finish()
+    assert rc == 0, log
+    assert "boom-from-the-step" in (node.out / "tail").read_text()

@@ -334,6 +334,12 @@ if sys.argv[1:2] == ['--step']:
     env = dict((k, v) for k, v in os.environ.items() if STEP_ENV.match(k))
     env.update(KAOS_IN_STEP='1', KAOS_JOB_ID=job)
     os.chdir(env.get('HOME') or '/')
+    if len(sys.argv) > 4:
+        # The step writes its own log: srun forwards output late, and fail() reads
+        # this file for the job's comment (live 2026-11-03: the hosted tail was empty).
+        fd = os.open(sys.argv[4], os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o640)
+        os.dup2(fd, 1)
+        os.dup2(fd, 2)
     os.execve('/bin/bash', ['bash', '-l', script], env)
 
 ME = os.environ['SLURM_JOB_ID']
@@ -438,7 +444,7 @@ def launch(slot, job, script, log_to, limit=None):
     cmd = ['srun', '--exact', '-N1', '-n1', '--gpus=1', '-c', str(CPUS), '--job-name', 'kaos-' + job]
     if limit:
         cmd.append('--time=%d' % max(1, (limit + 59) // 60))
-    cmd += ['python3', sys.argv[0], '--step', script, job]
+    cmd += ['python3', sys.argv[0], '--step', script, job] + ([log_to] if log_to else [])
     out = open(log_to, 'a') if log_to else None
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT if out else None)
     return proc
@@ -520,6 +526,15 @@ def take(slot, job, name, limit):
                 pass
 
 
+def requeue(s):
+    # Back to the queue with the next attempt number, still leasing its dataset.
+    if q(s['job'], '%T') == 'PENDING':
+        c = comment(s['job'])
+        set_comment(s['job'], '%skaos-state=requeued attempt=%d' % (lease(c), s['attempt'] + 1))
+        run('scontrol', 'release', s['job'])
+        log('requeued', s['job'], 'as attempt', s['attempt'] + 1)
+
+
 def finish(slot, rc):
     global own_rc
     s = slots.pop(slot)
@@ -534,6 +549,12 @@ def finish(slot, rc):
     if q(job, '%T') != 'PENDING':
         log('guest', job, 'was stopped; its step ended rc=%d' % rc)
         return
+    if q(ME, '%T') != 'RUNNING':
+        # The host itself is going away (cancelled, out of time): Slurm may end the
+        # steps before this program's TERM handler runs (live 2026-11-03, host
+        # 5417697). The guest's run did not fail; it goes back to the queue.
+        requeue(s)
+        return
     c = comment(job)
     set_comment(job, '%skaos-state=done rc=%d host=%s%s%s' % (lease(c), rc, ME, reason, err_part(c)))
     run('scancel', job)
@@ -544,11 +565,8 @@ def requeue_all(signum, frame):
     # Host cancelled or out of time (Slurm sends TERM, KILL 30 s later): every guest
     # goes back to the queue with the next attempt number, still leasing its dataset.
     for s in list(slots.values()):
-        if s['job'] != ME and q(s['job'], '%T') == 'PENDING':
-            c = comment(s['job'])
-            set_comment(s['job'], '%skaos-state=requeued attempt=%d' % (lease(c), s['attempt'] + 1))
-            run('scontrol', 'release', s['job'])
-            log('requeued', s['job'])
+        if s['job'] != ME:
+            requeue(s)
     sys.exit(own_rc if own_rc is not None else 143)
 
 
@@ -578,6 +596,11 @@ while True:
         if s['job'] != ME and q(s['job'], '%T') != 'PENDING' and s.get('sid'):
             log('guest', s['job'], 'stopped by its run: cancelling step', s['sid'])
             run('scancel', s['sid'])
+    if q(ME, '%T') != 'RUNNING':
+        # Cancelled or out of time: take nothing new; leave once the last step is gone.
+        if not slots:
+            sys.exit(own_rc if own_rc is not None else 143)
+        continue
     free = [i for i in range(GPUS) if i not in slots]
     if free:
         rc, out = run('squeue', '-u', os.environ.get('USER', ''), '-h', '-t', 'PENDING',
