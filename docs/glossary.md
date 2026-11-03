@@ -50,7 +50,7 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **Results.** What your steps write: one commit per step per run in your app's `outputs-<app>` repository.
 
-**Storage.** The place where files and datasets are kept, reached by your steps through the `kubecore` package.
+**Storage.** The place where files and datasets are kept, reached by your steps through kaos-lib (`kaos_lib`).
 
 **Submit.** The button on the run page that starts a run.
 

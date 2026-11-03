@@ -1,7 +1,7 @@
 """dataset-loading: pin the run's dataset to one commit.
 
 The run picked `dataset` = `<dataset-repo>@<version>` (a dropdown on the submit
-form). This step resolves it ONCE, with the kubecore package, to a lakeFS commit and
+form). This step resolves it ONCE, with kaos-lib, to a lakeFS commit and
 records it as the step output `dataset-info` (`dataset_commit`). Every later step takes
 that output (`--dataset-info`) and reads exactly that commit, so a `latest` that moves
 during the run never changes what the run trains on.
@@ -15,7 +15,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import yaml
-from kubecore import datasets
+from kaos_lib import datasets
 
 # The config sections this step reads (must exist in the config/ tree).
 READS = ["dataset"]

@@ -33,13 +33,13 @@ message that says what is wrong and what exists.
 
 ## Templates are optional
 
-`kubecore dataset create <name>` starts a repository from a **format template**. The only one
+`kaosctl dataset create <name>` starts a repository from a **format template**. The only one
 today is `yolo` (YOLO, images + labels: `data.yaml`, `images/`, `labels/`); a template is the
 starter layout plus the checks `validate` and `push` run.
 
 You can do without it:
 
-- `kubecore dataset create <name> --template none` makes an empty `dataset-<name>`.
+- `kaosctl dataset create <name> --template none` makes an empty `dataset-<name>`.
 - A repository named `dataset-<something>` created by hand in lakeFS becomes a dataset after
   its first commit.
 - A repository with **no template label validates nothing**; `push` takes the files as they are.
@@ -51,14 +51,14 @@ You can do without it:
 ## The commands
 
 ```bash
-kubecore login
-kubecore dataset create <name> [--classes a,b] [--template yolo|none]
-kubecore dataset list
-kubecore dataset versions <repo>
-kubecore dataset pull <repo>@<ref> [dir] [--prefix folder/]
-kubecore dataset validate <dir> --format yolo
-kubecore dataset push <dir> <repo> -m "message" [--format yolo]
-kubecore dataset release <repo>
+kaosctl login
+kaosctl dataset create <name> [--classes a,b] [--template yolo|none]
+kaosctl dataset list
+kaosctl dataset versions <repo>
+kaosctl dataset pull <repo>@<ref> [dir] [--prefix folder/]
+kaosctl dataset validate <dir> --format yolo
+kaosctl dataset push <dir> <repo> -m "message" [--format yolo]
+kaosctl dataset release <repo>
 ```
 
 Every command prints the next step and the link to what it made. Exit codes: 0 ok, 1 something

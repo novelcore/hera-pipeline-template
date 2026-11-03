@@ -1,6 +1,6 @@
 # Write a step that uses a dataset
 
-A step that trains or analyses data does three things with the `kubecore` package: reads the
+A step that trains or analyses data does three things with kaos-lib (`kaos_lib`): reads the
 dataset the run pinned, writes its results, and (for long steps) saves progress so a retry
 resumes. The template's `steps/hello_world/` is a working example; this page explains it.
 
@@ -21,7 +21,7 @@ pick itself: `latest` can move during a run.
 In `steps/my_step/Dockerfile`, copy the lines from `steps/hello_world/Dockerfile`:
 
 ```dockerfile
-ARG KAOS_LIB_PACKAGE="<the value in steps/hello_world/Dockerfile>"
+ARG KAOS_LIB_PACKAGE="<the requirement the template pins>"   # the platform CI passes its own
 RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ```
@@ -31,14 +31,13 @@ chose through it, so your new step moves with the others ([Package versions and
 upgrades](kaos-lib-versions.md)). A step without it keeps the default forever.
 
 Copy only `app/`. Do not copy the template's `kubecore/` folder into a step image: it is the
-platform's engine, it has the same import name as the package, and the two must never be on
-the same path.
+platform's engine, not something a step uses.
 
 ## 3. Read the dataset
 
 ```python
 import argparse, json
-from kubecore import datasets
+from kaos_lib import datasets
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--params", required=True)
@@ -58,7 +57,7 @@ environment: you write none of that.
 
 ```python
 import os
-from kubecore import outputs
+from kaos_lib import outputs
 
 app = os.environ["CHECKPOINT_BUCKET"]        # outputs-<app>, set by the platform
 run = os.environ["KUBECORE_RUN_ID"]          # the Argo run name
@@ -101,7 +100,6 @@ writes its results with the same run writer.
 
 ## 7. Test it without a cluster
 
-Step code that imports `kubecore` runs in its own test command, apart from the engine tests,
-because of the shared import name: see `step_tests/README.md` and DEVELOPER.md §15. The package
-ships an in-memory lakeFS (`packages/kubecore/tests/fake_lakefs.py`) that the template's step tests
-use.
+Step code that imports `kaos_lib` runs in its own test command, apart from the engine tests: see
+`step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS,
+vendored as `step_tests/fake_lakefs.py`.
