@@ -22,7 +22,6 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | no **New pipeline**, or the project is not offered | the project cannot host an ML pipeline yet; ask a project admin |
 | stuck on **Awaiting first build** | the build was not triggered; check the repository and its `dev` branch exist, then ask your platform contact |
 | **Build failed** | **View run** opens the build in Argo; read the failing step |
-| the build card tells you to run `scripts/upload-dataset.py` | that script is gone; use `kaosctl dataset push` ([chapter 5](5-your-data.md)) |
 
 ## kaosctl
 
