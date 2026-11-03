@@ -123,13 +123,19 @@ Writing a step that reads a dataset and writes results: [docs/write-a-step.md](d
 
 ## The `kubecore` package
 
-`packages/kubecore/` is the Python package behind all of this. Install it on your
-computer inside a virtual environment, from this repository, at the commit your step
-images use (`KUBECORE_PKG_COMMIT` in `steps/*/Dockerfile`):
+`packages/kubecore/` is the Python package behind all of this (kaos-lib, still named
+`kubecore` until its first release). The platform picks the
+version your step images install, inside the range in `.kaos/compat.yaml`, and passes
+it to every step Dockerfile as `KAOS_LIB_PACKAGE`. A version outside the range arrives as a
+pull request on `kaos-lib/bump-<version>`: see
+[docs/kaos-lib-versions.md](docs/kaos-lib-versions.md).
+
+Install it on your computer inside a virtual environment, with the requirement in
+`KAOS_LIB_PACKAGE` of `steps/hello_world/Dockerfile`:
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install "git+https://github.com/novelcore/hera-pipeline-template@<commit>#subdirectory=packages/kubecore"
+pip install "kubecore[zitadel] @ https://github.com/novelcore/hera-pipeline-template/archive/<commit>.zip#subdirectory=packages/kubecore"
 kubecore login                    # opens your browser once
 ```
 
