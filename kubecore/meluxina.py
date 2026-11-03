@@ -327,7 +327,7 @@ import os, re, signal, subprocess, sys, time
 # A step's environment: Slurm's own variables, the GPU it was given and the login
 # basics. Nothing of the host's inputs reaches a guest; each script exports its own.
 STEP_ENV = re.compile(r'^(SLURM_|CUDA_VISIBLE_DEVICES$|GPU_DEVICE_ORDINAL$|ROCR_VISIBLE_DEVICES$'
-                      r'|PATH$|HOME$|USER$|LANG$|LC_)')
+                      r'|KUBECORE_SLOT_|PATH$|HOME$|USER$|LANG$|LC_)')
 
 if sys.argv[1:2] == ['--step']:
     import pwd
@@ -456,7 +456,12 @@ def launch(slot, job, script, log_to, limit=None):
         cmd.append('--time=%d' % max(1, (limit + 59) // 60))
     cmd += ['python3', sys.argv[0], '--step', script, job] + ([log_to] if log_to else [])
     out = open(log_to, 'a') if log_to else None
-    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT if out else None)
+    # PRD-1609 F-05: the step's share of the node, for kaos_lib.runtime (context().slot,
+    # usable_cpus()): the GPU is already the only one it sees; cores and memory are not hidden.
+    env = dict(os.environ, KUBECORE_SLOT_GPUS='1', KUBECORE_SLOT_CPUS=str(CPUS),
+               KUBECORE_SLOT_MEM_GIB=str(SHARE >> 30), KUBECORE_SLOT_SHARED='1')
+    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT if out else None,
+                            env=env)
     return proc
 
 
