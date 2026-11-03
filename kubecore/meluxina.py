@@ -95,7 +95,7 @@ import base64, json, os, re, shlex, signal, subprocess, sys, threading, time, ur
 # endpoint (bearer through oauth2-proxy — the in-cluster S3-gateway/manifest
 # streaming path is blocked by the SSO front off-cluster) into a Lustre cache
 # keyed by commit, parallel + resumable (size-matched files are skipped,
-# .part rename is atomic). Rides to the node base64-encoded in the job
+# per-writer part-file renamed atomically). Rides to the node base64-encoded in the job
 # environment.
 STAGEIN = """
 import concurrent.futures, json, os, pathlib, sys, urllib.parse, urllib.request
@@ -143,16 +143,22 @@ def fetch(o):
     if p.exists() and p.stat().st_size == o.get('size_bytes'):
         return 0
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = str(p) + '.part'
-    with get(base + '/refs/' + commit + '/objects?'
-             + urllib.parse.urlencode({'path': o['path']})) as r:
-        with open(tmp, 'wb') as f:
-            while True:
-                b = r.read(1 << 20)
-                if not b:
-                    break
-                f.write(b)
-    os.replace(tmp, p)
+    # PRD-1609 F-02: one part-file per writer — another job may stage the same file.
+    tmp = '%s.part-%s-%d' % (p, os.environ.get('SLURM_JOB_ID', ''), os.getpid())
+    try:
+        with get(base + '/refs/' + commit + '/objects?'
+                 + urllib.parse.urlencode({'path': o['path']})) as r:
+            with open(tmp, 'wb') as f:
+                while True:
+                    b = r.read(1 << 20)
+                    if not b:
+                        break
+                    f.write(b)
+        os.replace(tmp, p)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
     return 1
 with concurrent.futures.ThreadPoolExecutor(8) as ex:
     n = sum(ex.map(fetch, objs))
@@ -699,13 +705,19 @@ def submit():
         ' [ -n "$REG_TOKEN" ] && export'
         ' APPTAINER_DOCKER_USERNAME=oauth2accesstoken'
         ' APPTAINER_DOCKER_PASSWORD=$REG_TOKEN;; esac',
-        '  apptainer pull "$SIF" docker://$IMAGE_REF || fail 231',
+        # PRD-1609 F-02: pull to a name only this job writes, then rename it into
+        # the shared cache (atomic on Lustre). Jobs, and steps sharing a node,
+        # never run a half-written SIF; an image another job finished first is kept.
+        '  SIF_TMP=$SIF.part-$SLURM_JOB_ID-$$',
+        '  apptainer pull "$SIF_TMP" docker://$IMAGE_REF || { rm -f "$SIF_TMP"; fail 231; }',
+        '  mv -n "$SIF_TMP" "$SIF"; rm -f "$SIF_TMP"',
         'fi',
         # PRD-1541: the image and download caches share the allocation's scratch
         # quota with the dataset cache and only ever grew. This user's entries
         # unused for 14 days go: SIFs, Apptainer's layer cache, in-job
         # downloads. What this job uses was touched just above.
         'find $SCR/sif-cache -maxdepth 1 -name "*.sif" -user "$USER" -mtime +14 -delete 2>/dev/null',
+        'find $SCR/sif-cache -maxdepth 1 -name "*.sif.part-*" -user "$USER" -mmin +720 -delete 2>/dev/null',
         'find $SCR/data-cache -mindepth 3 -maxdepth 3 -name .complete -user "$USER" -mtime +14'
         ' -printf "%h\\n" 2>/dev/null | xargs -r rm -rf',
         'apptainer cache clean --force --days 14 >/dev/null 2>&1',
