@@ -61,10 +61,10 @@ class _Stager:
 
 
 def _twin(monkeypatch, tmp_path, lakefs, stager, key=True):
-    summary = json.dumps({"commit": COMMIT, "ref": "main"})
+    summary = json.dumps({"dataset_commit": COMMIT})
     for k, v in {"SLURM_TOKEN": "t", "WF_UID": "u", "STEP_NAME": "s", "IMAGE_REF": "r/x:t",
-                 "STEP_COMMAND": json.dumps(["python", "-m", "train", "--manifest-summary", summary]),
-                 "DATASET_REPO": "poulaki", "DATASET_REF": "main",
+                 "STEP_COMMAND": json.dumps(["python", "-m", "train", "--dataset-info", summary]),
+                 "DATASET": "dataset-poulaki@latest",
                  "LAKEFS_EXTERNAL_URL": "https://lakefs.example/",
                  "HPC_USER": "u1", "HPC_ACCOUNT": "p1", "HPC_SCRATCH": "/s", "HPC_HOME": "/h"}.items():
         monkeypatch.setenv(k, v)
@@ -86,7 +86,7 @@ def _stage_call(stager):
 
 
 def test_first_copy_streams_every_dataset_object(monkeypatch, tmp_path):
-    lakefs = _LakeFS({"dataset/data.yaml": 4, "dataset/images/a.jpg": 10, "checkpoints/x.pt": 99})
+    lakefs = _LakeFS({"data.yaml": 4, "images/a.jpg": 10, "README.md": 99})
     stager = _Stager({"ready": False, "base": None})
     g = _twin(monkeypatch, tmp_path, lakefs, stager)
     assert g["stage_dataset"]().endswith(COMMIT)
@@ -95,40 +95,40 @@ def test_first_copy_streams_every_dataset_object(monkeypatch, tmp_path):
     assert words[words.index("--need-bytes") + 1] == 14 and words[words.index("--need-files") + 1] == 2
     assert records[0] == {"op": "auth", "authorization": "Bearer wallet-jwt"}
     fetched = {r["path"]: r for r in records if r["op"] == "fetch"}
-    assert set(fetched) == {"dataset/data.yaml", "dataset/images/a.jpg"}, "only the dataset"
-    assert fetched["dataset/images/a.jpg"]["url"] == (
-        "https://lakefs.example/api/v1/repositories/poulaki/refs/%s/objects?path=dataset%%2Fimages%%2Fa.jpg"
+    assert set(fetched) == {"data.yaml", "images/a.jpg"}, "only the dataset"
+    assert fetched["images/a.jpg"]["url"] == (
+        "https://lakefs.example/api/v1/repositories/dataset-poulaki/refs/%s/objects?path=images%%2Fa.jpg"
         % COMMIT)
-    assert records[-1] == {"op": "end", "files": 2, "bytes": 14, "ref": "main", "prefix": "dataset/"}
+    assert records[-1] == {"op": "end", "files": 2, "bytes": 14, "ref": "main", "prefix": ""}
 
 
 def test_delta_lists_only_the_two_dot_diff_against_the_base(monkeypatch, tmp_path):
-    lakefs = _LakeFS({"dataset/a.jpg": 1}, diff=[
-        {"type": "added", "path": "dataset/new.jpg", "size_bytes": 5},
-        {"type": "changed", "path": "dataset/a.jpg", "size_bytes": 7},
-        {"type": "removed", "path": "dataset/gone.jpg", "size_bytes": 3}])
-    stager = _Stager({"ready": False, "base": BASE, "base_files": 10, "base_prefix": "dataset/"})
+    lakefs = _LakeFS({"images/a.jpg": 1}, diff=[
+        {"type": "added", "path": "images/new.jpg", "size_bytes": 5},
+        {"type": "changed", "path": "images/a.jpg", "size_bytes": 7},
+        {"type": "removed", "path": "images/gone.jpg", "size_bytes": 3}])
+    stager = _Stager({"ready": False, "base": BASE, "base_files": 10, "base_prefix": ""})
     g = _twin(monkeypatch, tmp_path, lakefs, stager)
     assert g["stage_dataset"]()
     words, records = _stage_call(stager)
     assert words[words.index("--base") + 1] == BASE
     assert words[words.index("--need-files") + 1] == 2 and words[words.index("--need-bytes") + 1] == 12
-    assert {"op": "delete", "path": "dataset/gone.jpg"} in records
+    assert {"op": "delete", "path": "images/gone.jpg"} in records
     assert records[-1]["files"] == 10 + 1 - 1, "base count + added - removed"
     assert any("/refs/%s/diff/%s?" % (BASE, COMMIT) in u and "type=two_dot" in u for u in lakefs.urls)
-    assert not any("/objects/ls?" in u and "prefix=dataset%2F&" not in u for u in lakefs.urls)
+    assert not any("/objects/ls?" in u for u in lakefs.urls), "a delta never lists the whole commit"
 
 
 def test_a_base_with_another_layout_is_not_used(monkeypatch, tmp_path):
-    lakefs = _LakeFS({"dataset/a.jpg": 1})
-    stager = _Stager({"ready": False, "base": BASE, "base_files": 10, "base_prefix": ""})
+    lakefs = _LakeFS({"images/a.jpg": 1})
+    stager = _Stager({"ready": False, "base": BASE, "base_files": 10, "base_prefix": "dataset/"})
     g = _twin(monkeypatch, tmp_path, lakefs, stager)
     assert g["stage_dataset"]()
     assert "--base" not in _stage_call(stager)[0]
 
 
 def test_a_ready_copy_is_never_listed_again(monkeypatch, tmp_path):
-    lakefs = _LakeFS({"dataset/a.jpg": 1})
+    lakefs = _LakeFS({"images/a.jpg": 1})
     stager = _Stager({"ready": True})
     g = _twin(monkeypatch, tmp_path, lakefs, stager)
     assert g["stage_dataset"]().endswith(COMMIT)
@@ -136,7 +136,7 @@ def test_a_ready_copy_is_never_listed_again(monkeypatch, tmp_path):
 
 
 def test_retry_resumes_and_no_space_gives_up(monkeypatch, tmp_path):
-    lakefs = _LakeFS({"dataset/a.jpg": 1})
+    lakefs = _LakeFS({"images/a.jpg": 1})
     stager = _Stager({"ready": False, "base": None}, stage_rcs=[75, 0])
     g = _twin(monkeypatch, tmp_path, lakefs, stager)
     assert g["stage_dataset"](), "exit 75 (dropped session, busy lock) is retried"
@@ -195,3 +195,28 @@ def test_twin_mounts_the_staging_key_read_only():
     assert vol["secret"] == {"secretName": "meluxina-staging", "defaultMode": 0o400, "optional": True}
     assert {"name": "meluxina-staging", "mountPath": "/etc/meluxina-staging", "readOnly": True} \
         in mr["container"]["volumeMounts"]
+
+
+def test_the_first_step_pins_the_commit_by_resolving_the_dataset_ref(monkeypatch, tmp_path):
+    """No upstream recorded a dataset_commit: the twin resolves it, so the stager
+    is keyed by repository and commit even for the first step of a run."""
+    class Resolving(_LakeFS):
+        def __call__(self, req, timeout=0):
+            url = req.full_url if hasattr(req, "full_url") else req
+            if "/commits?" in url:
+                self.urls.append(url)
+                return io.BytesIO(json.dumps({"results": [{"id": COMMIT}]}).encode())
+            return super().__call__(req, timeout)
+    lakefs = Resolving({"images/a.jpg": 1})
+    stager = _Stager({"ready": False, "base": None})
+    g = _twin(monkeypatch, tmp_path, lakefs, stager)
+    monkeypatch.setenv("STEP_COMMAND", json.dumps(["python", "-m", "first"]))
+    monkeypatch.setenv("DATASET", "dataset-poulaki@v3")
+    assert g["stage_dataset"]().endswith(COMMIT)
+    assert any("/repositories/dataset-poulaki/refs/v3/commits?amount=1" in u for u in lakefs.urls)
+    assert g["PINNED"] == COMMIT
+
+
+def test_the_job_gets_the_staged_copy_through_the_package_variable():
+    src = MELUXINA_SUBMIT_CODE
+    assert "APPTAINERENV_KUBECORE_STAGED_DIR=/kubecore/dataset" in src

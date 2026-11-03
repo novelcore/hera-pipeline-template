@@ -40,6 +40,10 @@ Operational notes baked in from the live F-01/F-02 shakedown (2026-08):
 import json
 import re
 
+from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
+from kubecore.kaos_lib_support import support_value
+from kubecore.outputs_repo import OUTPUTS_REF, checkpoint_prefix, outputs_repo
+
 # The submit/poll program the meluxina-run container executes via
 # `python3 -c`. Plain string — no Argo tags inside (all run-time inputs
 # arrive via env), so it survives every templating layer verbatim.
@@ -47,14 +51,25 @@ MELUXINA_SUBMIT_CODE = r'''
 STAGEOUT = r"""
 # F-05 stage-out: the step's declared outputs (/work/output/<name>.json,
 # what Argo would have read as outputs.parameters in-cluster) go to lakeFS
-# at hpc-outputs/{wf-uid}/{step}/ on the project's outputs branch (the run's
-# dataset branch on a project without one); the waiter fetches them back
-# into the twin's outputs so downstream steps see real values.
-import json, os, pathlib, urllib.parse, urllib.request
+# at hpc-outputs/{wf-uid}/{step}/ on a hand-off branch of the app's outputs
+# repository (outputs-<app>); the waiter fetches them back into the twin's outputs so
+# downstream steps see real values, then deletes the branch. They never touch `main`:
+# lakeFS refuses a merge into a branch with uncommitted objects, and the step's real
+# results (checkpoints) are written by the step itself, inside the image, with the
+# kubecore package's run writer (branch run-<run>-<kind>, merged into main).
+import json, os, pathlib, urllib.error, urllib.parse, urllib.request
 base = os.environ['LAKEFS_ENDPOINT'].rstrip('/') + '/api/v1'
 H = {'Authorization': 'Bearer ' + os.environ['LAKEFS_BEARER_TOKEN']}
-repo = os.environ['DATASET_REPO']
-branch = os.environ.get('OUTPUTS_BRANCH') or os.environ.get('DATASET_REF') or 'main'
+repo = os.environ['OUTPUTS_REPO']
+branch = 'hpc-%s-%s' % (os.environ['WF_UID'], os.environ['STEP_NAME'])
+try:
+    urllib.request.urlopen(urllib.request.Request(
+        base + '/repositories/%s/branches' % repo, method='POST',
+        data=json.dumps({'name': branch, 'source': os.environ.get('OUTPUTS_REF') or 'main'}).encode(),
+        headers=dict(H, **{'Content-Type': 'application/json'})), timeout=60).read()
+except urllib.error.HTTPError as e:
+    if e.code != 409:   # 409: a retry of this stage-out created it already
+        raise
 prefix = 'hpc-outputs/%s/%s/' % (os.environ['WF_UID'], os.environ['STEP_NAME'])
 out = pathlib.Path(os.environ['KAOS_WORK']) / 'output'
 for name in [n for n in os.environ.get('STEP_OUTPUTS', '').split(',') if n]:
@@ -71,12 +86,12 @@ for name in [n for n in os.environ.get('STEP_OUTPUTS', '').split(',') if n]:
     urllib.request.urlopen(req, timeout=120).read()
     print('stage-out:', name, len(data), 'bytes ->', prefix, flush=True)
 """
-import base64, json, os, shlex, signal, subprocess, sys, threading, time, urllib.parse, urllib.request
+import base64, json, os, re, shlex, signal, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 # F-04 stage-in, run ON the compute node (system python3, stdlib only):
 # take the commit dataset-loading pinned (DATASET_COMMIT) or resolve
-# ref -> commit, download the dataset/ folder of that version (the whole ref
-# only for data uploaded before the dataset/ layout) from the lakeFS PUBLIC
+# ref -> commit, download the dataset (data.yaml, images/, labels/ at the root of
+# the dataset repository) of that version from the lakeFS PUBLIC
 # endpoint (bearer through oauth2-proxy — the in-cluster S3-gateway/manifest
 # streaming path is blocked by the SSO front off-cluster) into a Lustre cache
 # keyed by commit, parallel + resumable (size-matched files are skipped,
@@ -102,6 +117,7 @@ dest = pathlib.Path(os.environ['DATASET_CACHE']) / REPO / commit
 open(os.environ['DATASET_DIRFILE'], 'w').write(str(dest))
 if (dest / '.complete').exists():
     (dest / '.complete').touch()            # last use, for the job's cache cleanup
+    (dest / '.kaos-commit').write_text(commit)  # the kubecore consumer checks it
     print('stage-in: cache hit', dest, flush=True)
     sys.exit(0)
 def ls(prefix):
@@ -117,9 +133,10 @@ def ls(prefix):
         if not pg.get('has_more'):
             return objs
         after = pg.get('next_offset') or ''
-# Only the dataset: the branch may also hold other files (checkpoints of
-# older runs). Data uploaded before the dataset/ layout sits at the root.
-objs = ls('dataset/') or ls('')
+# Only the dataset: the repository root may also hold other files (README,
+# notes) the steps never read.
+objs = [o for o in ls('') if o['path'] == 'data.yaml'
+        or o['path'].split('/', 1)[0] in ('images', 'labels')]
 print('stage-in:', len(objs), 'objects @', commit[:12], flush=True)
 def fetch(o):
     p = dest / o['path']
@@ -140,6 +157,7 @@ def fetch(o):
 with concurrent.futures.ThreadPoolExecutor(8) as ex:
     n = sum(ex.map(fetch, objs))
 (dest / '.complete').touch()
+(dest / '.kaos-commit').write_text(commit)   # the kubecore consumer checks it
 print('stage-in: downloaded', n, 'of', len(objs), '->', dest, flush=True)
 """
 
@@ -337,23 +355,53 @@ cmd = ' '.join(shlex.quote(t) for t in json.loads(
 
 
 def pinned_commit():
-    """The lakeFS commit dataset-loading resolved. It rides in this step's own
-    command, already pair-aware: dataset-loading's --manifest-summary
-    ({commit}), or model-training's --training-result ({dataset_commit}) for
-    the steps after training. So the HPC copy stages exactly what the
-    in-cluster steps read. "" when neither carries one (older step code)."""
+    """The lakeFS commit an upstream step recorded as `dataset_commit` in a JSON
+    output that rides in this step's own command (e.g. --training-result,
+    --dataset-info). The HPC copy then stages exactly what the in-cluster steps
+    read. "" when no argument carries one (the first step: see resolve_commit)."""
     toks = json.loads(os.environ.get('STEP_COMMAND') or '[]', strict=False)
-    for flag, value in zip(toks, toks[1:]):
-        key = {'--manifest-summary': 'commit',
-               '--training-result': 'dataset_commit'}.get(flag)
-        if key:
-            try:
-                commit = str(json.loads(value).get(key) or '')
-            except (ValueError, AttributeError):
-                commit = ''
-            if commit:
-                return commit
+    for tok in toks:
+        if not (isinstance(tok, str) and tok.lstrip().startswith('{')):
+            continue
+        try:
+            commit = str(json.loads(tok).get('dataset_commit') or '')
+        except (ValueError, AttributeError):
+            continue
+        if commit:
+            return commit
     return ''
+
+
+def dataset_coords():
+    """(repo, ref) of the run's `dataset` parameter (`<dataset-repo>@<version>`):
+    the dataset repository and the lakeFS ref to resolve when no commit was
+    pinned (`latest` is the head of `main`). ('', '') when the pipeline has no
+    `dataset` parameter (the batch then runs the step data-less)."""
+    value = (os.environ.get('DATASET') or '').strip()
+    if not value:
+        return '', ''
+    repo, sep, version = value.partition('@')
+    if not (sep and re.match(r'^dataset-[a-z0-9][a-z0-9-]*$', repo)
+            and re.match(r'^(latest|v[0-9]+)$', version)):
+        print('dataset must be <dataset-repo>@<version> (e.g. '
+              'dataset-default@latest), got %r' % value, flush=True)
+        sys.exit(1)
+    return repo, ('main' if version == 'latest' else version)
+
+
+def resolve_commit(repo, ref, lakefs, wallet):
+    """ref -> commit for a first step that has no upstream pin. The commit log
+    (amount=1) is the proven endpoint: GET /refs/{ref} does not exist on our
+    lakeFS version. Tags and branches both work as {ref}."""
+    url = (lakefs + '/api/v1/repositories/' + urllib.parse.quote(repo, safe='')
+           + '/refs/' + urllib.parse.quote(ref, safe='') + '/commits?amount=1')
+    page = json.load(urllib.request.urlopen(urllib.request.Request(
+        url, headers={'Authorization': 'Bearer ' + wallet}), timeout=60))
+    return page['results'][0]['id']
+
+
+PINNED = ''   # the commit staged for this run (upstream pin, else resolved here)
+
 
 # PRD-HPC-1541 F-03: stage the pinned dataset commit into the project's Lustre
 # cache from a MeluXina LOGIN node before the GPU job is submitted, so the job
@@ -362,7 +410,7 @@ def pinned_commit():
 # forced-command key that can run nothing else (Secret meluxina-staging: key +
 # verified host pin). The stager names a base (its newest ready commit of the
 # repo); the pod lists only the lakeFS diff base..commit, or the whole
-# dataset/ for a first copy, and streams one JSON line per file. Unchanged
+# dataset for a first copy, and streams one JSON line per file. Unchanged
 # files are hard links of the base. Bytes come from the lakeFS API with the
 # wallet bearer (sent once on stdin, held in memory only) until presigned URLs
 # are enabled (F-05). Any failure returns '' and the job stages in-job as
@@ -389,6 +437,12 @@ def lakefs_pages(url, wallet, params):
         after = pg.get('next_offset') or ''
 
 
+def is_dataset_path(path):
+    # The YOLO layout the steps read: data.yaml, images/, labels/ at the
+    # root of the dataset repository. README and notes are not staged.
+    return path == 'data.yaml' or path.split('/', 1)[0] in ('images', 'labels')
+
+
 def stage_plan(api, commit, base, prefix, wallet):
     # (kind, path, size) per file the stager applies: the two-dot diff against
     # the base (three-dot would be wrong when the base is not an ancestor), or
@@ -398,10 +452,12 @@ def stage_plan(api, commit, base, prefix, wallet):
                               {'prefix': prefix, 'type': 'two_dot'}):
             if d['type'] not in ('added', 'changed', 'removed'):
                 raise ValueError('unexpected diff entry %s for %s' % (d['type'], d['path']))
-            yield d['type'], d['path'], int(d.get('size_bytes') or 0)
+            if is_dataset_path(d['path']):
+                yield d['type'], d['path'], int(d.get('size_bytes') or 0)
     else:
         for o in lakefs_pages(api + '/refs/%s/objects/ls' % commit, wallet, {'prefix': prefix}):
-            yield 'added', o['path'], int(o.get('size_bytes') or 0)
+            if is_dataset_path(o['path']):
+                yield 'added', o['path'], int(o.get('size_bytes') or 0)
 
 
 def stager(words, feed=None):
@@ -466,10 +522,8 @@ def stage_once(repo, ref, commit, lakefs, wallet):
         print('stage: cache hit', st['path'], flush=True)
         return st['path'], False
     api = lakefs + '/api/v1/repositories/' + urllib.parse.quote(repo, safe='')
-    # Only the dataset: the branch may also hold other files. Data uploaded
-    # before the dataset/ layout sits at the root (same rule as the stage-in).
-    prefix = 'dataset/' if next(lakefs_pages(api + '/refs/%s/objects/ls' % commit, wallet,
-                                             {'prefix': 'dataset/'}), None) else ''
+    # The dataset sits at the repository root; is_dataset_path() keeps the rest out.
+    prefix = ''
     base = st.get('base') if st.get('base') and st.get('base_prefix') == prefix else None
     need_bytes = need_files = added = removed = 0
     for kind, _, size in stage_plan(api, commit, base, prefix, wallet):
@@ -510,16 +564,25 @@ def stage_once(repo, ref, commit, lakefs, wallet):
 
 def stage_dataset():
     # The resident path of the pinned commit, or '' (job stages in-job).
-    repo, commit = os.environ.get('DATASET_REPO') or '', pinned_commit()
-    ref = os.environ.get('DATASET_REF') or ''
+    global PINNED
+    repo, ref = dataset_coords()
+    commit = PINNED = pinned_commit()
     lakefs = (os.environ.get('LAKEFS_EXTERNAL_URL') or '').rstrip('/')
-    if not (repo and commit and lakefs and os.path.exists(STAGING_DIR + '/id_ed25519')):
-        print('stage: skipped (needs the dataset repo, a pinned commit, the lakeFS'
+    if not (repo and lakefs and os.path.exists(STAGING_DIR + '/id_ed25519')):
+        print('stage: skipped (needs the dataset parameter, the lakeFS'
               ' endpoint and the staging key) - the job stages in-job', flush=True)
         return ''
     wallet = mint_wallet()
     if not wallet:
         return ''
+    if not commit:
+        # The first step of the run: nothing upstream pinned a commit, so pin it
+        # here (the step then resolves the same ref; a vN tag cannot move).
+        try:
+            commit = PINNED = resolve_commit(repo, ref, lakefs, wallet)
+        except Exception as e:
+            print('stage: cannot resolve %s@%s (%s) - the job stages in-job' % (repo, ref, e), flush=True)
+            return ''
     try:
         if subprocess.call(['sh', '-c', 'command -v ssh >/dev/null || apk add --no-cache -q openssh-client']) != 0:
             print('stage: no ssh client - the job stages in-job', flush=True)
@@ -619,7 +682,8 @@ def submit():
         'BIND=""',
         'if [ -n "$DATASET_DIR" ]; then'
         ' BIND="-B $DATASET_DIR:/kubecore/dataset:ro";'
-        ' export APPTAINERENV_KUBECORE_DATASET_DIR=/kubecore/dataset; fi',
+        ' export APPTAINERENV_KUBECORE_DATASET_DIR=/kubecore/dataset'
+        ' APPTAINERENV_KUBECORE_STAGED_DIR=/kubecore/dataset; fi',
         # Writable /work: the SIF is read-only, but steps write /work/output
         # (declared outputs), /work/runs, /work/dataset caches. Per-job scratch
         # on Lustre, removed after a successful stage-out.
@@ -668,12 +732,12 @@ def submit():
            'STEP_NAME=' + (os.environ.get('STEP_NAME') or ''),
            'STEP_OUTPUTS=' + (os.environ.get('STEP_OUTPUTS') or ''),
            'DATASET_STAGED=' + STAGED]
-    # Same checkpoint location + run id as the in-cluster copy; without them
-    # training fell back to {ref}/checkpoints/ on the dataset branch. Only when
-    # set: step code reads os.environ.get(..., default), so an empty value
-    # would override its own default.
+    # Same outputs location + run id as the in-cluster copy (outputs-<app>).
+    # Only when set: step code reads os.environ.get(..., default), so an empty
+    # value would override its own default.
     env += [k + '=' + os.environ[k] for k in
-            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID')
+            ('CHECKPOINT_BUCKET', 'CHECKPOINT_PREFIX', 'KUBECORE_RUN_ID', 'KUBECORE_WORKFLOW_NAME',
+             'KAOS_LIB_SUPPORT')
             if os.environ.get(k)]
     global WALLET, WALLET_EXP
     wallet = WALLET = mint_wallet()
@@ -690,10 +754,11 @@ def submit():
         if lakefs_url:
             env += ['LAKEFS_ENDPOINT=' + lakefs_url,
                     'LAKEFS_BEARER_TOKEN=' + wallet,
-                    'DATASET_REPO=' + (os.environ.get('DATASET_REPO') or ''),
-                    'DATASET_REF=' + (os.environ.get('DATASET_REF') or ''),
-                    'DATASET_COMMIT=' + pinned_commit(),
-                    'OUTPUTS_BRANCH=' + (os.environ.get('OUTPUTS_BRANCH') or ''),
+                    'DATASET_REPO=' + dataset_coords()[0],
+                    'DATASET_REF=' + dataset_coords()[1],
+                    'DATASET_COMMIT=' + (PINNED or pinned_commit()),
+                    'OUTPUTS_REPO=' + (os.environ.get('OUTPUTS_REPO') or ''),
+                    'OUTPUTS_REF=' + (os.environ.get('OUTPUTS_REF') or ''),
                     'STAGEIN_B64='
                     + base64.b64encode(STAGEIN.encode()).decode(),
                     'STAGEOUT_B64='
@@ -781,10 +846,10 @@ for n in OUTPUT_NAMES:
 def fetch_outputs():
     """F-05: pull the step's staged-out outputs back into the twin."""
     base = (os.environ.get('LAKEFS_EXTERNAL_URL') or '').rstrip('/')
-    repo = os.environ.get('DATASET_REPO') or ''
+    repo = os.environ.get('OUTPUTS_REPO') or ''
     if not (OUTPUT_NAMES and base and repo and WALLET):
         return
-    branch = os.environ.get('OUTPUTS_BRANCH') or os.environ.get('DATASET_REF') or 'main'
+    branch = 'hpc-%s-%s' % (os.environ.get('WF_UID', ''), os.environ.get('STEP_NAME', ''))
     for n in OUTPUT_NAMES:
         q = urllib.parse.urlencode({'path': 'hpc-outputs/%s/%s/%s.json' % (
             os.environ.get('WF_UID', ''), os.environ.get('STEP_NAME', ''), n)})
@@ -796,6 +861,12 @@ def fetch_outputs():
             print('output', n, ':', len(data), 'bytes', flush=True)
         except Exception as e:
             print('output', n, 'not staged out (default {}):', e, flush=True)
+    try:   # the hand-off branch has done its job
+        urllib.request.urlopen(urllib.request.Request(
+            base + '/api/v1/repositories/%s/branches/%s' % (repo, branch), method='DELETE',
+            headers={'Authorization': 'Bearer ' + WALLET}), timeout=60).read()
+    except Exception as e:
+        print('hand-off branch', branch, 'not deleted:', e, flush=True)
 
 
 TERMINAL = ('COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
@@ -1138,18 +1209,15 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
 
     # F-08 wallet inputs: the machine key mounts optional:true (same shape
     # the legacy render-wft uses on every step) so a non-OIDC deployment
-    # still submits — the submit code degrades to no-wallet loudly. Dataset
-    # coordinates prefer the pipeline's own workflow params (Alexandra's
-    # WFTs carry lakefs-repo / data-ref) and fall back to the context
-    # repository; no param -> no stage-in, batch runs the step data-less.
+    # still submits — the submit code degrades to no-wallet loudly. The
+    # dataset is the pipeline's `dataset` workflow parameter
+    # (`<dataset-repo>@<version>`, parsed by the submit code); no param -> no
+    # stage-in, batch runs the step data-less.
     mlflow_ctx = ctx.get("mlflow") or {}
     lakefs_ctx = ctx.get("lakefs") or {}
     wf_params = {p.get("name") for p in parameters}
-    dataset_repo = ("{{workflow.parameters.lakefs-repo}}"
-                    if "lakefs-repo" in wf_params
-                    else str(lakefs_ctx.get("repository") or ""))
-    dataset_ref = ("{{workflow.parameters.data-ref}}"
-                   if "data-ref" in wf_params else "")
+    dataset = ("{{workflow.parameters.dataset}}"
+               if "dataset" in wf_params else "")
     spec["templates"].append({
         "name": "meluxina-run",
         "inputs": {"parameters": [
@@ -1221,17 +1289,16 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                  "value": str(mlflow_ctx.get("externalUrl") or "")},
                 {"name": "LAKEFS_EXTERNAL_URL",
                  "value": str(lakefs_ctx.get("externalUrl") or "")},
-                {"name": "DATASET_REPO", "value": dataset_repo},
-                {"name": "DATASET_REF", "value": dataset_ref},
-                # Pipeline outputs (stage-out hand-off, checkpoints) go to the
-                # project's outputs branch once it exists ("" = as before).
-                {"name": "OUTPUTS_BRANCH", "value": str(lakefs_ctx.get("outputsBranch") or "")},
-                {"name": "CHECKPOINT_BUCKET",
-                 "value": str((ctx.get("checkpoints") or {}).get("bucket") or "")},
-                {"name": "CHECKPOINT_PREFIX",
-                 "value": str((ctx.get("checkpoints") or {}).get("prefix") or "")},
+                {"name": "DATASET", "value": dataset},
+                # Pipeline outputs (stage-out hand-off, results) go to the
+                # app's own outputs repository, on main.
+                {"name": "OUTPUTS_REPO", "value": outputs_repo(ctx)},
+                {"name": "OUTPUTS_REF", "value": OUTPUTS_REF},
+                {"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)},
+                {"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()},
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
-            ],
+                {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
+            ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else []),
         },
         # slurm-job-id plus the union of every routed step's declared outputs
         # (one shared template; each twin fills its own, the rest default).
