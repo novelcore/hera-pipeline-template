@@ -26,7 +26,7 @@ what to click or paste, what you should see, what to do if you don't, and where 
 graph LR
     D["Data: push, PR, release v1"] --> E["Code: edit steps and config"]
     E --> P["PR into dev: the wft-render check"]
-    P --> M["Merge: kubecore-ml-ci builds the new version"]
+    P --> M["Merge: kaos-ml-ci builds the new version"]
     M --> R["Run: the form in Argo"]
     R --> O["Results: outputs-app and MLflow"]
     O --> D

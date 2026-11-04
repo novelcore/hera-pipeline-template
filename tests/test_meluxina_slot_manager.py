@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
 
 SCOPE = "a1b2c3d4e5"
 HEADER = "#!/bin/bash -l\n# kaos-job v2 scope=%s\nset +e\n" % SCOPE
@@ -314,11 +314,14 @@ def test_memory_is_counted_as_pss(tmp_path):
 
 
 def test_every_step_is_told_its_slot(tmp_path):
-    """PRD-1609 F-05: kaos_lib.runtime reads the step's share of the node from KUBECORE_SLOT_*."""
+    """PRD-1609 F-05: kaos_lib.runtime reads the step's share of the node from KAOS_SLOT_*
+    (KUBECORE_SLOT_* is the deprecated alias an older kaos-lib reads)."""
     guests = {"101": _job("kaos-%s-wf1-train" % SCOPE,
-                          'echo "$KUBECORE_SLOT_GPUS $KUBECORE_SLOT_CPUS $KUBECORE_SLOT_MEM_GIB $KUBECORE_SLOT_SHARED" > $OUT/101\nexit 0\n',
+                          'echo "$KAOS_SLOT_GPUS $KAOS_SLOT_CPUS $KAOS_SLOT_MEM_GIB $KAOS_SLOT_SHARED" > $OUT/101\n'
+                          'echo "$KUBECORE_SLOT_GPUS $KUBECORE_SLOT_CPUS $KUBECORE_SLOT_MEM_GIB $KUBECORE_SLOT_SHARED" > $OUT/101-old\nexit 0\n',
                           comment="kaos-commit=bbbbbbb2")}
     node = Node(tmp_path, guests, mem_mb=491520)
     rc, log = node.finish()
     assert rc == 0, log
     assert (node.out / "101").read_text().split() == ["1", "32", "120", "1"]
+    assert (node.out / "101-old").read_text().split() == ["1", "32", "120", "1"], "deprecated alias"

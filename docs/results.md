@@ -49,15 +49,15 @@ from kaos_lib.mlflow import mlflow
 
 mlflow()                                             # tracking address + sign-in from the environment
 mlf.set_experiment(experiment)
-with mlf.start_run(run_name=os.environ["KUBECORE_RUN_ID"]) as run:
+with mlf.start_run(run_name=os.environ["KAOS_RUN_ID"]) as run:
     mlf.log_params({"epochs": epochs, "dataset": info["dataset"], "dataset_commit": info["dataset_commit"]})
     mlf.set_tag("kaos_lib.version", version("kaos-lib"))
     ...                                              # train; mlf.log_metric("loss", loss, step=epoch)
-    with outputs.run(app, experiment, os.environ["KUBECORE_RUN_ID"]) as r:
+    with outputs.run(app, experiment, os.environ["KAOS_RUN_ID"]) as r:
         r.save("./weights")
         commit = r.finish({"dataset_ref": info["dataset"], "mlflow_run_id": run.info.run_id})
     mlf.set_tags({"kaos.outputs_repo": r.repo, "kaos.outputs_commit": commit,
-                  "kaos.outputs_path": r.prefix, "kaos.workflow": os.environ["KUBECORE_RUN_ID"]})
+                  "kaos.outputs_path": r.prefix, "kaos.workflow": os.environ["KAOS_RUN_ID"]})
     lock.write(run.info.run_id)                      # the data lock: every dataset commit this step read
 ```
 

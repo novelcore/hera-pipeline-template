@@ -15,7 +15,7 @@ An **ML app** is one pipeline with its own code. Creating one gives you:
 | a code repository on GitHub | `<app>` | your code: `pipeline.py`, `config/`, `steps/`, started from a template |
 | a pipeline | `<app>-pipeline` | the run form you submit ([chapter 7](7-run-it.md)) |
 | a results repository in lakeFS | `outputs-<app>` | everything your runs write ([chapter 8](8-results-and-weights.md)) |
-| automatic checks | `wft-render` on pull requests, `kubecore-ml-ci` on merges | every merge into `dev` builds a new version of the pipeline ([chapter 6](6-your-pipeline.md)) |
+| automatic checks | `wft-render` on pull requests, `kaos-ml-ci` on merges | every merge into `dev` builds a new version of the pipeline ([chapter 6](6-your-pipeline.md)) |
 
 The project already has a dataset called **`dataset-default`**. It belongs to the project, not to
 one pipeline, and it starts empty. All the pipelines of a project share its datasets, its lakeFS
@@ -58,7 +58,7 @@ pipeline build runs. Your app's row and its **First pipeline build** card go thr
 | status | what it means |
 |---|---|
 | **Awaiting first build** | the repository exists and the build has not started |
-| **Building** | `kubecore-ml-ci` is building the step images and the pipeline; **View run** opens it in Argo |
+| **Building** | `kaos-ml-ci` is building the step images and the pipeline; **View run** opens it in Argo |
 | **Ready** ("Pipeline ready") | the pipeline exists and you can submit it |
 | **Build failed** | open **View run** and read the failing step ([chapter 10](10-when-things-go-wrong.md)) |
 

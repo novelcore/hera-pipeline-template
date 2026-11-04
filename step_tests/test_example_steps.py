@@ -48,9 +48,19 @@ def test_should_write_one_commit_to_the_apps_outputs_repository(client, fake, mo
     hello = load_step("hello_world")
     info = load_step("dataset_loading").pin("dataset-default@v1", client)
     monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
-    monkeypatch.setenv("KUBECORE_RUN_ID", "wf-abc")
+    monkeypatch.setenv("KAOS_RUN_ID", "wf-abc")
     commit = hello.write_result(CFG, info, hello.read_dataset(info, client), client)
     assert fake.head("outputs-myapp") == commit
     tree = fake.tree("outputs-myapp", commit)
     assert set(tree) == {"checkpoints/exp1/wf-abc/hello.json"}
     assert json.loads(tree["checkpoints/exp1/wf-abc/hello.json"])["dataset_commit"] == info["dataset_commit"]
+
+
+def test_should_still_read_the_deprecated_run_id_name(client, fake, monkeypatch):
+    """A platform that only sets KUBECORE_RUN_ID (older engine) still names the run."""
+    hello = load_step("hello_world")
+    info = load_step("dataset_loading").pin("dataset-default@v1", client)
+    monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
+    monkeypatch.setenv("KUBECORE_RUN_ID", "wf-old")
+    commit = hello.write_result(CFG, info, hello.read_dataset(info, client), client)
+    assert set(fake.tree("outputs-myapp", commit)) == {"checkpoints/exp1/wf-old/hello.json"}

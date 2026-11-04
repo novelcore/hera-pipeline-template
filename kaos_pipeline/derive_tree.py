@@ -36,8 +36,8 @@ derive as form dropdowns.
 
 Platform-group searchpath resolution (production vs local dev):
   - CI/runtime: the enhancer materializes the `platform` group from
-    pipeline-context and sets KUBECORE_PLATFORM_SEARCHPATH to its dir.
-  - Local dev: falls back to the vendored `kubecore/config/` group (the
+    pipeline-context and sets KAOS_PLATFORM_SEARCHPATH (and the deprecated KUBECORE_PLATFORM_SEARCHPATH) to its dir.
+  - Local dev: falls back to the vendored `kaos_pipeline/config/` group (the
     same shape, real values from the last context) so `python -m ...`
     and pipeline.py work on a laptop with no cluster.
 """
@@ -55,11 +55,13 @@ from omegaconf import OmegaConf
 # runs at RUN time in a lean image without Hera, and only calls compose_tree()
 # — so Hera is imported lazily inside derive(), never at module load.
 
-HERE = Path(__file__).parent  # kubecore/
+HERE = Path(__file__).parent  # kaos_pipeline/
 CONFIG_DIR = HERE.parent / "config"  # the developer's experiment config tree
 # Local-dev fallback platform group (vendored). Production overrides via env.
 PLATFORM_SEARCHPATH = Path(
-    os.environ.get("KUBECORE_PLATFORM_SEARCHPATH", str(HERE / "config"))
+    os.environ.get("KAOS_PLATFORM_SEARCHPATH")
+    or os.environ.get("KUBECORE_PLATFORM_SEARCHPATH")  # deprecated alias
+    or str(HERE / "config")
 )
 
 PLATFORM_SECTIONS = {"platform"}  # injected, never a form surface

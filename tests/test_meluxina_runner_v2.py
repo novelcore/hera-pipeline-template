@@ -20,8 +20,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from kubecore import enhance, meluxina  # noqa: E402
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
+from kaos_pipeline import enhance, meluxina  # noqa: E402
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
 
 # The dataset stager's lease pattern (images/meluxina-tokenmint/stager/stager.py, LEASE_RE),
 # applied with findall over `squeue -o %k`.
@@ -170,7 +170,7 @@ def test_a_hosts_done_comment_is_the_steps_result():
 
 # ---------------------------------------------------------------- enhancer
 
-CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
+CONTEXT = yaml.safe_load((ROOT / "kaos_pipeline" / "local-dev" / "pipeline-context.yaml").read_text())
 
 
 def _twin_env(ctx):

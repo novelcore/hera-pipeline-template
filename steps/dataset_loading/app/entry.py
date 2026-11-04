@@ -32,13 +32,11 @@ def pin(dataset: str, client=None) -> dict:
 
 
 def kaos_lib_version() -> str:
-    """The installed kaos-lib version (distribution `kaos-lib`, or `kubecore` before its first release)."""
-    for dist in ("kaos-lib", "kubecore"):
-        try:
-            return version(dist)
-        except PackageNotFoundError:
-            pass
-    return "unknown"
+    """The installed kaos-lib version (distribution `kaos-lib`)."""
+    try:
+        return version("kaos-lib")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def main() -> None:

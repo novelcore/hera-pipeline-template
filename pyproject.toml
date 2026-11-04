@@ -27,10 +27,10 @@ dev = []
 # Console-script entrypoints so the in-image command matches local dev
 # invocation (O12d). Each step image installs this package and runs
 # `python -m app.entry` (see steps/*/Dockerfile).
-compose-and-validate = "kubecore.compose:main"
+compose-and-validate = "kaos_pipeline.compose:main"
 
 [tool.setuptools]
-packages = ["kubecore"]
+packages = ["kaos_pipeline"]
 
 [tool.pytest.ini_options]
 # Engine tests only. Step code imports kaos-lib (kaos_lib), installed separately; it has its own

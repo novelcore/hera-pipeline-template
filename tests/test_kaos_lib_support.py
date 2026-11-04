@@ -8,8 +8,8 @@ import json
 import yaml
 from test_datasets_as_repos import CTX_PATH, _raw
 
-from kubecore.enhance import enhance
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE
+from kaos_pipeline.enhance import enhance
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE
 
 SUPPORT = {"version": "0.4.0", "supported": ">=0.3", "deprecated": [{"range": "<0.3", "unsupported_after": "2027-01-01"}]}
 

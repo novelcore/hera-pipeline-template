@@ -34,9 +34,9 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **kaosctl.** The command-line tool that comes with kaos-lib: create, push, validate, release and pull datasets, and replay a run's data ([Install it](cookbook/4-install-kaosctl.md)).
 
-**kaos-lib.** The platform's Python package (`import kaos_lib`) for datasets, results and MLflow, with the `kaosctl` command (0.4.0rc5 or newer). Formerly the `kubecore` package. Reference: [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
+**kaos-lib.** The platform's Python package (`import kaos_lib`) for datasets, results and MLflow, with the `kaosctl` command (0.4.0rc5 or newer). Reference: [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
-**kubecore-ml-ci.** The name of the build that runs after a merge into `dev`: it builds the changed step images and releases a new version of the pipeline.
+**kaos-ml-ci.** The name of the check on GitHub for the build that runs after a merge into `dev`: it builds the changed step images and releases a new version of the pipeline.
 
 **lakeFS.** Your project's data store. It keeps every version of every file, like Git does for code. Datasets and `outputs-<app>` live there.
 

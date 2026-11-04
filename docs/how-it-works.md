@@ -38,6 +38,22 @@ When you send your files in, the platform takes over. You do not set any of this
 - It hands your steps the addresses and credentials they need for lakeFS and MLflow.
 - It checks your work and tells you on GitHub if something is off.
 
+## Good to know
+
+- **Your pipeline is named after your app** (`<app>-pipeline`), whatever `pipeline.py` says, so two
+  apps in one project never overwrite each other. Step images are likewise per app.
+- **Your `pipeline.py` is rendered without any credentials.** Only the platform's own release step
+  can publish; your code cannot reach tokens at render time.
+- **The repository is the source of truth.** The pipeline the platform runs is built from your
+  `dev` branch. A change made anywhere else, such as a hand edit of the released pipeline, is
+  replaced by the next release. Make every change in the repository.
+- **Each step gets its own machine and disk.** Steps do not share files; they pass small values
+  with `outputs=` and larger data through lakeFS ([Write results from a step](write-a-step.md)).
+- **GPU nodes are sized to fit.** A GPU step asks for what a whole GPU node can really offer, so it
+  is not left waiting for a machine that cannot exist.
+- **Older pipelines** may still have the helper folder `kubecore/` where new ones have
+  `kaos_pipeline/`. It works the same; nothing needs to be renamed.
+
 ## Where data and results live
 
 - **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
@@ -53,7 +69,7 @@ You describe what you want. The platform figures out how to run it.
 
 ```mermaid
 graph TD
-    E["📝 You edit: pipeline.py, config/, steps/"] -->|"PR into dev: wft-render, then merge"| P["🏗️ kubecore-ml-ci builds and releases"]
+    E["📝 You edit: pipeline.py, config/, steps/"] -->|"PR into dev: wft-render, then merge"| P["🏗️ kaos-ml-ci builds and releases"]
     P -->|a few minutes| R["🖥️ Argo run page: your settings as a form"]
     R -->|Submit| RUN["▶️ Your pipeline runs on real machines"]
 

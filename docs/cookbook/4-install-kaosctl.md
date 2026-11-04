@@ -38,8 +38,7 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
 
 !!! warning "Version 0.4.0rc5 or newer"
     The command is called `kaosctl` from kaos-lib **0.4.0rc5** on. Older versions only have
-    `kaos-cli`, which still works as a hidden alias and prints a note. The `kubecore` command and
-    package are the deprecated names from before kaos-lib. If you get `kaosctl: command not found`,
+    `kaos-cli`, which still works as a hidden alias and prints a note. If you get `kaosctl: command not found`,
     run the `pip install` line above again with `-U`.
 
 !!! tip "Why the virtual environment?"
@@ -48,8 +47,7 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
     Run `. ~/.venvs/kaos/bin/activate` again in every new terminal.
 
     Keep it apart from the app folder's `.venv`, which `./run.sh` makes for rendering the pipeline:
-    that one installs the template's engine, `kubecore/`, which has the same import name as a
-    module kaos-lib still ships for older code.
+    that one installs the template's engine, `kaos_pipeline/`.
 
 ## 2. Check the version
 
@@ -73,7 +71,7 @@ kaosctl login
 Your browser opens once and asks you to sign in. Sign in with your KAOS account, close the tab, and
 go back to the terminal. The tool remembers you.
 
-Run `kaosctl` **inside your app folder**. The folder has `.kubecore/dataset-config.yaml`, which tells
+Run `kaosctl` **inside your app folder**. The folder has `.kaos/dataset-config.yaml`, which tells
 the tool where your project's lakeFS is, so you never type an address or a password. Sign in from
 inside the app folder too: the session it makes then also opens your project's MLflow.
 

@@ -29,7 +29,7 @@ repository are relative and work on any branch.
 
 ```python
 # pipeline.py
-from kubecore.authoring import pipeline, step
+from kaos_pipeline.authoring import pipeline, step
 
 with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
     load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
@@ -46,7 +46,7 @@ form**: every plain value in `config/` becomes a field.
 pipeline.py            the steps and their order (reads=, gpu=, needs=, outputs=, when=)
 config/                every setting; each one is a field on the run form
 steps/<name>/          one folder per step: app/entry.py and a Dockerfile
-kubecore/              helper code that ships with the template: do not edit
+kaos_pipeline/         helper code that ships with the template: do not edit
 tests/, step_tests/    engine tests; step-code tests (DEVELOPER.md §15)
 docs/                  the guide (mkdocs)
 ```

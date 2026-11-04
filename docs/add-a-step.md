@@ -23,7 +23,7 @@ Only these. Nothing else.
 | `steps/say_goodbye/Dockerfile` | how your step gets packed into a box |
 | `pipeline.py` | one line that adds the step to the list |
 
-You will not open anything inside `kubecore/`. That is the platform engine. Leave it alone.
+You will not open anything inside `kaos_pipeline/`. That is the platform engine. Leave it alone. (Pipelines created earlier may still have this folder named `kubecore/`; it works the same.)
 
 ## Step 1. Make the folder
 

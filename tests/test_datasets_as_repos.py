@@ -14,10 +14,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from kubecore.enhance import enhance  # noqa: E402
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
+from kaos_pipeline.enhance import enhance  # noqa: E402
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
 
-CTX_PATH = ROOT / "kubecore/local-dev/pipeline-context.yaml"
+CTX_PATH = ROOT / "kaos_pipeline/local-dev/pipeline-context.yaml"
 
 
 def _submit_globals(monkeypatch, step_command, **env):
@@ -109,7 +109,7 @@ def test_stage_in_downloads_only_the_dataset_at_the_pinned_commit(tmp_path, monk
     dest = tmp_path / "cache" / "dataset-cars" / "c0ffee"
     assert (dest / "data.yaml").read_bytes() == b"y"
     assert (dest / "images/train/a.jpg").exists() and not (dest / "README.md").exists()
-    assert (dest / ".kaos-commit").read_text() == "c0ffee", "the kubecore consumer finds the commit here"
+    assert (dest / ".kaos-commit").read_text() == "c0ffee", "the kaos-lib consumer finds the commit here"
     assert not any("/commits" in u for u in lakefs.urls), "a pinned commit is never re-resolved"
 
 
@@ -161,8 +161,10 @@ def test_results_go_to_the_apps_outputs_repository():
     env = {e["name"]: e.get("value") for e in step["container"]["env"]}
     assert env["CHECKPOINT_BUCKET"] == "outputs-myapp"
     assert env["CHECKPOINT_PREFIX"] == "main/checkpoints"
-    assert env["KUBECORE_RUN_ID"] == "{{workflow.name}}"
-    assert env["KUBECORE_WORKFLOW_NAME"] == "{{workflow.name}}", "names the MLflow run"
+    assert env["KAOS_RUN_ID"] == "{{workflow.name}}"
+    assert env["KAOS_WORKFLOW_NAME"] == "{{workflow.name}}", "names the MLflow run"
+    assert env["KUBECORE_RUN_ID"] == "{{workflow.name}}", "deprecated alias, older kaos-lib reads it"
+    assert env["KUBECORE_WORKFLOW_NAME"] == "{{workflow.name}}", "deprecated alias"
     mr = next(t for t in out["spec"]["templates"] if t["name"] == "meluxina-run")
     menv = {e["name"]: e.get("value") for e in mr["container"]["env"]}
     assert menv["DATASET"] == "{{workflow.parameters.dataset}}"

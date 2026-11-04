@@ -18,10 +18,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from kubecore.enhance import enhance  # noqa: E402
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
+from kaos_pipeline.enhance import enhance  # noqa: E402
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
 
-CTX_PATH = ROOT / "kubecore/local-dev/pipeline-context.yaml"
+CTX_PATH = ROOT / "kaos_pipeline/local-dev/pipeline-context.yaml"
 COMMIT = "c2" * 32
 BASE = "c1" * 32
 
@@ -219,4 +219,5 @@ def test_the_first_step_pins_the_commit_by_resolving_the_dataset_ref(monkeypatch
 
 def test_the_job_gets_the_staged_copy_through_the_package_variable():
     src = MELUXINA_SUBMIT_CODE
-    assert "APPTAINERENV_KUBECORE_STAGED_DIR=/kubecore/dataset" in src
+    assert "APPTAINERENV_KAOS_STAGED_DIR=/kaos/dataset" in src
+    assert "APPTAINERENV_KUBECORE_STAGED_DIR=/kaos/dataset" in src, "deprecated alias"

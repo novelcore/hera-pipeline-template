@@ -14,15 +14,18 @@ from fake_lakefs import FakeLakeFS  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 ENV_VARS = ("LAKEFS_ENDPOINT", "LAKEFS_URL", "LAKEFS_ACCESS_KEY", "LAKEFS_SECRET_KEY", "LAKEFS_BEARER_TOKEN",
-            "KUBECORE_STAGED_DIR", "KUBECORE_CACHE_DIR", "KUBECORE_DATASET_CONFIG", "CHECKPOINT_BUCKET",
-            "KUBECORE_RUN_ID")
+            "KAOS_STAGED_DIR", "KAOS_CACHE_DIR", "KAOS_DATASET_CONFIG", "CHECKPOINT_BUCKET",
+            "KAOS_RUN_ID",
+            # deprecated aliases, still read by a kaos-lib older than the rename
+            "KUBECORE_STAGED_DIR", "KUBECORE_CACHE_DIR", "KUBECORE_DATASET_CONFIG", "KUBECORE_RUN_ID")
 
 
 @pytest.fixture(autouse=True)
 def clean_env(tmp_path, monkeypatch):
     for var in ENV_VARS:
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("KUBECORE_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("KAOS_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("KUBECORE_CACHE_DIR", str(tmp_path / "cache"))  # deprecated alias
     monkeypatch.chdir(tmp_path)
 
 

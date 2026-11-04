@@ -8,7 +8,7 @@ def _write(client, monkeypatch):
     hello = load_step("hello_world")
     info = load_step("dataset_loading").pin("dataset-default@v1", client)
     monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
-    monkeypatch.setenv("KUBECORE_RUN_ID", "wf-abc")
+    monkeypatch.setenv("KAOS_RUN_ID", "wf-abc")
     data_yaml = hello.read_dataset(info, client)
     return lambda: hello.write_result(CFG, info, data_yaml, client)
 

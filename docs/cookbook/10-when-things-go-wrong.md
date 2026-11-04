@@ -51,7 +51,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | `wft-render` red: a step reads a section that does not exist | fix `reads=` in `pipeline.py` and `READS` in the step, or add the section to `config/` |
 | `wft-render` red: a step needs a step that is gone | remove it from the `needs=` list ([Remove a step](../remove-a-step.md)) |
 | no `wft-render` at all | the pull request is not into `dev` |
-| `kubecore-ml-ci` red after the merge | open its **Details**; it is the build of a step image or of the pipeline |
+| `kaos-ml-ci` red after the merge | open its **Details**; it is the build of a step image or of the pipeline |
 | my step did not rebuild | only steps whose folder changed are rebuilt; your change is still live |
 | my new setting is not on the form | only plain values become fields; a long list or a nested block does not ([Change a setting](../change-a-setting.md)) |
 
@@ -63,7 +63,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | `dataset-loading` fails | the dataset or version does not exist; the message lists what does |
 | `hello-world` says "holds no files yet" | the dataset is empty; this is not an error. Push data and release a version ([chapter 5](5-your-data.md)) |
 | a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On an HPC class (`meluxina-*`) it waits in the HPC queue |
-| a step is red with `ImagePullBackOff` | its image was not built; check `kubecore-ml-ci` for that commit |
+| a step is red with `ImagePullBackOff` | its image was not built; check `kaos-ml-ci` for that commit |
 | a step is red with `OOMKilled` | it ran out of memory; pick a bigger `<step>-class` or raise `<step>-mem` |
 | a retry started from scratch | you used **Resubmit**, which is a new run; **Retry** keeps the run name and resumes ([chapter 7](7-run-it.md)) |
 

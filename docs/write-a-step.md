@@ -13,7 +13,7 @@ import os
 from kaos_lib import outputs
 
 app = os.environ["CHECKPOINT_BUCKET"]        # outputs-<app>, set by the platform
-run = os.environ["KUBECORE_RUN_ID"]          # the Argo run name
+run = os.environ["KAOS_RUN_ID"]          # the Argo run name
 
 with outputs.run(app, experiment, run) as r:
     r.save("./results")                      # a folder or files

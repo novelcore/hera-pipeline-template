@@ -14,7 +14,7 @@ def test_should_read_an_unlabelled_dataset_as_a_folder_and_report_its_files(clie
     assert entry.is_dir() and (entry / "sub" / "b.txt").read_bytes() == b"2"
     assert hello.describe(entry) == {"files": 2}
     monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
-    monkeypatch.setenv("KUBECORE_RUN_ID", "wf-raw")
+    monkeypatch.setenv("KAOS_RUN_ID", "wf-raw")
     commit = hello.write_result(CFG, info, entry, client)
     tree = fake.tree("outputs-myapp", commit)
     assert json.loads(tree["checkpoints/exp1/wf-raw/hello.json"])["files"] == 2
@@ -35,7 +35,7 @@ def test_should_report_a_dataset_with_no_files_instead_of_failing(client, fake, 
     monkeypatch.setattr(hello, "read_dataset", lambda i: read(i, client))        # main() uses the default client
     monkeypatch.setattr(hello, "write_result", lambda c, i, e: write(c, i, e, client))
     monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
-    monkeypatch.setenv("KUBECORE_RUN_ID", "wf-empty")
+    monkeypatch.setenv("KAOS_RUN_ID", "wf-empty")
     monkeypatch.setattr("sys.argv", ["entry", "--params", json.dumps(CFG), "--dataset-info", json.dumps(info)])
     hello.main()
     assert "holds no files yet" in capsys.readouterr().out

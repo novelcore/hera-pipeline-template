@@ -12,9 +12,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from kubecore import enhance  # noqa: E402
+from kaos_pipeline import enhance  # noqa: E402
 
-CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
+CONTEXT = yaml.safe_load((ROOT / "kaos_pipeline" / "local-dev" / "pipeline-context.yaml").read_text())
 
 
 def _enhanced(ctx):
@@ -40,7 +40,7 @@ def test_twin_carries_project_identity():
 
 
 def test_runner_has_no_identity_literals():
-    src = (ROOT / "kubecore" / "meluxina.py").read_text()
+    src = (ROOT / "kaos_pipeline" / "meluxina.py").read_text()
     for literal in ("u104378", "p201342", "/home/users/u", "/project/scratch/p"):
         assert literal not in src, f"identity literal {literal!r} must come from the context"
 
@@ -50,7 +50,7 @@ def test_submit_refuses_without_identity():
     # did not publish the tenancy. The runner is the embedded submit script
     # (MELUXINA_SUBMIT_CODE), so the function under test is extracted from it.
     import ast
-    from kubecore import meluxina as m
+    from kaos_pipeline import meluxina as m
     src = m.MELUXINA_SUBMIT_CODE
     tree = ast.parse(src)
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "hpc_identity")

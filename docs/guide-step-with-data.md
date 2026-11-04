@@ -49,7 +49,7 @@ def main() -> None:
     print(f"[count-files] {info['dataset']} @ {info['dataset_commit']}: {count} files")
 
     # Write the result: one merge commit in outputs-<app> under checkpoints/<experiment>/<run>/.
-    app, run = os.environ["CHECKPOINT_BUCKET"], os.environ["KUBECORE_RUN_ID"]
+    app, run = os.environ["CHECKPOINT_BUCKET"], os.environ["KAOS_RUN_ID"]
     with tempfile.TemporaryDirectory() as tmp, outputs.run(app, cfg["experiment"]["name"], run) as r:
         (Path(tmp) / "count.json").write_text(json.dumps({"dataset": info["dataset"], "files": count}))
         r.save(tmp)
@@ -75,7 +75,7 @@ ENTRYPOINT ["python", "-m", "app.entry"]
 ```
 
 Keep the name `KAOS_LIB_PACKAGE`. The platform's build passes its kaos-lib through it
-([kaos-lib versions](kaos-lib-versions.md)). Copy only `app/`, never the repository's `kubecore/`.
+([kaos-lib versions](kaos-lib-versions.md)). Copy only `app/`, never the repository's `kaos_pipeline/`.
 
 ## 4. One line in `pipeline.py`
 
@@ -108,7 +108,7 @@ git push -u origin add-count-files
 ```
 
 Open a pull request into `dev`. Wait for **`wft-render`** to go green, then merge. Wait for
-**`kubecore-ml-ci`** to go green. Then submit the pipeline with a released dataset
+**`kaos-ml-ci`** to go green. Then submit the pipeline with a released dataset
 ([Run it](cookbook/7-run-it.md)).
 
 **You should see** a `count-files` box. Its log says `<dataset> @ <commit>: N files`, and
