@@ -1151,17 +1151,23 @@ def submit():
         'NV=""; [ "${HPC_GPUS:-0}" -gt 0 ] && NV="--nv"',
         '[ -n "$STEP_CMD" ] || STEP_CMD="nvidia-smi -L || nproc"',
         # PRD-HPC-1461 D-38/D-44: Slurm sends USR1 to this shell about 10 minutes
-        # before the time limit. The step runs in its own process group (set -m) and
-        # the shell passes the signal to that group. Inside, sh ignores USR1, and so
-        # does every process that keeps that inherited setting; kaos-lib's handler
-        # (an open run writer) saves progress and exits 85. A step without kaos-lib
-        # runs to the limit as before. `wait` returns early on the trap, so wait
-        # again until the step is really gone.
+        # before the time limit. The step runs in its own process group (set -m), and
+        # the shell passes USR1 ONLY to the processes of that group that handle it
+        # (SigCgt bit 9): kaos-lib's handler (an open run writer) saves progress and
+        # exits 85. Never the whole group: Apptainer's squashfuse dies on USR1 and the
+        # image vanishes under the step (live job 5421507: Bus error, rc 135). Inside,
+        # sh ignores USR1 and so does every process that keeps that setting, so a step
+        # without kaos-lib runs to the limit as before. `wait` returns early on the
+        # trap, so wait again until the step is really gone.
         'set -m',
         'apptainer exec $NV $PWD_OPT $BIND "$SIF" /bin/sh -c "trap \'\' USR1; $STEP_CMD" &',
         'STEP_PID=$!',
         'set +m',
-        'trap \'echo "stop signal: asking the step to save its progress"; kill -USR1 -- -$STEP_PID 2>/dev/null\' USR1',
+        'kaos_stop(){ echo "stop signal: asking the step to save its progress";'
+        ' for p in $(pgrep -g $STEP_PID); do'
+        ' m=$(awk \'/^SigCgt:/{print $2}\' /proc/$p/status 2>/dev/null);'
+        ' [ -n "$m" ] && [ $(( 0x$m >> 9 & 1 )) -eq 1 ] && kill -USR1 $p 2>/dev/null; done; }',
+        'trap kaos_stop USR1',
         'wait $STEP_PID; rc=$?',
         'while kill -0 $STEP_PID 2>/dev/null; do wait $STEP_PID; rc=$?; done',
         'trap - USR1',

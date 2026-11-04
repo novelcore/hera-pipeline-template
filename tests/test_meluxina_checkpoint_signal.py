@@ -48,8 +48,12 @@ PLAIN_STEP = "python3 -c \"import pathlib,time; pathlib.Path('ready').write_text
 def _run(tmp_path, step_cmd):
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    # Like `apptainer exec [opts] SIF cmd...`: drop everything up to the image, run the rest.
-    (bindir / "apptainer").write_text('#!/bin/bash\nwhile [ "$1" != "$SIF" ]; do shift; done; shift; exec "$@"\n')
+    # Like `apptainer exec [opts] SIF cmd...`: drop everything up to the image, run the rest. First it
+    # starts a stand-in for Apptainer's squashfuse in the same process group, with USR1's default
+    # action (die): live job 5421507 lost its image when the whole group was signalled.
+    (bindir / "apptainer").write_text(
+        '#!/bin/bash\nsleep 60 & echo $! > fuse.pid\n'
+        'while [ "$1" != "$SIF" ]; do shift; done; shift; exec "$@"\n')
     (bindir / "apptainer").chmod(0o755)
     (bindir / "python3").symlink_to(sys.executable)
     script = "\n".join(_launch_block() + ['exit $rc'])
@@ -61,7 +65,20 @@ def _run(tmp_path, step_cmd):
             break
         time.sleep(0.05)
     os.kill(p.pid, signal.SIGUSR1)        # what Slurm does: the batch shell only (BATCH_JOB)
-    return p.wait(timeout=30)
+    rc = p.wait(timeout=30)
+    fuse = int((tmp_path / "fuse.pid").read_text())
+    try:
+        os.kill(fuse, 0)                  # still alive: the signal only went to handlers
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    finally:
+        try:
+            os.kill(fuse, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    assert alive, "a process without a USR1 handler was signalled (Apptainer's squashfuse would die)"
+    return rc
 
 
 def test_the_stop_signal_reaches_a_step_inside_the_container_and_85_comes_back(tmp_path):
