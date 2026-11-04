@@ -2,6 +2,8 @@
 
 Things go wrong. That is normal. The platform is built to tell you exactly what happened in plain words. This page lists the problems people hit most, and the fix for each.
 
+Problems with datasets and `kaosctl` are in [the cookbook's last page](cookbook/10-when-things-go-wrong.md).
+
 The golden habit. When a check fails, click **Details** and read the message. It almost always names the one thing to fix.
 
 ## My new setting did not show up on the run page

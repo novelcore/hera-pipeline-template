@@ -22,10 +22,6 @@ The moment you merge, the platform starts a build. It does two things.
 
 You will see a check on the merge called **`kubecore-ml-ci`**. It shows a yellow dot while it builds, then a green tick when it is done. This usually takes a few minutes.
 
-??? note "Curious what happens behind the scenes?"
-    Again, you never have to watch this. But this is the platform building your new step and releasing the pipeline. Every green tick is one part of that work done for you.
-
-    ![The build job on the platform, every step green](img/argo-build-green.png)
 
 ## Step 3. Your change is ready to run
 

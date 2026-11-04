@@ -53,3 +53,16 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 **Terminal.** The app where you type commands, like the ones in this guide.
 
 **wft-render.** The name of the check that runs on your pull request to confirm your pipeline is valid.
+
+**Dataset.** A named set of files with numbered versions, stored in its own lakeFS repository called `dataset-<name>`.
+
+**kaos-lib.** The Python package your steps use for datasets, run outputs and MLflow. Its command-line tool is `kaosctl`.
+
+**kaosctl.** The command on your laptop for signing in and for creating, uploading, releasing and downloading datasets.
+
+**lakeFS.** The storage for your datasets and run outputs. Open it from the console with **Open in lakeFS**.
+
+**MLflow.** The page that records each run's settings, metrics and models.
+
+**Version.** A frozen copy of a dataset: `v1`, `v2`, and so on. `@latest` means the newest data.
+

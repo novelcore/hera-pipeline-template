@@ -63,10 +63,6 @@ The check builds a preview of your pipeline using the real project settings. It 
 
 Nothing is deployed at this stage. The check only looks. It is a safety net before anything real happens.
 
-??? note "Curious what happens behind the scenes?"
-    You never have to look at this. But if you are curious, the check runs a small job on the platform that renders your pipeline. If you click the check and follow its link, you land on a live view like the one below. Green means the render finished.
-
-    ![The render job running on the platform](img/argo-pr-render.png)
 
 ## If the check fails
 

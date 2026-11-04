@@ -444,10 +444,10 @@ Open the workflow template in the Argo UI, press **Submit**:
   leave untouched follow the group you pick; fields you explicitly
   change win over the group.
 - **Your scalar fields** — every leaf of your tree
-  (`experiment-name`, `train-epochs`, `data-ref`, …), plus dropdowns the
+  (`experiment-name`, `train-epochs`, `dataset`, …), plus dropdowns the
   platform fills live (`cpu-class`/`gpu-class` list this cluster's node
-  classes; `data-ref` is free text — `kubecore-dataset list` shows the
-  datasets that exist) and
+  classes; `dataset` lists your released dataset versions, newest
+  first, then `@latest` — see [create a dataset](docs/cookbook/04-create-a-dataset.md)) and
   fixed-choice fields it validates (e.g. `data-source`).
 - **Per-step sizing** — `{step}-cpu` / `{step}-mem`.
 - **`config` (ADVANCED)** — normally empty. When non-empty it is an

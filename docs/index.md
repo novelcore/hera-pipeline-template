@@ -1,83 +1,34 @@
-# Welcome
+# Start here
 
-This is your guide to building a **Hera pipeline** from this template.
+You were given a KAOS account and a project. This guide takes you from sign-in to a trained model, in plain steps.
 
-A pipeline is just a list of steps that run in order. One step prepares some data. The next step trains a model. Another step saves the result. You decide what the steps are. You decide the order. You write it in Python, using a small library called Hera. Do not worry about that name. This guide shows you the few lines you need, and nothing more.
+**hera** is the starter ("scaffold") template for ML pipelines on KAOS. A pipeline is a list of steps, such as prepare data, then train, then report. You write them in Python, keep your settings in simple files, and push to your pipeline's code repository. KAOS builds the steps, puts your settings on a run form and runs the pipeline on the machines of your choice. For object detection there is a ready-made template, **yolo**, built on hera.
 
-The good news is simple. You describe the steps in plain files. You push those files. The platform does the hard part for you. It builds each step. It puts your settings on a web page with dropdowns. It runs the whole thing on real machines. You never touch servers or Kubernetes.
+## The 5-minute path
 
-## The loop you will repeat
+1. Sign in to the KAOS console and look around: [You are in](cookbook/01-you-are-in.md).
+2. Install `kaosctl` and sign in: [Install kaosctl](cookbook/03-install-kaosctl.md).
+3. Create a dataset and release `v1`: [Create a dataset](cookbook/04-create-a-dataset.md).
+4. In the console, **Machine learning → Pipelines → New pipeline**: [Create your pipeline](cookbook/05-create-your-pipeline.md).
+5. Open its run page, pick `dataset-<name>@v1` and press **Submit**: [Run it](cookbook/07-run-it.md).
 
-```mermaid
-graph TD
-    A["📝 You edit a few files"] --> B["⬆️ You push and open a request"]
-    B --> C["✅ The platform checks it"]
-    C --> D["🚀 You merge and it goes live"]
-    D --> E["▶️ You press Submit and run"]
+## The cookbook
 
-    style A fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style B fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style C fill:#6a1b9a,stroke:#9c27b0,color:#fff,stroke-width:2px
-    style D fill:#4a148c,stroke:#7b1fa2,color:#fff
-    style E fill:#4a148c,stroke:#7b1fa2,color:#fff
-```
+| # | Page | You will |
+|---|---|---|
+| 1 | [You are in](cookbook/01-you-are-in.md) | Sign in and learn the console |
+| 2 | [Your project](cookbook/02-your-project.md) | Understand where a pipeline can run |
+| 3 | [Install kaosctl](cookbook/03-install-kaosctl.md) | Get the data tool on your laptop |
+| 4 | [Create a dataset](cookbook/04-create-a-dataset.md) | Upload data and release a version |
+| 5 | [Create your pipeline](cookbook/05-create-your-pipeline.md) | Start from hera or yolo |
+| 6 | [Change a step](cookbook/06-change-a-step.md) | Read your dataset in code and push |
+| 7 | [Run it](cookbook/07-run-it.md) | Pick a dataset version and submit |
+| 8 | [See the results](cookbook/08-see-results.md) | Metrics, weights, comparing runs |
+| 9 | [Share a dataset](cookbook/09-share-a-dataset.md) | Read another project's data |
+| 10 | [When things go wrong](cookbook/10-when-things-go-wrong.md) | Real messages and fixes |
 
-You start at the top and work down. The platform handles the middle. You press Submit at the end. Every page in this guide is one part of this loop.
+## Reference
 
-## What you will be able to do
+[How it works](how-it-works.md) (optional) · [kaos-lib versions](kaos-lib-versions.md) · [Add a step](add-a-step.md) · [Remove a step](remove-a-step.md) · [Change a setting](change-a-setting.md) · [Troubleshooting](troubleshooting.md) · [Word list](glossary.md)
 
-<div class="grid cards" markdown>
-
-- :material-book-open-variant: **Start here**
-
-    ---
-
-    Set up your computer and get the project. First time through, read these in order.
-
-    [:octicons-arrow-right-24: What you need](what-you-need.md)
-
-- :material-plus-box: **Add a step**
-
-    ---
-
-    The main event. Make a folder, write a small program, add one line.
-
-    [:octicons-arrow-right-24: Add a step](add-a-step.md)
-
-- :material-tune: **Change a setting**
-
-    ---
-
-    Add a value people can change on the run page. One line does it.
-
-    [:octicons-arrow-right-24: Change a setting](change-a-setting.md)
-
-- :material-play-circle: **Run your pipeline**
-
-    ---
-
-    Open the web form, set a field or two, and press Submit.
-
-    [:octicons-arrow-right-24: Run your pipeline](run-it.md)
-
-- :material-lifebuoy: **When something breaks**
-
-    ---
-
-    Common problems and the plain fix for each one.
-
-    [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
-
-- :material-book-alphabet: **Word list**
-
-    ---
-
-    Every term in this guide, explained in one sentence.
-
-    [:octicons-arrow-right-24: Word list](glossary.md)
-
-</div>
-
-## Who this is for
-
-You do not need to be an engineer. If you can edit a text file and follow steps in order, you can do this. Start with [What you need](what-you-need.md).
+The library behind it all, kaos-lib, has its own docs: [kaos-lib documentation](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
