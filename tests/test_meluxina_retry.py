@@ -15,9 +15,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from kubecore import enhance, meluxina  # noqa: E402
+from kaos_pipeline import enhance, meluxina  # noqa: E402
 
-CONTEXT = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
+CONTEXT = yaml.safe_load((ROOT / "kaos_pipeline" / "local-dev" / "pipeline-context.yaml").read_text())
 
 # Pod messages as the kubelet and Argo write them.
 POD_LOST = [

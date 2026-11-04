@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
+from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE  # noqa: E402
 
 
 def _refusal():
@@ -53,8 +53,9 @@ def test_submit_reports_the_refusal_before_exiting():
 
 
 def test_submit_forwards_the_run_id_and_workflow_name_to_the_job():
-    """The Slurm job sees the same KUBECORE_RUN_ID / KUBECORE_WORKFLOW_NAME as an in-cluster step
+    """The Slurm job sees the same KAOS_RUN_ID / KAOS_WORKFLOW_NAME (and the deprecated KUBECORE_ aliases) as an in-cluster step
     (kaos#1283: the MLflow run is named after the workflow)."""
-    from kubecore.meluxina import MELUXINA_SUBMIT_CODE
+    from kaos_pipeline.meluxina import MELUXINA_SUBMIT_CODE
     forwarded = MELUXINA_SUBMIT_CODE.split("('CHECKPOINT_BUCKET'", 1)[1].split(")", 1)[0]
-    assert "'KUBECORE_RUN_ID'" in forwarded and "'KUBECORE_WORKFLOW_NAME'" in forwarded
+    for name in ("KAOS_RUN_ID", "KAOS_WORKFLOW_NAME", "KUBECORE_RUN_ID", "KUBECORE_WORKFLOW_NAME"):
+        assert "'%s'" % name in forwarded

@@ -32,7 +32,7 @@ import re
 from hera.workflows import DAG, Container, Parameter, Resources, WorkflowTemplate
 from hera.workflows.models import ValueFrom
 
-from kubecore import derive_tree
+from kaos_pipeline import derive_tree
 
 IMAGE = "platform-managed"  # sentinel; the platform always rewrites images
 
@@ -47,9 +47,9 @@ class AuthoringError(Exception):
     pass
 COMPOSE_STEP = "compose-and-validate"
 PARAMS_PATH = "/work/params.yaml"
-# The compose step runs `python -m kubecore.compose` inside its own image;
+# The compose step runs `python -m kaos_pipeline.compose` inside its own image;
 # every other step runs `python -m app.entry` (the app's console-script).
-COMPOSE_COMMAND = ["python", "-m", "kubecore.compose"]
+COMPOSE_COMMAND = ["python", "-m", "kaos_pipeline.compose"]
 STEP_COMMAND = ["python", "-m", "app.entry"]
 
 _current = None
@@ -175,7 +175,7 @@ class pipeline:
                     )
                     if (s.gpu or s.disk)
                     else None,
-                    # Read by kubecore/meluxina.py: the Slurm time limit when
+                    # Read by kaos_pipeline/meluxina.py: the Slurm time limit when
                     # this step runs on the HPC target (developer-set; the
                     # enhancer defaults it otherwise).
                     annotations={"platform.kubecore.io/hpc": s.hpc_time_limit}

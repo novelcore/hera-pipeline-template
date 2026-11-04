@@ -15,7 +15,7 @@ You never need to type an address. Console → **Pipelines** → your app's row 
 | **lakeFS** (your project's data store) | **Datasets**, then *Create in project (opens its lakeFS)*; **Outputs** | datasets: create, upload, pull requests, **Release version**; your runs' outputs in `outputs-<app>` |
 | **MLflow** | **MLflow**, **Models** | metrics, parameters and artifacts of runs; compare runs; registered models |
 | **Console Datasets page** | sidebar → **Datasets** | every dataset of the organisation, its versions and location; **sharing** with other projects |
-| **GitHub** | the app page | your code, pull requests and the `wft-render` / `kubecore-ml-ci` checks |
+| **GitHub** | the app page | your code, pull requests and the `wft-render` / `kaos-ml-ci` checks |
 
 Each tool signs you in with the same KAOS account. If a tool asks you to sign in, use the same
 account as for the console.

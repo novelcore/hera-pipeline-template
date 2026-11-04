@@ -63,7 +63,7 @@ def write_result(cfg: dict, info: dict, entry: Optional[Path], client=None) -> s
               **describe(entry), "experiment": cfg["experiment"]["name"]}
     # CHECKPOINT_BUCKET is `outputs-<app>`, injected by the platform.
     app = os.environ.get("CHECKPOINT_BUCKET") or ((cfg.get("platform") or {}).get("checkpoints") or {}).get("bucket")
-    run = os.environ.get("KUBECORE_RUN_ID") or "local"
+    run = os.environ.get("KAOS_RUN_ID") or os.environ.get("KUBECORE_RUN_ID") or "local"
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "hello.json").write_text(json.dumps(result, indent=2))
         # The run writer saves on the branch run-<run>-checkpoints (durable, reused on a retry) and
@@ -74,13 +74,11 @@ def write_result(cfg: dict, info: dict, entry: Optional[Path], client=None) -> s
 
 
 def kaos_lib_version() -> str:
-    """The installed kaos-lib version (distribution `kaos-lib`, or `kubecore` before its first release)."""
-    for dist in ("kaos-lib", "kubecore"):
-        try:
-            return version(dist)
-        except PackageNotFoundError:
-            pass
-    return "unknown"
+    """The installed kaos-lib version (distribution `kaos-lib`)."""
+    try:
+        return version("kaos-lib")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def main() -> None:

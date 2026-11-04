@@ -1,6 +1,6 @@
 # LOCAL-DEV pipeline-context — PLACEHOLDER values only.
 #
-# This file exists ONLY so `python -m kubecore.enhance` can be exercised on a
+# This file exists ONLY so `python -m kaos_pipeline.enhance` can be exercised on a
 # laptop. In production the platform NEVER reads this copy: the k8smlapp
 # Crossplane composition writes the real pipeline-context (real endpoints, the
 # lakeFS admin secret NAME, OIDC ids, per-project compute catalog) into the
@@ -19,7 +19,7 @@ lakefs:
   endpoint: http://lakefs.internal.invalid
   repository: PLACEHOLDER-repo
   # externalUrl is the browser/CLI-facing ingress; render-wft
-  # writes it into the app repo's .kubecore/dataset-config.yaml.
+  # writes it into the app repo's .kaos/dataset-config.yaml.
   externalUrl: "https://lakefs.internal.invalid"
   adminSecret: PLACEHOLDER-lakefs-admin
   adminSecretKeys:
@@ -89,7 +89,7 @@ computeClasses:
       allocatable:
         cpu: 7
         memoryGiB: 27
-    - name: "kubecorecpu"
+    - name: "kaoscpu"
       tier: "cpu"
       machineType: "e2-standard-8"
       description: "e2-standard-8 + 200GiB — CI builds (kaniko), sized for build-push req 4cpu/12Gi"

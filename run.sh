@@ -2,8 +2,8 @@
 # Local iteration loop: no cluster needed. Creates/reuses a venv, installs the
 # pinned render deps, then runs the three stages:
 #   pipeline.py            -> out/raw-workflow-template.yaml  (your DAG)
-#   kubecore.enhance       -> out/workflow-template.yaml      (platform wiring)
-#   kubecore.compose       -> out/params.yaml                 (composed defaults)
+#   kaos_pipeline.enhance  -> out/workflow-template.yaml      (platform wiring)
+#   kaos_pipeline.compose  -> out/params.yaml                 (composed defaults)
 #
 # out/workflow-template.yaml is what the platform releases; out/params.yaml is
 # exactly what your steps receive at run time.
@@ -17,13 +17,13 @@ fi
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -e .
 
-# pipeline.py imports kubecore.* — run from the repo root so the package resolves.
+# pipeline.py imports kaos_pipeline.* — run from the repo root so the package resolves.
 PYTHONPATH="$PWD" .venv/bin/python pipeline.py
-PYTHONPATH="$PWD" .venv/bin/python -m kubecore.enhance \
+PYTHONPATH="$PWD" .venv/bin/python -m kaos_pipeline.enhance \
   --raw out/raw-workflow-template.yaml \
-  --context kubecore/local-dev/pipeline-context.yaml \
+  --context kaos_pipeline/local-dev/pipeline-context.yaml \
   --output out/workflow-template.yaml
-PYTHONPATH="$PWD" .venv/bin/python -m kubecore.compose --output out/params.yaml
+PYTHONPATH="$PWD" .venv/bin/python -m kaos_pipeline.compose --output out/params.yaml
 
 echo
 echo "done:"

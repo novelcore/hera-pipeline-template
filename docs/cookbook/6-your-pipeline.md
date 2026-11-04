@@ -15,7 +15,7 @@ config/                every setting; each one becomes a field on the run form
   experiment.yaml        experiment.name, experiment.description
   dataset.yaml           dataset: "dataset-default@latest"  (the dropdown)
 steps/<step_name>/     one folder per step: app/entry.py and a Dockerfile
-kubecore/              helper code that ships with the template; do not edit
+kaos_pipeline/         helper code that ships with the template; do not edit
 ```
 
 The shipped `pipeline.py` has two steps:
@@ -101,11 +101,11 @@ Open a pull request **into `dev`**. Then:
    opens the Argo run with the error, or with the rendered pipeline when it passes
    ("pipeline rendered: N steps, M form params").
 2. **Merge** when it is green.
-3. **`kubecore-ml-ci`** runs on the merge. It builds the step images whose folders changed and
+3. **`kaos-ml-ci`** runs on the merge. It builds the step images whose folders changed and
    releases a new version of `<app>-pipeline`. It reports on the merge commit, and in the console
    under **CI builds**.
 
-When `kubecore-ml-ci` is green, the form has your step and your new field
+When `kaos-ml-ci` is green, the form has your step and your new field
 ([Send your change in](../send-it-in.md)).
 
 ## If it isn't there
@@ -115,7 +115,7 @@ When `kubecore-ml-ci` is green, the form has your step and your new field
 | `wft-render` red: a step has no Dockerfile | add `steps/<step_name>/Dockerfile`; the folder uses underscores |
 | `wft-render` red: a section in `reads=` does not exist | fix the name in `reads=` and in the step's `READS`, or add the section to `config/` |
 | `wft-render` never appears | the pull request is not into `dev` |
-| your new field is not on the form | only plain values become fields (text, numbers, true/false); reopen the form after `kubecore-ml-ci` is green |
+| your new field is not on the form | only plain values become fields (text, numbers, true/false); reopen the form after `kaos-ml-ci` is green |
 | a step did not rebuild | only steps whose folder changed are rebuilt; that is expected |
 
 **Next:** [7. Run it](7-run-it.md).

@@ -1,6 +1,6 @@
 """compose-and-validate: what the first DAG step's container runs.
 
-Invoked in-cluster as `python -m kubecore.compose`. Takes Hydra override
+Invoked in-cluster as `python -m kaos_pipeline.compose`. Takes Hydra override
 tokens (argv) plus the optional ADVANCED override YAML, composes the config
 tree + overrides via the Hydra Compose API, validates, and emits the single
 resolved params.yaml that determines the entire experiment. Downstream steps
@@ -45,11 +45,11 @@ import yaml
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from omegaconf.nodes import BooleanNode, EnumNode, FloatNode, IntegerNode, StringNode
 
-from kubecore import derive_tree
+from kaos_pipeline import derive_tree
 
 MAX_PARAMS_BYTES = 200 * 1024
 
-HERE = Path(__file__).parent  # kubecore/
+HERE = Path(__file__).parent  # kaos_pipeline/
 DEFAULT_OUTPUT = HERE.parent / "out" / "params.yaml"
 
 

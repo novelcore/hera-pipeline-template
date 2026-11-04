@@ -1,8 +1,8 @@
 """Where a pipeline's outputs go: the app's own lakeFS outputs repository.
 
 Platform-side naming only (the render-time engine reads the pipeline-context and
-must stay stdlib + PyYAML). Steps write results with the `kubecore` Python package
-(`kubecore.outputs.write_run`), which uses the same names: `outputs-<app>`, on
+must stay stdlib + PyYAML). Steps write results with the `kaos_lib` Python package
+(`kaos_lib.outputs.run`), which uses the same names: `outputs-<app>`, on
 `main`, under `<kind>/<experiment>/<run>/`, one commit per producing step per run.
 
 The enhancer injects CHECKPOINT_BUCKET (= the repository) and CHECKPOINT_PREFIX

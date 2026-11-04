@@ -62,10 +62,10 @@ from pathlib import Path
 
 import yaml
 
-from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
-from kubecore.kaos_lib_support import support_value
-from kubecore.meluxina import enhance_hpc, hpc_classes
-from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
+from kaos_pipeline.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
+from kaos_pipeline.kaos_lib_support import support_value
+from kaos_pipeline.meluxina import enhance_hpc, hpc_classes
+from kaos_pipeline.outputs_repo import checkpoint_prefix, outputs_repo
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
 KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc"}
@@ -400,7 +400,7 @@ def enhance_class_param(spec: dict, step: dict, ctx: dict, annots: dict) -> None
         options.insert(0, default)
     # HPC classes: every step can be placed on the
     # HPC provider per run — the class is provider-prefixed (meluxina-gpu),
-    # and kubecore/meluxina.py gates the in-cluster/Slurm twin pair on it.
+    # and kaos_pipeline/meluxina.py gates the in-cluster/Slurm twin pair on it.
     hpc_names = [c["name"] for c in hpc_classes(ctx)]
     options += [n for n in hpc_names if n not in options]
     param = {
@@ -475,11 +475,15 @@ def enhance_env(step: dict, ctx: dict, annots: dict) -> None:
         )
     # Results location: the app's own outputs repository `outputs-<app>` on `main`
     # (never a dataset repository), plus the run id that names the run's
-    # directory and its lakeFS commit. Steps write with kubecore.outputs.write_run.
+    # directory and its lakeFS commit. Steps write with kaos_lib.outputs.run.
     add({"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)})
     add({"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()})
-    add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})
-    add({"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"})
+    # KAOS_* is the name; KUBECORE_* is the deprecated alias for step images that
+    # still run an older kaos-lib (removal tracked in the follow-up PRD).
+    add({"name": "KAOS_RUN_ID", "value": "{{workflow.name}}"})
+    add({"name": "KAOS_WORKFLOW_NAME", "value": "{{workflow.name}}"})
+    add({"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"})  # deprecated alias
+    add({"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"})  # deprecated alias
     # kaos-lib support window (PRD novelcore/kaos#1147): checked by the step at start.
     # Absent from the context = not injected, so the env is unchanged.
     if support_value(ctx):
@@ -837,7 +841,7 @@ def enhance_platform_group(steps: list, ctx: dict) -> None:
     `platform.*` is platform-injected runtime config (the project's lakeFS repo,
     the MLflow endpoint, the checkpoint bucket) — never a developer knob, never
     committed to a repo. The template vendors a PLACEHOLDER copy of the group so
-    `python -m kubecore.compose` works on a laptop, and that copy is baked into
+    `python -m kaos_pipeline.compose` works on a laptop, and that copy is baked into
     the compose step's image.
 
     In the cluster the placeholder must lose. Without this the composed params
@@ -992,7 +996,7 @@ def enhance(wft: dict, ctx: dict) -> dict:
     enhance_pipeline_info(spec, ctx, steps)
     # PRD-1016: the MeluXina leg — must run LAST (twin tasks copy each routed
     # step's FINAL container image/command, and the depends rewrite needs the
-    # final DAG). See kubecore/meluxina.py.
+    # final DAG). See kaos_pipeline/meluxina.py.
     enhance_hpc(spec, ctx, steps, gpu_step_names)
     return wft
 

@@ -54,7 +54,7 @@ first, wait for their approval.
 
 ## 4. Let the platform build
 
-The merge starts **`kubecore-ml-ci`**. It builds the step images whose folders changed and releases
+The merge starts **`kaos-ml-ci`**. It builds the step images whose folders changed and releases
 a new version of `<app>-pipeline`. It reports on the merge commit, in a few minutes. The console
 shows it under **Pipelines** → your app → **CI builds**.
 
