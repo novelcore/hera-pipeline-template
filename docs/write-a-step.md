@@ -53,10 +53,10 @@ with outputs.run(app, experiment, run) as r:
 Pass the MLflow run id to `finish`, and tag the MLflow run with where the files are. Then each side
 names the other ([Results](results.md#log-to-mlflow-from-a-step)).
 
-## 4. On MeluXina
+## 4. On HPC (Slurm)
 
-Nothing changes in your code. When a person picks a `meluxina-*` class for the step, the step
-writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([MeluXina](meluxina.md)).
+Nothing changes in your code. When a person picks an HPC class (`meluxina-*`) for the step, the step
+writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([Run on HPC (Slurm)](hpc.md)).
 
 ## 5. Test it on your laptop
 

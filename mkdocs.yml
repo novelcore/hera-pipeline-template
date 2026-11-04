@@ -114,7 +114,7 @@ nav:
       - Send your change in and go live: send-it-in.md
       - Run your pipeline: run-it.md
   - Results: results.md
-  - MeluXina: meluxina.md
+  - Run on HPC (Slurm): hpc.md
   - kaos-lib:
       - Versions and upgrades: kaos-lib-versions.md
       - kaos-lib reference: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html

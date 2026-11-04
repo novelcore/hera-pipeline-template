@@ -44,7 +44,7 @@ The cookbook links into these pages for the details:
   pull, share, use in a step).
 - **Pipelines**: [how it works](how-it-works.md), and pages on adding, writing and removing a step,
   changing a setting, sending a change in, and running.
-- **[Results](results.md)**, **[MeluXina](meluxina.md)**,
+- **[Results](results.md)**, **[Run on HPC (Slurm)](hpc.md)**,
   **[kaos-lib versions](kaos-lib-versions.md)** and a **[word list](glossary.md)**.
 
 kaos-lib, the library behind `kaosctl` and `import kaos_lib`, has its own reference:

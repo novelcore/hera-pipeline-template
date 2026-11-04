@@ -15,10 +15,10 @@ Every field has a default, so you can press **Submit** straight away.
 
 | field | what it is |
 |---|---|
-| `pipeline-info` | a read-only note: the classes this pipeline can use and, on a Slurm (MeluXina) project, the MeluXina account. Leave it. |
+| `pipeline-info` | a read-only note: the classes this pipeline can use and, on an HPC (Slurm) project, the HPC account. Leave it. |
 | `experiment-name`, `experiment-description` | from `config/experiment.yaml`; the name groups your runs in MLflow and in `outputs-<app>` |
 | `dataset` | a dropdown of `<dataset>@<version>`, newest first, including datasets shared with your project as `<owner>/<dataset>@<version>` |
-| `<step>-class` | the kind of machine each step runs on: your project's classes, plus `meluxina-*` on a project with Slurm (MeluXina) ([MeluXina](../meluxina.md)) |
+| `<step>-class` | the kind of machine each step runs on: your project's classes, plus the HPC classes (`meluxina-*`, the provider's name) on a project with HPC (Slurm) ([Run on HPC (Slurm)](../hpc.md)) |
 | `<step>-cpu`, `<step>-mem`, `<step>-disk` | ask for less than the whole machine, for a quick test |
 | everything else | one field per setting in `config/`, named by its path with dashes (`train.epochs` → `train-epochs`) |
 
@@ -45,8 +45,8 @@ to outputs: <commit>` at the end of the last log.
   that saves progress with kaos-lib's run writer finds what it already saved and continues from it
   ([Write results from a step](../write-a-step.md#2-save-progress-and-resume)).
 - **Resubmit** starts a new run with the same field values and a new name. It starts from scratch.
-- Steps on your project's own machines are not retried on their own. A MeluXina step whose waiting process is lost is
-  retried twice and re-attaches to its Slurm job. A job that failed on MeluXina is not retried.
+- Steps on your project's own machines are not retried on their own. An HPC step whose waiting process is lost is
+  retried twice and re-attaches to its Slurm job. A job that failed on HPC is not retried.
 - **Stop** ends a run. Results a step had already finished stay in `outputs-<app>`.
 
 ## If it isn't there
@@ -55,7 +55,7 @@ to outputs: <commit>` at the end of the last log.
 |---|---|
 | the run stops in seconds with "invalid value" | a field is outside its allowed values; the message lists them |
 | `dataset-loading` fails: the dataset or version does not exist | the message lists what exists; release a version ([chapter 5](5-your-data.md)) |
-| a step stays *Pending* for a long time | no machine of that class is free yet; one may take a few minutes to appear. A `meluxina-*` step waits in MeluXina's queue (minutes to hours) |
+| a step stays *Pending* for a long time | no machine of that class is free yet; one may take a few minutes to appear. An HPC (`meluxina-*`) step waits in the HPC queue (minutes to hours) |
 | a step is red | read the last lines of its log; [chapter 10](10-when-things-go-wrong.md) lists the usual causes |
 | no **Submit** button | your role is `business`, which is read-only ([chapter 1](1-youre-in.md)) |
 
