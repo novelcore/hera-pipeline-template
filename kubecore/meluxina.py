@@ -184,6 +184,7 @@ WALLET_EXP = 0.0
 # The Slurm JWT is read fresh per request (tok()); the wallet cannot be
 # refreshed inside a queued job, so the job itself is replaced.
 WALLET_MARGIN_S = 30 * 60
+CHECKPOINT_WARNING_S = 10 * 60   # PRD-HPC-1461 D-38: USR1 this long before the time limit
 
 
 def wallet_exp(w):
@@ -1148,11 +1149,26 @@ def submit():
         # --nv only on GPU classes: on the cpu/largemem partitions there is
         # no driver to bind and the flag makes Apptainer warn or fail.
         'NV=""; [ "${HPC_GPUS:-0}" -gt 0 ] && NV="--nv"',
-        'if [ -n "$STEP_CMD" ]; then apptainer exec $NV $PWD_OPT $BIND "$SIF"'
-        ' /bin/sh -c "$STEP_CMD"; else apptainer exec $NV $PWD_OPT $BIND "$SIF"'
-        ' /bin/sh -c "nvidia-smi -L || nproc"; fi',
-        'rc=$?',
-        'if [ -n "$STEP_OUTPUTS" ] && [ -n "$STAGEOUT_B64" ] && [ -n "$LAKEFS_BEARER_TOKEN" ]; then'
+        '[ -n "$STEP_CMD" ] || STEP_CMD="nvidia-smi -L || nproc"',
+        # PRD-HPC-1461 D-38/D-44: Slurm sends USR1 to this shell about 10 minutes
+        # before the time limit. The step runs in its own process group (set -m) and
+        # the shell passes the signal to that group. Inside, sh ignores USR1, and so
+        # does every process that keeps that inherited setting; kaos-lib's handler
+        # (an open run writer) saves progress and exits 85. A step without kaos-lib
+        # runs to the limit as before. `wait` returns early on the trap, so wait
+        # again until the step is really gone.
+        'set -m',
+        'apptainer exec $NV $PWD_OPT $BIND "$SIF" /bin/sh -c "trap \'\' USR1; $STEP_CMD" &',
+        'STEP_PID=$!',
+        'set +m',
+        'trap \'echo "stop signal: asking the step to save its progress"; kill -USR1 -- -$STEP_PID 2>/dev/null\' USR1',
+        'wait $STEP_PID; rc=$?',
+        'while kill -0 $STEP_PID 2>/dev/null; do wait $STEP_PID; rc=$?; done',
+        'trap - USR1',
+        # 85: the step saved its progress; the waiter continues the run in a new job.
+        # Its outputs are not final yet, so nothing is staged out.
+        '[ $rc -eq 85 ] && echo "step saved its progress before the time limit (exit 85)"',
+        'if [ $rc -ne 85 ] && [ -n "$STEP_OUTPUTS" ] && [ -n "$STAGEOUT_B64" ] && [ -n "$LAKEFS_BEARER_TOKEN" ]; then'
         ' printf %s "$STAGEOUT_B64" | base64 -d | python3 - || echo "stage-out failed (rc=$rc)"; fi',
         '[ $rc -eq 0 ] && rm -rf "$KAOS_WORK"',
         '[ $rc -ne 0 ] && fail $rc',
@@ -1202,7 +1218,8 @@ def submit():
         env.append('KAOS_COMMIT=' + commit)   # fail() keeps the dataset lease
     step_limit = int(os.environ.get('SLURM_TIME_LIMIT') or 240)
     job_limit = step_limit
-    if SHARING and int(HPC.get('gpus') or 0) > 0:
+    hosting = SHARING and int(HPC.get('gpus') or 0) > 0
+    if hosting:
         # F-03: the batch step becomes the host (slot manager); one slot per GPU.
         env += ['KAOS_SLOTS_B64=' + base64.b64encode(SLOTS.encode()).decode(),
                 'KAOS_SCOPE=' + SCOPE, 'KAOS_SCR=' + ident['scratch'],
@@ -1230,6 +1247,16 @@ def submit():
         # PRD-1541 D-06: the stager never evicts a commit a queued or running
         # job names here (squeue %k).
         body['job']['comment'] = 'kaos-commit=' + commit
+    if not hosting:
+        # PRD-HPC-1461 D-37/D-38: requeue lets the site put a pre-empted job back in
+        # the queue with its ID and place (users cannot requeue their own jobs on
+        # MeluXina). USR1 goes to the batch shell CHECKPOINT_WARNING_S before the
+        # limit (half the limit for short jobs), which passes it to the step (D-44).
+        # Not for a host yet: its slot manager does not pass the signal on (#1609).
+        body['job'].update({'requeue': True, 'kill_warning_signal': 'USR1',
+                            'kill_warning_flags': ['BATCH_JOB'],
+                            'kill_warning_delay': {'set': True, 'number': min(
+                                CHECKPOINT_WARNING_S, step_limit * 30)}})
     req = urllib.request.Request(API + '/job/submit',
                                  data=json.dumps(body).encode(),
                                  headers=hdrs(), method='POST')
@@ -1332,6 +1359,12 @@ TERMINAL = ('COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
 # once: a second long wait after the first resubmit must not strand the run.
 PULL_RESUBMITS = 3
 resubmits = 0
+# PRD-HPC-1461 D-44: exit 85 = the step saved its progress on the stop signal
+# (kaos-lib). The run continues in a new job, which resumes from the run's
+# branch; bounded so a step that never finishes cannot run forever.
+CHECKPOINT_EXIT = 85
+MAX_CONTINUATIONS = 5
+continuations = 0
 # Why Slurm holds a queued job (Priority, Resources, AssocGrpGRESMinutes = the
 # allocation's GPU minutes are spent, ...): only slurmctld knows it, the
 # accounting record polled below does not. Printed when it changes, so a run
@@ -1433,6 +1466,15 @@ while True:
                 resubmits += 1
                 print('pull failed - resubmitting with fresh credentials'
                       ' (%d/%d)' % (resubmits, PULL_RESUBMITS), flush=True)
+                jid = submit()
+                open('/tmp/slurm-job-id', 'w').write(str(jid))
+                continue
+            if (rc == CHECKPOINT_EXIT and not any(x in st for x in ('COMPLETED', 'CANCELLED'))
+                    and continuations < MAX_CONTINUATIONS):
+                continuations += 1
+                print('the step saved its progress before the time limit - continuing'
+                      ' the run in a new job (%d/%d)' % (continuations, MAX_CONTINUATIONS),
+                      flush=True)
                 jid = submit()
                 open('/tmp/slurm-job-id', 'w').write(str(jid))
                 continue

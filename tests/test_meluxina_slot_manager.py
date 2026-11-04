@@ -219,7 +219,7 @@ def test_the_batch_step_becomes_the_host_only_with_slots():
     src = MELUXINA_SUBMIT_CODE
     assert "'if [ -z \"$KAOS_IN_STEP\" ] && [ -n \"$KAOS_SLOTS_B64\" ]; then'," in src
     sub = src[src.index("    commit = pinned_commit()\n    if commit:"):src.index("    body = {'job':")]
-    assert "if SHARING and int(HPC.get('gpus') or 0) > 0:" in sub
+    assert "hosting = SHARING and int(HPC.get('gpus') or 0) > 0\n    if hosting:" in sub
     assert sub.index("KAOS_SLOTS_B64") < sub.index("batch, env = inputs_in_script(batch, env)"), \
         "the slot manager rides in the script, like every input"
 
