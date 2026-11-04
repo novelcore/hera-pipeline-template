@@ -1,27 +1,75 @@
-# How it works (optional)
+# How it works
 
-This page has no tasks. Read it if you want the idea behind the cookbook.
+This page has no tasks. It is a short read so the rest of the guide makes sense. Five minutes and you will get the whole idea.
 
-## Three things you own
+## Three files, three jobs
 
-- **`pipeline.py`**: your list of steps and their order.
-- **`config/`**: your settings. Every setting becomes a field on the run form.
-- **`steps/`**: your code, one folder per step, each with a small program and a Dockerfile.
+<div class="grid cards" markdown>
+
+- :material-file-tree: **`pipeline.py`**
+
+    ---
+
+    Your list of steps. It says what the steps are and what order they run in. Nothing else.
+
+- :material-tune-vertical: **`config/`**
+
+    ---
+
+    Your settings. Each one turns into a field on the run page that a person can change.
+
+- :material-package-variant-closed: **`steps/`**
+
+    ---
+
+    Your code. One folder per step, each with a small program and a Dockerfile.
+
+</div>
+
+That is the whole thing you own. Everything else is the platform.
+
+## What the platform does for you
+
+When you send your files in, the platform takes over. You do not set any of this up.
+
+- It builds each step into an image, which is a small self contained box.
+- It reads your `config/` and turns every setting into a field on a web page.
+- It picks the right machine for each step, with or without a graphics card.
+- It hands your steps the addresses and credentials they need for lakeFS and MLflow.
+- It checks your work and tells you on GitHub if something is off.
+
+## Where data and results live
+
+- **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
+  picks one in the `dataset` field. Its first step, `dataset-loading`, pins it to one commit, and
+  every later step reads that commit ([Datasets](datasets.md)).
+- **Results** go to your app's `outputs-<app>` repository, one commit per step per run, written with
+  kaos-lib ([Results](results.md)).
+- A step never writes to a dataset.
+
+You describe what you want. The platform figures out how to run it.
 
 ## What happens when you push
 
 ```mermaid
 graph TD
-    E["You edit pipeline.py, config/, steps/"] -->|push and merge| P["KAOS builds your steps"]
-    P -->|about a minute| R["Run form: your settings as a page"]
-    R -->|Submit| RUN["Your pipeline runs"]
+    E["📝 You edit: pipeline.py, config/, steps/"] -->|"PR into dev: wft-render, then merge"| P["🏗️ kubecore-ml-ci builds and releases"]
+    P -->|a few minutes| R["🖥️ Argo run page: your settings as a form"]
+    R -->|Submit| RUN["▶️ Your pipeline runs on real machines"]
+
+    style E fill:#4a148c,stroke:#7b1fa2,color:#fff
+    style P fill:#6a1b9a,stroke:#9c27b0,color:#fff,stroke-width:2px
+    style R fill:#4a148c,stroke:#7b1fa2,color:#fff
+    style RUN fill:#4a148c,stroke:#7b1fa2,color:#fff
 ```
 
-1. You push your change to the code repository and merge it after the check passes.
-2. KAOS builds an image of every step whose code changed. An image is a self-contained box with your code and its libraries.
-3. Your settings become the run form. The values you pick are combined into one file that every step receives, and it is saved so any run can be repeated exactly.
-4. Each step runs on the machine class you chose. Your steps get access to your data and MLflow without you handling any passwords.
+The values you set on the form get combined with your settings into one file before anything heavy runs. Every step receives that file. It is also saved, so any run can be repeated exactly.
 
-## The one rule
+## The one rule worth remembering
 
-You describe **what** each step is. KAOS handles **how** it runs.
+!!! quote "Remember this"
+    You describe **what** each step is. The platform handles **how** it runs.
+
+You never write a server address. You never write a password. You never pick a machine by hand. You say what your step needs, and the platform wires it up.
+
+Ready to build something. Go to [Add a step](add-a-step.md), or follow [the guide](guide-step-with-data.md) for a step that reads the dataset.

@@ -113,7 +113,7 @@ on plain dicts (no Hera dependency). The exact ordered pipeline (`enhance()`):
 | `enhance_spec_top_level` | `serviceAccountName` | fill-absent |
 | `enhance_arguments` | endpoints (`mlflow-endpoint`, `lakefs-endpoint`, `lakefs-repo`), one `image-{step}` param per step (a `configMapKeyRef` into `{app}-pipeline-images`) | image is a supply-chain concern |
 | `enhance_image` | rewrites each step's image → `{{workflow.parameters.image-{step}}}` | **always** overwritten (the one non-fill-absent rule), unless a `platform.kubecore.io/image` annotation gives a verbatim utility image |
-| `enhance_env` | `MLFLOW_TRACKING_URI`, `LAKEFS_ENDPOINT`, lakeFS creds (`secretKeyRef`), `CHECKPOINT_BUCKET/PREFIX`, `KUBECORE_RUN_ID` (the workflow name) | default-on per step; opt out via `platform.kubecore.io/inject` |
+| `enhance_env` | `MLFLOW_TRACKING_URI`, `LAKEFS_ENDPOINT`, lakeFS creds (`secretKeyRef`), `CHECKPOINT_BUCKET` (= `outputs-<app>`) / `CHECKPOINT_PREFIX` (`main/checkpoints`), `KUBECORE_RUN_ID` (the workflow name) | default-on per step; opt out via `platform.kubecore.io/inject` |
 | `enhance_class_param` | a per-step `{step}-class` dropdown (options = the pool's classes of that tier) | so a submitter routes each step onto any allowed class |
 | `enhance_sizing_knobs` | `{step}-cpu` / `{step}-mem` form params + a `podSpecPatch` wiring them | per-run sizing; runs BEFORE scheduling so dev-set values are distinguishable |
 | `enhance_scheduling` | `nodeSelector` (`nodegroup-type: {{workflow.parameters.{step}-class}}`), tolerations, whole-node `requests==limits` from the class `allocatable`, `nvidia.com/gpu` for GPU steps | fill-absent; developer-set resources win |
@@ -248,8 +248,8 @@ The gitops `workflow-template.yaml` is a Crossplane `RepositoryFile` MR with
 Crossplane seeds a one-task placeholder **once** and never issues an Update, so
 CI's git commit of the real rendered WFT is never reverted. ArgoCD `selfHeal` then
 keeps the live cluster WFT equal to what CI committed — so the platform's stated
-guarantee ("cluster state == last released pipeline") holds, and manual `kubectl`
-edits to the live WFT are reverted (everything goes through git, by design).
+guarantee ("cluster state == last released pipeline") holds, and manual changes
+to the live WFT are reverted (everything goes through git, by design).
 
 ---
 

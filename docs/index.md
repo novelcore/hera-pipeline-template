@@ -1,34 +1,56 @@
-# Start here
+# The engineer's cookbook
 
-You were given a KAOS account and a project. This guide takes you from sign-in to a trained model, in plain steps.
+You are an ML or software engineer and you have just been added to a KAOS project. This cookbook
+takes you through your first day. By the end of it you have built a pipeline end to end, run it on
+your own data, and you are comparing the trained weights of two runs.
 
-**hera** is the starter ("scaffold") template for ML pipelines on KAOS. A pipeline is a list of steps, such as prepare data, then train, then report. You write them in Python, keep your settings in simple files, and push to your pipeline's code repository. KAOS builds the steps, puts your settings on a run form and runs the pipeline on the machines of your choice. For object detection there is a ready-made template, **yolo**, built on hera.
+Read the chapters in order the first time. Each one says what it is for, who is allowed to do it,
+what to click or paste, what you should see, what to do if you don't, and where to go next.
 
-## The 5-minute path
-
-1. Sign in to the KAOS console and look around: [You are in](cookbook/01-you-are-in.md).
-2. Install `kaosctl` and sign in: [Install kaosctl](cookbook/03-install-kaosctl.md).
-3. Create a dataset and release `v1`: [Create a dataset](cookbook/04-create-a-dataset.md).
-4. In the console, **Machine learning → Pipelines → New pipeline**: [Create your pipeline](cookbook/05-create-your-pipeline.md).
-5. Open its run page, pick `dataset-<name>@v1` and press **Submit**: [Run it](cookbook/07-run-it.md).
-
-## The cookbook
-
-| # | Page | You will |
+| | chapter | at the end of it you have |
 |---|---|---|
-| 1 | [You are in](cookbook/01-you-are-in.md) | Sign in and learn the console |
-| 2 | [Your project](cookbook/02-your-project.md) | Understand where a pipeline can run |
-| 3 | [Install kaosctl](cookbook/03-install-kaosctl.md) | Get the data tool on your laptop |
-| 4 | [Create a dataset](cookbook/04-create-a-dataset.md) | Upload data and release a version |
-| 5 | [Create your pipeline](cookbook/05-create-your-pipeline.md) | Start from hera or yolo |
-| 6 | [Change a step](cookbook/06-change-a-step.md) | Read your dataset in code and push |
-| 7 | [Run it](cookbook/07-run-it.md) | Pick a dataset version and submit |
-| 8 | [See the results](cookbook/08-see-results.md) | Metrics, weights, comparing runs |
-| 9 | [Share a dataset](cookbook/09-share-a-dataset.md) | Read another project's data |
-| 10 | [When things go wrong](cookbook/10-when-things-go-wrong.md) | Real messages and fixes |
+| 1 | [You're in](cookbook/1-youre-in.md) | signed in to the console; you have found your organisation, your project and your role |
+| 2 | [Your project's apps](cookbook/2-your-apps.md) | an ML app, either an existing one or one you created from this template, cloned on your computer |
+| 3 | [Your tools](cookbook/3-your-tools.md) | Argo, lakeFS, MLflow, the console's Datasets page and GitHub open in your browser |
+| 4 | [Install kaosctl and sign in](cookbook/4-install-kaosctl.md) | the `kaosctl` command, signed in to your project |
+| 5 | [Your data](cookbook/5-your-data.md) | a dataset with your files, released as `v1` and ready to share |
+| 6 | [Your pipeline](cookbook/6-your-pipeline.md) | the shipped pipeline run once, and then your own step added, checked and live |
+| 7 | [Run it](cookbook/7-run-it.md) | a run started from the form, watched, its logs read, and retried if needed |
+| 8 | [Results and weights](cookbook/8-results-and-weights.md) | your run's outputs and its MLflow run, with two runs compared |
+| 9 | [The yolo use case](cookbook/9-the-yolo-use-case.md) | the same day with the yolo template: labelled images, two trainings compared, weights picked |
+| 10 | [When things go wrong](cookbook/10-when-things-go-wrong.md) | a fix for the symptom in front of you |
 
-## Reference
+## The loop you will repeat
 
-[How it works](how-it-works.md) (optional) · [kaos-lib versions](kaos-lib-versions.md) · [Add a step](add-a-step.md) · [Remove a step](remove-a-step.md) · [Change a setting](change-a-setting.md) · [Troubleshooting](troubleshooting.md) · [Word list](glossary.md)
+```mermaid
+graph LR
+    D["Data: push, PR, release v1"] --> E["Code: edit steps and config"]
+    E --> P["PR into dev: the wft-render check"]
+    P --> M["Merge: kubecore-ml-ci builds the new version"]
+    M --> R["Run: the form in Argo"]
+    R --> O["Results: outputs-app and MLflow"]
+    O --> D
+```
 
-The library behind it all, kaos-lib, has its own docs: [kaos-lib documentation](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
+## The rest of the site
+
+The cookbook links into these pages for the details:
+
+- **Guides** walk one task from start to finish: [first dataset and run](first-run.md),
+  [upload images and labels for yolo](guide-upload-yolo.md),
+  [add a step that reads the dataset and writes a result](guide-step-with-data.md), and
+  [run on a released version and find the result](guide-run-on-a-version.md).
+- **Datasets**: [concepts](datasets.md), then one page per task (create, upload, validate, release,
+  pull, share, use in a step).
+- **Pipelines**: [how it works](how-it-works.md), and pages on adding, writing and removing a step,
+  changing a setting, sending a change in, and running.
+- **[Results](results.md)**, **[MeluXina](meluxina.md)**,
+  **[kaos-lib versions](kaos-lib-versions.md)** and a **[word list](glossary.md)**.
+
+kaos-lib, the library behind `kaosctl` and `import kaos_lib`, has its own reference:
+[the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
+
+!!! note "Using the yolo template?"
+    The [yolo pipeline guide](https://novelcore.github.io/yolo-pipelines-template/) covers the same
+    day for the yolo training pipeline. It links back to these chapters for everything the two
+    templates share.

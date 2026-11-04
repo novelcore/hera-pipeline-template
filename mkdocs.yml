@@ -1,11 +1,11 @@
 site_name: Hera Pipeline Guide
-site_description: A friendly, step by step guide to building your own Hera pipeline from this template
+site_description: The engineer's cookbook for KAOS ML pipelines - from your first sign-in to comparing trained weights
 site_author: Novelcore
 site_url: https://novelcore.github.io/hera-pipeline-template/
 
 repo_name: novelcore/hera-pipeline-template
 repo_url: https://github.com/novelcore/hera-pipeline-template
-edit_uri: edit/dev/docs/
+edit_uri: edit/main/docs/
 
 docs_dir: docs
 
@@ -79,30 +79,45 @@ extra:
       link: https://github.com/novelcore/hera-pipeline-template
 
 nav:
-  - Start here: index.md
   - Cookbook:
-      - 1. You are in: cookbook/01-you-are-in.md
-      - 2. Your project: cookbook/02-your-project.md
-      - 3. Install kaosctl: cookbook/03-install-kaosctl.md
-      - 4. Create a dataset: cookbook/04-create-a-dataset.md
-      - 5. Create your pipeline: cookbook/05-create-your-pipeline.md
-      - 6. Change a step and push: cookbook/06-change-a-step.md
-      - 7. Run it: cookbook/07-run-it.md
-      - 8. See the results: cookbook/08-see-results.md
-      - 9. Share a dataset: cookbook/09-share-a-dataset.md
+      - Your first day: index.md
+      - 1. You're in: cookbook/1-youre-in.md
+      - 2. Your project's apps: cookbook/2-your-apps.md
+      - 3. Your tools: cookbook/3-your-tools.md
+      - 4. Install kaosctl and sign in: cookbook/4-install-kaosctl.md
+      - 5. Your data: cookbook/5-your-data.md
+      - 6. Your pipeline: cookbook/6-your-pipeline.md
+      - 7. Run it: cookbook/7-run-it.md
+      - 8. Results and weights: cookbook/8-results-and-weights.md
+      - 9. The yolo use case: cookbook/9-the-yolo-use-case.md
       - 10. When things go wrong: cookbook/10-when-things-go-wrong.md
-  - Reference:
-      - What you need: what-you-need.md
-      - Get the project: get-the-project.md
+  - Guides:
+      - First dataset and run: first-run.md
+      - Upload images and labels for yolo: guide-upload-yolo.md
+      - Add a step that reads the dataset: guide-step-with-data.md
+      - Run on a released version: guide-run-on-a-version.md
+  - Datasets:
+      - What a dataset is: datasets.md
+      - Create a dataset: dataset-create.md
+      - Add or change data: dataset-upload.md
+      - Check a dataset: dataset-validate.md
+      - Release a version: dataset-release.md
+      - Download a dataset: dataset-pull.md
+      - Share a dataset: dataset-share.md
+      - Use a dataset in a step: dataset-in-a-step.md
+  - Pipelines:
       - How it works: how-it-works.md
       - Add a step: add-a-step.md
+      - Write results from a step: write-a-step.md
       - Remove a step: remove-a-step.md
       - Change a setting: change-a-setting.md
-      - Send your change in: send-it-in.md
-      - Go live: go-live.md
+      - Send your change in and go live: send-it-in.md
       - Run your pipeline: run-it.md
-      - kaos-lib versions: kaos-lib-versions.md
-      - Troubleshooting: troubleshooting.md
-      - Word list: glossary.md
+  - Results: results.md
+  - MeluXina: meluxina.md
+  - kaos-lib:
+      - Versions and upgrades: kaos-lib-versions.md
+      - kaos-lib reference: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html
+  - Word list: glossary.md
 
 copyright: "Copyright &copy; 2026 Novelcore"

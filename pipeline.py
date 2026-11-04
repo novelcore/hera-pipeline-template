@@ -6,8 +6,10 @@ writes (outputs=), and an optional condition (when=). Every tunable parameter
 lives in the config/ tree and reaches the submit form automatically — there is
 no parameter wiring here.
 
-This template ships a single example step (hello-world). Add your own steps
-under steps/<name>/ and wire them here. See README.md / DEVELOPER.md.
+This template ships two example steps: dataset-loading pins the run's dataset
+(the `dataset` parameter, <dataset-repo>@<version>) to one commit, and hello-world
+reads that commit and writes a result to the app's outputs repository. Add your own
+steps under steps/<name>/ and wire them here. See README.md / DEVELOPER.md.
 """
 
 from pathlib import Path
@@ -21,7 +23,8 @@ HERE = Path(__file__).parent
 # each app gets its own uniquely-named WFT (no collisions across apps in a
 # shared namespace). You don't need to change it per app.
 with pipeline("ml-pipeline") as p:
-    hello = step("hello-world", reads=["experiment"])
+    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
+    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 
 if __name__ == "__main__":
     p.write(HERE / "out" / "raw-workflow-template.yaml")

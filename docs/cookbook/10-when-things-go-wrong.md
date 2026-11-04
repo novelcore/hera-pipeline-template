@@ -1,20 +1,90 @@
 # 10. When things go wrong
 
-Messages are quoted as `kaosctl` prints them. More on pipeline checks: [When something breaks](../troubleshooting.md).
+**Goal:** find your symptom and fix it. The sections follow the order of the day.
 
-| You see | What it means | Do this |
-|---|---|---|
-| `ERROR: not signed in. Run kaosctl login, ...` | No session, or it expired. | `kaosctl login` |
-| `ERROR: --classes and --param fill a layout's parameters, and no layout is named ...` | A new dataset has no layout unless you name one. | Add `--layout yolo` (or another from `kaosctl layout list`). |
-| `<folder> has N problem(s) for layout yolo:` and a list | Your folder does not match the layout. | Fix each listed line, run `kaosctl dataset validate <folder>` again, then push. |
-| `ERROR: cannot release team-a/...: ... read-only. Ask team-a to release it.` | You are using another project's shared dataset. | Ask that project. |
-| `kaosctl: command not found` | The virtual environment is not active. | `. .venv/bin/activate` |
-| `externally-managed-environment` when installing | Your system Python refuses installs. | Install inside a virtual environment, as in [step 3](03-install-kaosctl.md). |
-| `No matching distribution found for PyJWT` (or another dependency) | You gave pip only the `kaos-lib` index. | Add `--extra-index-url https://pypi.org/simple/`. |
-| `cannot determine the lakeFS URL` | `kaosctl` was not run in your pipeline folder. | `cd` into your pipeline's code folder, or pass `--url`. |
-| A version is missing from the run form's dataset dropdown | The release has not shown up yet, or it was never released. | Wait a minute and reload the form. Check `kaosctl dataset versions dataset-<name>`; if it is not listed, release it ([step 4](04-create-a-dataset.md)). |
-| A step box is red | The step stopped with an error. | Click it and read the last lines of its log. |
-| The run stops at once with a list of allowed values | A field accepts a fixed set of choices. | Pick one of the listed values. |
-| `kaosctl` refuses `create`, `release` or `push` as unsupported | Your `kaos-lib` is too old. | `kaosctl upgrade` |
+**The habit that solves most of them:** read the message. A red check has a **Details** link, and
+a red step has a log. Read the last lines first. KAOS errors name the one thing to fix, and
+`kaosctl` prints a single `ERROR:` line.
 
-Still stuck? Send your project administrator the exact message and what you were doing.
+## Signing in and access
+
+| symptom | cause and fix |
+|---|---|
+| the console shows no project | you are not on a team with access to it. An organisation admin adds you ([chapter 1](1-youre-in.md)) |
+| added to a team, still no access | the team links your sign-in e-mail; check it is the exact address. Wait a few minutes, then sign out and in again |
+| `403` in Argo, lakeFS or MLflow | your role does not cover that project or that action ([chapter 1](1-youre-in.md)) |
+| no **Identity & Access** in the sidebar | only organisation admins see it |
+
+## The app and its first build
+
+| symptom | cause and fix |
+|---|---|
+| no **New pipeline**, or the project is not offered | the project cannot host an ML pipeline yet; ask a project admin |
+| stuck on **Awaiting first build** | the build was not triggered; check the repository and its `dev` branch exist, then ask your KAOS contact |
+| **Build failed** | **View run** opens the build in Argo; read the failing step |
+
+## kaosctl
+
+| symptom | cause and fix |
+|---|---|
+| `kaosctl: command not found` | activate the virtual environment, or install kaos-lib 0.4.0rc5 or newer ([chapter 4](4-install-kaosctl.md)) |
+| `cannot determine the lakeFS URL` | run it inside your app folder |
+| `externally-managed-environment` from `pip` | install inside a virtual environment ([chapter 4](4-install-kaosctl.md)) |
+| the browser does not open on `kaosctl login` | open the printed link yourself; the tool waits about three minutes |
+| `pip` cannot find `kaos-lib` | use the platform's index (`--index-url ...`) and keep `--extra-index-url https://pypi.org/simple/` for its dependencies |
+
+## Data
+
+| symptom | cause and fix |
+|---|---|
+| `push` stops and lists problems (exit code 2) | fix each one; for yolo, every label needs its image, and every class id must be below the number of `names` ([Check a dataset](../dataset-validate.md)) |
+| `push` opened a pull request but `main` is unchanged | merge the pull request in lakeFS |
+| the new version is not in the run form's dropdown | the list is refreshed after a release; wait a few minutes and reopen the form |
+| a shared dataset is not in the dropdown | the owner has not saved the sharing, or your pipeline has not been refreshed since |
+| `push` to a shared dataset is refused | only the owning project writes it |
+
+## The pull request checks
+
+| symptom | cause and fix |
+|---|---|
+| `wft-render` red: a step has no Dockerfile | add `steps/<step_name>/Dockerfile`; folder names use underscores, step names use dashes |
+| `wft-render` red: a step reads a section that does not exist | fix `reads=` in `pipeline.py` and `READS` in the step, or add the section to `config/` |
+| `wft-render` red: a step needs a step that is gone | remove it from the `needs=` list ([Remove a step](../remove-a-step.md)) |
+| no `wft-render` at all | the pull request is not into `dev` |
+| `kubecore-ml-ci` red after the merge | open its **Details**; it is the build of a step image or of the pipeline |
+| my step did not rebuild | only steps whose folder changed are rebuilt; your change is still live |
+| my new setting is not on the form | only plain values become fields; a long list or a nested block does not ([Change a setting](../change-a-setting.md)) |
+
+## The run
+
+| symptom | cause and fix |
+|---|---|
+| it stops in seconds with "invalid value" | a field is outside its allowed values; the message lists them |
+| `dataset-loading` fails | the dataset or version does not exist; the message lists what does |
+| `hello-world` says "holds no files yet" | the dataset is empty; this is not an error. Push data and release a version ([chapter 5](5-your-data.md)) |
+| a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On a `meluxina-*` class it waits in MeluXina's queue |
+| a step is red with `ImagePullBackOff` | its image was not built; check `kubecore-ml-ci` for that commit |
+| a step is red with `OOMKilled` | it ran out of memory; pick a bigger `<step>-class` or raise `<step>-mem` |
+| a retry started from scratch | you used **Resubmit**, which is a new run; **Retry** keeps the run name and resumes ([chapter 7](7-run-it.md)) |
+
+## Results and MLflow
+
+| symptom | cause and fix |
+|---|---|
+| nothing in `outputs-<app>` | the step failed before `finish()`; its saves wait on `run-<run>-<kind>` for a retry |
+| no MLflow run | the step does not log to MLflow ([Results](../results.md#log-to-mlflow-from-a-step)) |
+| MLflow `401` from your laptop | `kaosctl login` again, inside the app folder |
+| `kaosctl run --lock`: the run has no data lock | the step never called `kaos_lib.lock.write` |
+
+## MeluXina
+
+| symptom | cause and fix |
+|---|---|
+| no `meluxina-*` in the class dropdown | your project has no Slurm (MeluXina) environment yet ([MeluXina](../meluxina.md)) |
+| a MeluXina step waits for hours | the Slurm queue is busy; the waiting time is real |
+| it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py` |
+
+## Still stuck
+
+Copy the exact message and the run name, say what you were doing, and send it to your KAOS
+contact.
