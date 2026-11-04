@@ -1,15 +1,29 @@
 # hera-pipeline-template
 
-A KAOS ML pipeline you write in **Python** ([Hera](https://github.com/argoproj-labs/hera)), with
-its settings in a **[Hydra](https://github.com/facebookresearch/hydra) config tree**. Add your
-steps and settings and open a pull request into `dev`. The platform checks it, builds your step
-images on merge, and releases a pipeline you run from a web form. You never touch Kubernetes.
+**hera** is the starter ("scaffold") template for ML pipelines on KAOS. You write the pipeline in
+**Python** ([Hera](https://github.com/argoproj-labs/hera)), keep its settings in a
+**[Hydra](https://github.com/facebookresearch/hydra) config tree**, and push to your pipeline's
+code repository. KAOS builds your steps and gives you a run form. You never touch servers.
+For object detection there is a ready-made template built on hera:
+[yolo](https://github.com/novelcore/yolo-pipelines-template).
 
-New ML apps are seeded from this template.
+## Start here
 
-**The guide: [novelcore.github.io/hera-pipeline-template](https://novelcore.github.io/hera-pipeline-template/)**.
-It is built around *the engineer's cookbook*, which takes you from your first sign-in to comparing
-the trained weights of two runs.
+You were given a KAOS account and a project? Follow **[the cookbook](docs/index.md)**. It goes from
+your first sign-in to comparing the trained weights of two runs.
+
+The same guide is published at <https://novelcore.github.io/hera-pipeline-template/>. That site
+shows the **released** version, so a page that is new here may not be there yet. Links inside this
+repository are relative and work on any branch.
+
+### The 5-minute path
+
+1. Sign in to the KAOS console. **Machine learning** is in the sidebar ([1. You're in](docs/cookbook/1-youre-in.md)).
+2. Install `kaosctl` and run `kaosctl login` ([4. Install kaosctl](docs/cookbook/4-install-kaosctl.md)).
+3. Create a dataset, upload data, release `v1` ([5. Your data](docs/cookbook/5-your-data.md)).
+4. Create your pipeline from this template: **Pipelines**, **New pipeline** ([2. Your project's apps](docs/cookbook/2-your-apps.md)).
+5. Open the run form, pick `dataset-<name>@v1`, press **Submit** ([7. Run it](docs/cookbook/7-run-it.md)).
+6. Open the run in MLflow ([8. Results and weights](docs/cookbook/8-results-and-weights.md)).
 
 ## The pipeline in one file
 
@@ -17,13 +31,13 @@ the trained weights of two runs.
 # pipeline.py
 from kubecore.authoring import pipeline, step
 
-with pipeline("ml-pipeline") as p:  # the platform renames it <app>-pipeline
+with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
     load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
     hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
 
-`dataset-loading` pins the dataset version the run picked to one commit. `hello-world` reads it
-and writes a result to the app's `outputs-<app>` repository. **The `config/` tree is the submit
+`dataset-loading` pins the dataset version the run picked to one commit. `hello-world` reads it and
+writes a result to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
 form**: every plain value in `config/` becomes a field.
 
 ## Layout
@@ -32,7 +46,7 @@ form**: every plain value in `config/` becomes a field.
 pipeline.py            the steps and their order (reads=, gpu=, needs=, outputs=, when=)
 config/                every setting; each one is a field on the run form
 steps/<name>/          one folder per step: app/entry.py and a Dockerfile
-kubecore/              the platform's engine: seeded, do not edit
+kubecore/              helper code that ships with the template: do not edit
 tests/, step_tests/    engine tests; step-code tests (DEVELOPER.md §15)
 docs/                  the guide (mkdocs)
 ```
@@ -49,19 +63,22 @@ kaosctl dataset push ./my-data dataset-my-data -m "first data"
 ```
 
 `kaosctl` needs kaos-lib **0.4.0rc5** or newer
-([install](https://novelcore.github.io/hera-pipeline-template/cookbook/4-install-kaosctl/)).
+([install](docs/cookbook/4-install-kaosctl.md)).
 The library is documented at [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
 ## Where to read next
 
 | you want to | read |
 |---|---|
-| start from zero: access, apps, tools, data, pipeline, results | [the cookbook](https://novelcore.github.io/hera-pipeline-template/) |
-| make a dataset, run on it, find the result | [guide: first dataset and run](https://novelcore.github.io/hera-pipeline-template/first-run/) |
-| add a step that reads the dataset | [guide: add a step](https://novelcore.github.io/hera-pipeline-template/guide-step-with-data/) |
-| run a step on MeluXina | [MeluXina](https://novelcore.github.io/hera-pipeline-template/meluxina/) |
+| start from zero: access, apps, tools, data, pipeline, results | [the cookbook](docs/index.md) |
+| make a dataset, run on it, find the result | [guide: first dataset and run](docs/first-run.md) |
+| add a step that reads the dataset | [guide: add a step](docs/guide-step-with-data.md) |
+| run a step on MeluXina | [MeluXina](docs/meluxina.md) |
 | the operating manual: config, tests, HPC | [DEVELOPER.md](DEVELOPER.md) |
-| how the platform works inside | [MECHANISMS.md](MECHANISMS.md), [PLATFORM.md](PLATFORM.md) |
+
+## Checking the docs
+
+`make docs-check` (or `scripts/check-docs.sh`) builds the site with `mkdocs build --strict` and checks every internal link and anchor. Add `--external` to also check external links. Install the tools first: `pip install -r docs/requirements.txt`. No GitHub Actions needed.
 
 ## License
 

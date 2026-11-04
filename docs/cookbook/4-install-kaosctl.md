@@ -8,7 +8,7 @@ computer.
 
 ## 1. Install it
 
-`kaosctl` comes with **kaos-lib**, the platform's Python package. Install it in a virtual
+`kaosctl` comes with **kaos-lib**, the KAOS Python package. Install it in a virtual
 environment of its own:
 
 === "Development projects (prerelease)"
@@ -26,12 +26,12 @@ environment of its own:
     python3 -m venv ~/.venvs/kaos
     . ~/.venvs/kaos/bin/activate          # Windows: %USERPROFILE%\.venvs\kaos\Scripts\activate
     pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib/simple/ \
-        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]==<version your platform contact gives you>"
+        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]==<version your KAOS contact gives you>"
     ```
 
     The stable channel has no release yet. Until it has one, use the prerelease line.
 
-The first address is the platform's package index; kaos-lib is not on PyPI. The second brings
+The first address is the KAOS package index; kaos-lib is not on PyPI. The second brings
 kaos-lib's own dependencies from PyPI. The `zitadel` extra is for datasets that other projects share
 with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
 ([chapter 8](8-results-and-weights.md)).
@@ -57,7 +57,7 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
 kaosctl --version
 ```
 
-This prints the version, its channel (`prerelease` or `stable`) and the version your platform
+This prints the version, its channel (`prerelease` or `stable`) and the version KAOS
 recommends. To move to the recommended one:
 
 ```bash

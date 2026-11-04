@@ -1,6 +1,6 @@
 # kaos-lib versions and upgrades
 
-Your step images install **kaos-lib**, the platform's Python package for datasets and run outputs
+Your step images install **kaos-lib**, the KAOS Python package for datasets and run outputs
 (`import kaos_lib`; the `kubecore` package is its deprecated former name). The same package gives
 you `kaosctl` on your computer. This page explains who picks its version, how a new version reaches
 your app, how to hold a version, and how long a version is supported. The library itself is
@@ -71,7 +71,7 @@ you get a new pull request for that one, and the platform closes the older one.
 
 - **From your repository**: narrow the range. `kaos-lib: "==0.4.2"` keeps exactly 0.4.2;
   a newer released version arrives as a bump pull request instead of a rebuild.
-- **On the platform**: your platform contact can pin your app to one version (the app's
+- **On the platform**: your KAOS contact can pin your app to one version (the app's
   `kaosLib` setting). A pinned app is never moved when the platform's default changes, and
   gets no bump pull requests.
 

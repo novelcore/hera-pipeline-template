@@ -38,10 +38,7 @@ has a Dockerfile. Nothing is built or released yet. A second check, **`kaos-lib/
 whether your kaos-lib version is still supported ([kaos-lib versions](kaos-lib-versions.md)). It
 never blocks the render.
 
-??? note "What Details shows"
-    The render job in Argo. Green means the render finished.
-
-    ![The render job running on the platform](img/argo-pr-render.png)
+**Details** opens the run that checked your pipeline. Green means the check finished.
 
 If it is red, fix the one thing the message names and push again. The same pull request updates
 and the check runs again.
@@ -60,9 +57,6 @@ first, wait for their approval.
 The merge starts **`kubecore-ml-ci`**. It builds the step images whose folders changed and releases
 a new version of `<app>-pipeline`. It reports on the merge commit, in a few minutes. The console
 shows it under **Pipelines** → your app → **CI builds**.
-
-??? note "What the build looks like in Argo"
-    ![The build job on the platform, every step green](img/argo-build-green.png)
 
 When it is green, your step or setting is on the form. You never built an image, picked a machine,
 or typed a password.

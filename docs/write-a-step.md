@@ -56,10 +56,9 @@ names the other ([Results](results.md#log-to-mlflow-from-a-step)).
 ## 4. On MeluXina
 
 Nothing changes in your code. When a person picks a `meluxina-*` class for the step, the step
-writes with the same run writer, and the commit appears in `outputs-<app>` as for a step in the
-cluster ([MeluXina](meluxina.md)).
+writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([MeluXina](meluxina.md)).
 
-## 5. Test it without a cluster
+## 5. Test it on your laptop
 
 Step code that imports `kaos_lib` has its own test command, separate from the engine tests: see
 `step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS, vendored

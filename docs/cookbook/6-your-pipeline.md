@@ -15,13 +15,13 @@ config/                every setting; each one becomes a field on the run form
   experiment.yaml        experiment.name, experiment.description
   dataset.yaml           dataset: "dataset-default@latest"  (the dropdown)
 steps/<step_name>/     one folder per step: app/entry.py and a Dockerfile
-kubecore/              the platform's engine; do not edit
+kubecore/              helper code that ships with the template; do not edit
 ```
 
 The shipped `pipeline.py` has two steps:
 
 ```python
-with pipeline("ml-pipeline") as p:   # the platform renames it <app>-pipeline
+with pipeline("ml-pipeline") as p:   # KAOS names it <app>-pipeline
     load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
     hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
 ```
@@ -95,11 +95,11 @@ git push -u origin add-my-step
 
 Open a pull request **into `dev`**. Then:
 
-1. **`wft-render`** runs on the pull request. It renders your pipeline the way the platform will
+1. **`wft-render`** runs on the pull request. It renders your pipeline the way KAOS will
    build it: the steps are wired, every `reads=` names a config section that exists, and every step
    has a `steps/<dir>/Dockerfile`. It reports as a status check on the pull request. **Details**
    opens the Argo run with the error, or with the rendered pipeline when it passes
-   ("WorkflowTemplate rendered: N steps, M form params").
+   ("pipeline rendered: N steps, M form params").
 2. **Merge** when it is green.
 3. **`kubecore-ml-ci`** runs on the merge. It builds the step images whose folders changed and
    releases a new version of `<app>-pipeline`. It reports on the merge commit, and in the console

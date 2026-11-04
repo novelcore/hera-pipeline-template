@@ -20,23 +20,11 @@ You never need to type an address. Console → **Pipelines** → your app's row 
 Each tool signs you in with the same KAOS account. If a tool asks you to sign in, use the same
 account as for the console.
 
-## The addresses, if you want bookmarks
-
-| tool | address |
-|---|---|
-| Argo Workflows | `https://workflows.system.<pool domain>` |
-| lakeFS | `https://lakefs-<project>.<project domain>` |
-| MLflow | `https://mlflow-<project>.<project domain>` |
-| console | `https://<org>.console.<platform domain>` |
-
-The pool domain is the domain of the cluster your project runs on. The project domain is your
-project's subdomain under it (on the development platform it has the form
-`<project>.<region>.<pool domain>`, for example `europe-west1`; verify on yours). The console links
-are always right, so copy the address from there.
+Copy the address from the console link when you want a bookmark; the console links are always current.
 
 ## What you should see
 
-- **Argo:** the **Workflow Templates** list has `<app>-pipeline` once the first build is done.
+- **Argo:** the **Workflow Templates** list (Argo's list of runnable pipelines) has `<app>-pipeline` once the first build is done.
   **Workflows** lists runs and builds.
 - **lakeFS:** the **Datasets** page lists `dataset-default` and any datasets of your project, with
   a **New dataset** button. The repository list also has `outputs-<app>`.
@@ -45,8 +33,8 @@ are always right, so copy the address from there.
 
 ## If it isn't there
 
-- **A link is missing from the app's row:** that part of the project is not deployed yet. For
-  example, no **MLflow** link means the project has no MLflow. Ask your platform contact.
+- **A link is missing from the app's row:** that part of your project is not set up yet. For
+  example, no **MLflow** link means the project has no MLflow. Ask your KAOS contact.
 - **"403" or "access denied" in Argo:** your role does not include this project. Check your team
   ([chapter 1](1-youre-in.md)).
 - **No `<app>-pipeline` in Argo:** the first build has not finished ([chapter 2](2-your-apps.md)).

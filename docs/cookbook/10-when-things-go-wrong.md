@@ -11,7 +11,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | symptom | cause and fix |
 |---|---|
 | the console shows no project | you are not on a team with access to it. An organisation admin adds you ([chapter 1](1-youre-in.md)) |
-| added to a team, still no access | the team links your sign-in e-mail; check it is the exact address. Wait for the platform sync, then sign out and in again |
+| added to a team, still no access | the team links your sign-in e-mail; check it is the exact address. Wait a few minutes, then sign out and in again |
 | `403` in Argo, lakeFS or MLflow | your role does not cover that project or that action ([chapter 1](1-youre-in.md)) |
 | no **Identity & Access** in the sidebar | only organisation admins see it |
 
@@ -20,7 +20,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | symptom | cause and fix |
 |---|---|
 | no **New pipeline**, or the project is not offered | the project cannot host an ML pipeline yet; ask a project admin |
-| stuck on **Awaiting first build** | the build was not triggered; check the repository and its `dev` branch exist, then ask your platform contact |
+| stuck on **Awaiting first build** | the build was not triggered; check the repository and its `dev` branch exist, then ask your KAOS contact |
 | **Build failed** | **View run** opens the build in Argo; read the failing step |
 
 ## kaosctl
@@ -80,11 +80,11 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 
 | symptom | cause and fix |
 |---|---|
-| no `meluxina-*` in the class dropdown | your project's pool is not HPC-enabled ([MeluXina](../meluxina.md)) |
+| no `meluxina-*` in the class dropdown | your project has no Slurm (MeluXina) environment yet ([MeluXina](../meluxina.md)) |
 | a MeluXina step waits for hours | the Slurm queue is busy; the waiting time is real |
 | it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py` |
 
 ## Still stuck
 
-Copy the exact message and the run name, say what you were doing, and send it to your platform
+Copy the exact message and the run name, say what you were doing, and send it to your KAOS
 contact.

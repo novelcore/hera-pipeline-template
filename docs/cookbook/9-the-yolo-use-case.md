@@ -18,7 +18,7 @@ config-validation → dataset-loading → data-summary
 ## The worked day
 
 The yolo guide walks it through with every click and command:
-**[A day with yolo](https://novelcore.github.io/yolo-pipelines-template/worked-day/)**. In short:
+**[A day with yolo](https://github.com/novelcore/yolo-pipelines-template/blob/dev/docs/worked-day.md)**. In short:
 
 1. **Create the app**: console → **Pipelines** → **New pipeline** → the yolo card
    ([chapter 2](2-your-apps.md)).

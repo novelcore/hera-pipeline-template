@@ -183,8 +183,8 @@ Per step:
 
 ## 5. Add a step
 
-> **New here? Read [Add a step](https://novelcore.github.io/hera-pipeline-template/add-a-step/)**
-> (or [a step that reads the dataset](https://novelcore.github.io/hera-pipeline-template/guide-step-with-data/))
+> **New here? Read [Add a step](docs/add-a-step.md)**
+> (or [a step that reads the dataset](docs/guide-step-with-data.md))
 > in the guide: a complete, copy-paste walkthrough with every command and how to verify it.
 > The version below is the quick reference once you know the shape.
 

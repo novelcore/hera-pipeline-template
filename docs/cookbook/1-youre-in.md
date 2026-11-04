@@ -7,10 +7,9 @@ what your role lets you do.
 
 ## Sign in
 
-1. Open your organisation's console. Its address has the form `https://<org>.console.<platform domain>`.
-   Your organisation admin sends it with the invitation e-mail.
+1. Open your organisation's console. The link is in the invitation e-mail your organisation admin sent.
 2. Sign in with the account the invitation was sent to. KAOS has a single sign-in, and the same
-   account later opens Argo, lakeFS, MLflow and `kaosctl`.
+   account later opens the run page (Argo), lakeFS, MLflow and `kaosctl`.
 3. In the sidebar, open **Projects**. This lists the projects of your organisation. Open yours.
 
 ## What you should see
@@ -18,7 +17,7 @@ what your role lets you do.
 - Your organisation's name at the top of the sidebar.
 - Your project under **Projects**. On the project page you see its environments, and buttons that
   open its dashboards and its **Datasets**.
-- Under **Pipelines**, the ML apps of the projects you can see. [Chapter 2](2-your-apps.md) covers
+- Under **Pipelines**, the pipelines of the projects you can see. [Chapter 2](2-your-apps.md) covers
   this page.
 
 ## What your role allows
@@ -34,17 +33,13 @@ and every member of the team has that role.
 | `dev` | submit, retry, stop runs | maintain: push branches, open and merge pull requests | signed in (verify the per-experiment rights) |
 | `business` | read only | triage: read, comment | signed in (verify the per-experiment rights) |
 
-These rights come from the platform's own setup: the Argo SSO rules for each project role, the
-GitHub team permission each role maps to, and MLflow's admin group. Pipelines log to MLflow with
-the project's own machine account, which has admin rights, so a run's MLflow records never depend
-on who submitted it. For datasets, lakeFS has no separate
-rights per person. Everyone who can sign in to the project's lakeFS gets the same rights there
-(verify which teams your project lets into lakeFS). Two rules apply to everyone: changes to a
-dataset's `main` go only through a pull request, and only the owning project can write a dataset
-([Datasets](../datasets.md)).
+Pipelines record their results in MLflow under your project's own account, so a run's MLflow
+records do not depend on who submitted it. In lakeFS, everyone who can sign in to your project's
+lakeFS has the same rights there. Two rules apply to everyone: changes to a dataset's `main` go only
+through a pull request (a proposed change that must be accepted), and only the owning project can
+write a dataset ([Datasets](../datasets.md)).
 
-The console's **Identity & Access** page, under its **Roles** tab, shows "what each role can do, as
-proven by the platform's end-to-end RBAC tests". If your role and the table above disagree, the
+The console's **Identity & Access** page, under its **Roles** tab, shows "what each role can do". If your role and the table above disagree, the
 console page is right.
 
 To work through this cookbook you need `dev`, `ops` or `admin` on your project.
@@ -64,7 +59,7 @@ team"* for a member in that state.
   different e-mail, for example a personal one, does not match. Give your admin the exact address
   you sign in with.
 
-Access takes effect once the platform syncs the team. The console shows *"Committed, waiting for
+Access takes effect a few minutes after the team is saved. The console shows *"Committed, waiting for
 platform sync."* in the meantime. Sign out and in again afterwards.
 
 **Next:** [2. Your project's apps](2-your-apps.md).

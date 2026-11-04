@@ -43,4 +43,4 @@ every read ([Results](results.md#replay-a-runs-data)).
 
 With the yolo template the same run trains a model. Its weights land in the same place, and MLflow
 links them: see [Results and weights](cookbook/8-results-and-weights.md) and the yolo guide's
-[train on a version and find the model](https://novelcore.github.io/yolo-pipelines-template/guide-train-and-find-the-model/).
+[train on a version and find the model](https://github.com/novelcore/yolo-pipelines-template/blob/dev/docs/guide-train-and-find-the-model.md).

@@ -74,7 +74,7 @@ with mlf.start_run(run_name=os.environ["KUBECORE_RUN_ID"]) as run:
 ## Replay a run's data
 
 ```bash
-export MLFLOW_TRACKING_URI=https://mlflow-<project>.<project domain>
+export MLFLOW_TRACKING_URI=<the address behind the console's MLflow link>
 kaosctl run --lock <mlflow-run-id> -- python evaluate.py
 ```
 

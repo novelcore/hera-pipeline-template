@@ -131,7 +131,7 @@ Here is what each part means.
 
 ## Step 5. Check it on your computer (optional)
 
-You do not need a cluster to sanity check your work. From the project folder, run this.
+You do not need a cloud run to sanity check your work. From the project folder, run this.
 
 ```bash
 ./run.sh

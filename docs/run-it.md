@@ -19,8 +19,8 @@ Every field came from your `config/` folder, plus a few the platform adds:
 - **`dataset`**: a dropdown of your project's datasets and versions, such as `dataset-cats@v2`, and
   of datasets shared with your project, such as `team-a/dataset-cats@v3`
   ([Datasets](datasets.md)).
-- `<step>-class` for each step: the kind of machine it runs on, including `meluxina-*` on an
-  HPC-enabled pool ([MeluXina](meluxina.md)).
+- `<step>-class` for each step: the kind of machine it runs on, including `meluxina-*` on a
+  project with Slurm (MeluXina) ([MeluXina](meluxina.md)).
 - `<step>-cpu`, `<step>-mem` and `<step>-disk` to ask for less, for a quick test.
 
 ![The experiment fields on the submit form](img/form-experiment-fields.png)

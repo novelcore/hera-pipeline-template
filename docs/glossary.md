@@ -42,7 +42,7 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **Layout.** The shape a dataset must have, such as `yolo` (images, labels, `data.yaml`). `validate` and `push` check it. `none` means any files.
 
-**MeluXina.** The Luxembourg supercomputer. On an HPC-enabled pool a step can run there by picking a `meluxina-*` class ([MeluXina](meluxina.md)).
+**MeluXina.** The Luxembourg supercomputer. On a project with a Slurm (MeluXina) environment a step can run there by picking a `meluxina-*` class ([MeluXina](meluxina.md)).
 
 **Merge.** To accept a pull request, which makes the change part of the project for real.
 

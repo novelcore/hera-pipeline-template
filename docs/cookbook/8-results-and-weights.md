@@ -35,7 +35,7 @@ For the shipped pipeline you find `hello.json`, which names the dataset and the 
 
 A step that logs to MLflow puts there the run's **metrics**, its **parameters** (every form field
 it used), the **dataset commit** it read, and the **`kaos_lib.*` tags**. The yolo template's
-training step does all of this. In your own step, call `kaos_lib.mlflow.mlflow()` once: the platform
+training step does all of this. In your own step, call `kaos_lib.mlflow.mlflow()` once: KAOS
 sets the step's tracking address and sign-in, and kaos-lib adds the token
 ([Results](../results.md#log-to-mlflow-from-a-step) has the snippet).
 
@@ -82,7 +82,7 @@ A step that calls `kaos_lib.lock.write(<mlflow run id>)` records every dataset c
 evaluation or a re-training:
 
 ```bash
-export MLFLOW_TRACKING_URI=https://mlflow-<project>.<project domain>     # copy it from the console's MLflow link
+export MLFLOW_TRACKING_URI=<the address behind the console's MLflow link>
 kaosctl run --lock <mlflow-run-id> -- python evaluate.py ./run-a/best.pt
 ```
 
