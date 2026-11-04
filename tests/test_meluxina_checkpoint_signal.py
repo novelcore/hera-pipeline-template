@@ -110,3 +110,13 @@ def test_exit_85_continues_the_run_a_bounded_number_of_times():
     cont = loop[loop.index("if (rc == CHECKPOINT_EXIT"):loop.index("if 'COMPLETED' in st:")]
     assert "continuations < MAX_CONTINUATIONS" in cont and "jid = submit()" in cont and "continue" in cont
     assert "'CANCELLED'" in cont        # a stopped run is never continued
+
+
+def test_the_waiters_deadline_covers_every_continuation():
+    """Each continued job queues, prepares and runs again: a deadline sized for one job would kill
+    the waiter in the middle of a continued run."""
+    from kubecore import meluxina
+    assert "MAX_CONTINUATIONS = %d" % meluxina.HPC_MAX_CONTINUATIONS in MELUXINA_SUBMIT_CODE
+    src = Path(meluxina.__file__).read_text()
+    assert ("(1 + HPC_MAX_CONTINUATIONS)\n                              * (minutes + QUEUE_ALLOWANCE_MINUTES) * 60"
+            in src)

@@ -1572,6 +1572,10 @@ DEFAULT_TIME_LIMIT_MINUTES = 240
 # first, on_term leaves a RUNNING job to finish unobserved — so the deadline
 # must comfortably exceed queue + prep + time limit.
 QUEUE_ALLOWANCE_MINUTES = 480
+# PRD-HPC-1461 D-44: a step that saves on the stop signal continues in a new job,
+# at most this many times (MAX_CONTINUATIONS in the waiter). Each job may queue,
+# prepare and run again, so the waiter's deadline covers all of them.
+HPC_MAX_CONTINUATIONS = 5
 HPC_ANNOTATION = "platform.kubecore.io/hpc"
 # How the kubelet words a waiter pod lost with its node: Argo marks such a pod
 # Failed (a pod with a status message is never an Error), so OnError alone
@@ -1714,7 +1718,8 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                  "value": _cmd_json(cmd, routed=routable, provider=provider)},
                 {"name": "time-limit", "value": str(minutes)},
                 {"name": "deadline-seconds",
-                 "value": str((minutes + QUEUE_ALLOWANCE_MINUTES) * 60)},
+                 "value": str((1 + HPC_MAX_CONTINUATIONS)
+                              * (minutes + QUEUE_ALLOWANCE_MINUTES) * 60)},
                 {"name": "step-outputs", "value": ",".join(step_outputs)},
                 {"name": "hpc-class", "value": "{{workflow.parameters.%s-class}}" % step["name"]},
             ]},
