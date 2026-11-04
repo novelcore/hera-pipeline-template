@@ -185,6 +185,7 @@ WALLET_EXP = 0.0
 # refreshed inside a queued job, so the job itself is replaced.
 WALLET_MARGIN_S = 30 * 60
 CHECKPOINT_WARNING_S = 10 * 60   # PRD-HPC-1461 D-38: USR1 this long before the time limit
+OFFER_S = 60   # PRD-1609: a sharing job waits this long for a host of its scope to take it
 
 
 def wallet_exp(w):
@@ -361,7 +362,10 @@ CPUS = max(1, int(os.environ.get('SLURM_CPUS_ON_NODE') or GPUS) // GPUS)
 IDLE_S = int(os.environ.get('KAOS_IDLE_S') or 120)
 MARGIN_S = 300          # a guest must end this long before the host's own limit
 TOKEN_MARGIN_S = 1800   # ... and this long before its own token expires (D-07)
-HELD = ('JobHeld', 'Dependency', 'BeginTime')
+# Not takeable: held (another host took it) or waiting for another job. A job of this
+# scope waiting for its BeginTime is in its offer window (OFFER_S): exactly the job a
+# host should take, so it is NOT skipped.
+HELD = ('JobHeld', 'Dependency')
 POLL_S = float(os.environ.get('KAOS_POLL_S') or 2)   # watchdog cadence; queue every 5 polls
 
 
@@ -1253,6 +1257,14 @@ def submit():
         # PRD-1541 D-06: the stager never evicts a commit a queued or running
         # job names here (squeue %k).
         body['job']['comment'] = 'kaos-commit=' + commit
+    if SHARING and int(HPC.get('gpus') or 0) > 0:
+        # PRD-1609 offer window (PRD-HPC-1461 N-12): a sharing job starts OFFER_S late,
+        # so a running host of the same scope can take it even when free nodes would
+        # start it at once (a quiet site packed nothing: e2e 56c7480b). Slurm makes it
+        # eligible by itself afterwards: nothing has to release it, so there is no race
+        # beyond the one take() already handles (hold, then check it is still pending).
+        # Live 2026-11-05 (job 5422046): BeginTime for 45 s, then it started alone.
+        body['job']['begin_time'] = {'set': True, 'number': int(time.time()) + OFFER_S}
     if not hosting:
         # PRD-HPC-1461 D-37/D-38: requeue lets the site put a pre-empted job back in
         # the queue with its ID and place (users cannot requeue their own jobs on

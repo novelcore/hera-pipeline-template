@@ -322,3 +322,31 @@ def test_every_step_is_told_its_slot(tmp_path):
     rc, log = node.finish()
     assert rc == 0, log
     assert (node.out / "101").read_text().split() == ["1", "32", "120", "1"]
+
+
+def test_a_job_in_its_offer_window_is_taken_but_a_held_one_is_not(tmp_path):
+    """PRD-1609 offer window: a sharing job is submitted to begin OFFER_S late, so it waits with
+    reason BeginTime even when a free node could start it. A host of its scope must take it then
+    (e2e 56c7480b: on a quiet site both trainings started alone and nothing was packed). A job held
+    by another host (JobHeld) or waiting for another job (Dependency) is still never touched."""
+    offered = _job("kaos-%s-wf1-train" % SCOPE, "echo yes > $OUT/101\nexit 0\n", comment="kaos-commit=bbbbbbb2")
+    offered["reason"] = "BeginTime"
+    waiting_on_dep = _job("kaos-%s-wf2-train" % SCOPE, "echo NO > $OUT/102\n", comment="kaos-commit=bbbbbbb3")
+    waiting_on_dep["reason"] = "Dependency"
+    node = Node(tmp_path, {"101": offered, "102": waiting_on_dep})
+    rc, log = node.finish()
+    assert rc == 0, log
+    jobs = node.jobs()
+    assert (node.out / "101").read_text().strip() == "yes", log
+    assert jobs["101"]["comment"] == "kaos-commit=bbbbbbb2 kaos-state=done rc=0 host=100"
+    assert jobs["102"]["state"] == "PENDING" and not (node.out / "102").exists(), (jobs["102"], log)
+
+
+def test_a_sharing_job_is_submitted_with_an_offer_window():
+    src = MELUXINA_SUBMIT_CODE
+    assert "OFFER_S = 60" in src
+    sub = src[src.index("def submit():"):]
+    block = sub[sub.index("    if SHARING and int(HPC.get('gpus') or 0) > 0:\n        # PRD-1609 offer window"):
+                sub.index("    if not hosting:")]
+    assert "body['job']['begin_time'] = {'set': True, 'number': int(time.time()) + OFFER_S}" in block
+    assert "HELD = ('JobHeld', 'Dependency')" in src
