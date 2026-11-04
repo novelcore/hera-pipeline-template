@@ -58,7 +58,7 @@ except EmptyDataset:
 | none | the local folder with the files at that commit (`prefix=` for one folder) |
 
 The address of lakeFS and the credentials come from the step's environment: you write none of that.
-The first call downloads and keeps the copy; on MeluXina the platform has staged it already.
+The first call downloads and keeps the copy; on HPC the platform has staged it already.
 
 Catch `EmptyDataset` only in a step that can do something useful without data (the template's
 `hello-world` reports "holds no files yet" and still succeeds). A training step should let it fail.

@@ -73,7 +73,7 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 | start from zero: access, apps, tools, data, pipeline, results | [the cookbook](docs/index.md) |
 | make a dataset, run on it, find the result | [guide: first dataset and run](docs/first-run.md) |
 | add a step that reads the dataset | [guide: add a step](docs/guide-step-with-data.md) |
-| run a step on MeluXina | [MeluXina](docs/meluxina.md) |
+| run a step on HPC (Slurm) | [Run on HPC (Slurm)](docs/hpc.md) |
 | the operating manual: config, tests, HPC | [DEVELOPER.md](DEVELOPER.md) |
 
 ## Checking the docs

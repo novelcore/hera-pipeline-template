@@ -62,7 +62,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | it stops in seconds with "invalid value" | a field is outside its allowed values; the message lists them |
 | `dataset-loading` fails | the dataset or version does not exist; the message lists what does |
 | `hello-world` says "holds no files yet" | the dataset is empty; this is not an error. Push data and release a version ([chapter 5](5-your-data.md)) |
-| a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On a `meluxina-*` class it waits in MeluXina's queue |
+| a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On an HPC class (`meluxina-*`) it waits in the HPC queue |
 | a step is red with `ImagePullBackOff` | its image was not built; check `kubecore-ml-ci` for that commit |
 | a step is red with `OOMKilled` | it ran out of memory; pick a bigger `<step>-class` or raise `<step>-mem` |
 | a retry started from scratch | you used **Resubmit**, which is a new run; **Retry** keeps the run name and resumes ([chapter 7](7-run-it.md)) |
@@ -76,12 +76,12 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | MLflow `401` from your laptop | `kaosctl login` again, inside the app folder |
 | `kaosctl run --lock`: the run has no data lock | the step never called `kaos_lib.lock.write` |
 
-## MeluXina
+## HPC (Slurm)
 
 | symptom | cause and fix |
 |---|---|
-| no `meluxina-*` in the class dropdown | your project has no Slurm (MeluXina) environment yet ([MeluXina](../meluxina.md)) |
-| a MeluXina step waits for hours | the Slurm queue is busy; the waiting time is real |
+| no `meluxina-*` in the class dropdown | your project has no HPC (Slurm) environment yet ([Run on HPC (Slurm)](../hpc.md)); HPC class names start with `meluxina-`, the provider's name |
+| an HPC step waits for hours | the Slurm queue is busy; the waiting time is real |
 | it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py` |
 
 ## Still stuck

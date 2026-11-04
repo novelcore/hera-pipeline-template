@@ -7,7 +7,7 @@ from dataset-loading). This one:
   1. reads the dataset at the commit dataset-loading pinned, through kaos-lib
      package (`datasets.materialize`). The package picks the dataset's format from its
      `kaos.template` label (an unlabelled repository is read as plain files) and returns
-     the local entry point. On MeluXina the platform stages the commit and the package
+     the local entry point. On HPC the platform stages the commit and the package
      uses that copy. A dataset with no files yet (a new project's `dataset-default`) is
      reported, not an error, so the first run of a new app succeeds;
   2. writes a small result to the app's own outputs repository `outputs-<app>` with the run
