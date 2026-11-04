@@ -51,6 +51,15 @@ train = step("model-training", gpu=True, needs=[load], hpc_time_limit="12h",
 The value takes minutes or hours: `"90m"`, `"12h"`, or `"720"` (minutes). The platform adds a queue
 allowance on top for its own wait.
 
+### Long runs continue after the time limit
+
+About 10 minutes before the limit, a step with an open run writer (`outputs.run(...)`) saves what it has
+written so far and stops; the run then continues in a new job, up to 5 times. Your step resumes with
+`r.latest(...)`, as in [Save progress and resume](write-a-step.md#2-save-progress-and-resume). To also save a
+folder your framework writes to, name it: `outputs.run(app, experiment, run, autosave="runs/")`. A continued
+run waits in the queue again, and its time counts against your budget. Steps without a run writer run to
+the limit as before.
+
 ## What you should see
 
 - The step's log shows its Slurm job, then your step's own output.
@@ -64,7 +73,7 @@ allowance on top for its own wait.
 |---|---|
 | no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet; ask your KAOS contact |
 | the step waits for hours | the queue is busy; this is the HPC queue, not your run |
-| the step stops at its time limit | raise `hpc_time_limit` |
+| the step stops at its time limit | raise `hpc_time_limit`, or save progress with a run writer so the run continues |
 | the job is refused or never starts | the HPC allocation may be used up or not cover that class; ask your KAOS contact |
 | a lost waiting pod | it is retried twice and re-attaches to the same Slurm job; a job that failed on HPC is not retried |
 
