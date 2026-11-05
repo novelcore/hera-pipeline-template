@@ -68,7 +68,7 @@ from kubecore.meluxina import enhance_hpc, hpc_classes
 from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
-KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc"}
+KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc", "hpc-resumable"}
 WORKSPACE_MOUNT = "/workspace"
 # Mount path for the Zitadel machine-key secret backing MLflow bearer auth
 # (#868) — matches the previous DSL's working reference (/etc/mlflow-svc).
