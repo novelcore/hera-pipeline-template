@@ -132,7 +132,7 @@ def test_stage_out_goes_to_a_hand_off_branch_of_the_outputs_repository(tmp_path,
                  "KAOS_WORK": str(tmp_path)}.items():
         monkeypatch.setenv(k, v)
     g = {}
-    exec(MELUXINA_SUBMIT_CODE.split("import base64, json")[0], g)
+    exec(MELUXINA_SUBMIT_CODE.split("import base64, hashlib, json")[0], g)
     exec(g["STAGEOUT"], {})
     # a hand-off branch, never main: a merge into a dirty main is refused by lakeFS
     assert any("/repositories/outputs-myapp/branches/hpc-u-model-training/objects?" in u for u in lakefs.urls), lakefs.urls

@@ -203,7 +203,7 @@ for o in objs:
 print('checkpoint stage-in: %d files from %s@%s %s' % (len(objs), repo, ref[:12], prefix), flush=True)
 """
 
-import base64, json, os, re, shlex, signal, subprocess, sys, threading, time, urllib.parse, urllib.request
+import base64, hashlib, json, os, re, shlex, signal, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 # F-04 stage-in, run ON the compute node (system python3, stdlib only):
 # take the commit dataset-loading pinned (DATASET_COMMIT) or resolve
@@ -305,6 +305,10 @@ WALLET_MARGIN_S = 30 * 60
 # this many minutes before its wall time, and continues in a new job; 0 = not resumable.
 RESUMABLE_LEAD_MIN = int(os.environ.get('HPC_RESUMABLE_LEAD') or 0)
 ATTEMPT = 1      # this step's job: 1, then one more per continuation
+# PRD-HPC-1461 D-44: exit 85 = the step saved its checkpoint; it continues in a new job at most
+# MAX_CONTINUATIONS times (the render's HPC_MAX_CONTINUATIONS sizes the waiter's deadline for them).
+CHECKPOINT_EXIT = 85
+MAX_CONTINUATIONS = 5
 RESUME = None    # (commit, path) of the checkpoint the next job continues from
 OFFER_S = 60   # PRD-1609: a sharing job waits this long for a host of its scope to take it
 
@@ -1440,6 +1444,8 @@ def submit():
     print('submitted job', j, 'errors:', resp.get('errors'), flush=True)
     if not j:
         sys.exit(1)
+    # A resubmit replaces the site job of the same attempt: the attempt does not end.
+    report(siteJobID=str(j), state='PENDING')
     return j
 
 
@@ -1466,6 +1472,159 @@ def cancel(j):
         print('cancel failed:', e, flush=True)
 
 
+# PRD-HPC-1461 F-26 / D-34, phase 0 "observe and admit": with the pool's HPC controller on, every
+# attempt of this step is an HPCArgoWorkflowJob in this namespace. The runner submits an attempt only
+# after the controller admitted it and booked it against the project's share, and reports the site
+# job to it (status.run) so the controller settles each attempt and decides a continuation. Off
+# (the default): nothing here runs and the step behaves as before. On but unusable (no controller
+# on the pool, no permission): the step fails; it never submits around the admission.
+CONTROLLER = os.environ.get('HPC_CONTROLLER') == 'on'
+K8S_SA = '/var/run/secrets/kubernetes.io/serviceaccount'
+RECORD_ACTIVE = ('Admitted', 'Running')
+RECORD_TERMINAL = ('Succeeded', 'Failed', 'Cancelled', 'Refused')
+RUN_FIELDS = ('attempt', 'siteJobID', 'state', 'exitCode', 'startTime', 'endTime', 'terminal',
+              'hostSiteJobID', 'slot', 'checkpointRef')
+
+
+def k8s(method, path, body=None, ctype='application/json'):
+    import ssl
+    tok = open(K8S_SA + '/token').read().strip()          # re-read: projected tokens rotate
+    req = urllib.request.Request(
+        'https://kubernetes.default.svc' + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={'Authorization': 'Bearer ' + tok, 'Content-Type': ctype, 'Accept': 'application/json'})
+    ctx = ssl.create_default_context(cafile=K8S_SA + '/ca.crt')
+    with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+        return json.load(r)
+
+
+def record_name():
+    """One record per step of a workflow run: deterministic, so a retried waiter finds it."""
+    name = re.sub('[^a-z0-9-]+', '-', ('%s-%s' % (os.environ.get('KUBECORE_WORKFLOW_NAME') or '',
+                                                  os.environ['STEP_NAME'])).lower()).strip('-')
+    if len(name) > 63:
+        name = name[:54].rstrip('-') + '-' + hashlib.sha256(name.encode()).hexdigest()[:8]
+    return name
+
+
+def record_path(sub=''):
+    ns = open(K8S_SA + '/namespace').read().strip()
+    return '/apis/hpc.kaos.io/v1alpha1/namespaces/%s/hpcargoworkflowjobs/%s%s' % (ns, record_name(), sub)
+
+
+def record_spec():
+    spec = {'class': os.environ.get('HPC_CLASS') or '', 'image': img,
+            'command': json.loads(os.environ.get('STEP_COMMAND') or '[]', strict=False),
+            'wallTimeMinutes': int(os.environ.get('SLURM_TIME_LIMIT') or 240), 'nodes': 1,
+            'outputs': [n for n in (os.environ.get('STEP_OUTPUTS') or '').split(',') if n]}
+    if os.environ.get('DATASET'):
+        spec['datasetRef'] = '%s@%s' % dataset_coords()
+    if RESUMABLE_LEAD_MIN:
+        spec['resumable'] = {'leadMinutes': RESUMABLE_LEAD_MIN, 'maxContinuations': MAX_CONTINUATIONS}
+    return spec
+
+
+def record_unusable(e):
+    code = getattr(e, 'code', None)
+    why = {404: 'the pool has no HPC controller (no hpcargoworkflowjobs.hpc.kaos.io)',
+           403: 'this step may not create its HPC job record'}.get(code)
+    if why:
+        print('HPC controller is on for this project, but %s; not submitting around its admission'
+              ' (PRD-HPC-1461 D-34)' % why, flush=True)
+        sys.exit(1)
+
+
+def ensure_record():
+    """Create this step's record (owned by its Workflow) or, on a retried waiter, read the existing one."""
+    body = {'apiVersion': 'hpc.kaos.io/v1alpha1', 'kind': 'HPCArgoWorkflowJob',
+            'metadata': {'name': record_name(),
+                         'labels': {'workflows.argoproj.io/workflow': os.environ.get('KUBECORE_WORKFLOW_NAME') or '',
+                                    'hpc.kaos.io/step': os.environ['STEP_NAME'][:63]},
+                         'ownerReferences': [{'apiVersion': 'argoproj.io/v1alpha1', 'kind': 'Workflow',
+                                              'name': os.environ.get('KUBECORE_WORKFLOW_NAME') or '',
+                                              'uid': os.environ['WF_UID']}]},
+            'spec': record_spec()}
+    for n in range(30):
+        try:
+            return k8s('POST', record_path()[:record_path().rindex('/')], body)
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                try:
+                    return k8s('GET', record_path())
+                except urllib.error.HTTPError as g:
+                    e = g
+            record_unusable(e)
+            print('HPC job record: HTTP %s, retrying' % e.code, flush=True)
+        except Exception as e:
+            print('HPC job record: %s, retrying' % e, flush=True)
+        time.sleep(10)
+    print('HPC job record: the API server did not answer for 5 minutes', flush=True)
+    sys.exit(1)
+
+
+def await_admission(attempt):
+    """Block until the controller admits this attempt and books it. Its refusal, or the record ending
+    (for example a continuation it declined), ends the step with the controller's reason."""
+    last = None
+    while True:
+        try:
+            st = k8s('GET', record_path()).get('status') or {}
+        except Exception as e:
+            print('HPC job record unreadable (%s), asking again' % e, flush=True)
+            time.sleep(10)
+            continue
+        phase = st.get('phase') or 'Pending'
+        if int(st.get('attempt') or 1) == attempt and phase in RECORD_ACTIVE:
+            b = st.get('booking') or {}
+            print('admitted: attempt %d, %s node-minutes booked on %s' % (
+                attempt, b.get('nodeMinutes', '?'), b.get('siteName', '?')), flush=True)
+            return st
+        if phase in RECORD_TERMINAL:
+            print('not admitted: %s %s: %s' % (phase, st.get('reason') or '', st.get('message') or ''), flush=True)
+            sys.exit(1)
+        if (phase, st.get('reason')) != last:
+            print('waiting for the HPC controller: %s %s %s' % (
+                phase, st.get('reason') or '', st.get('message') or ''), flush=True)
+            last = (phase, st.get('reason'))
+        time.sleep(5)
+
+
+def site_time(job, key):
+    t = ((job.get('time') or {}).get(key))
+    t = t.get('number') if isinstance(t, dict) else t
+    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(t)) if t else None
+
+
+def report(must=False, **run):
+    """status.run of this attempt, every field written (a merge patch would keep an earlier attempt's
+    exit code or checkpoint). must: retry until it lands; the controller settles from it."""
+    if not CONTROLLER:
+        return
+    run['attempt'] = ATTEMPT
+    body = {'status': {'run': {k: run.get(k) for k in RUN_FIELDS}}}
+    for n in range(60 if must else 1):
+        try:
+            k8s('PATCH', record_path('/status'), body, 'application/merge-patch+json')
+            return
+        except Exception as e:
+            print('HPC job record: report failed (%s)%s' % (e, ', retrying' if must else ''), flush=True)
+            if must:
+                time.sleep(10)
+    if must:
+        print('HPC job record: the end of the site job could not be reported', flush=True)
+        sys.exit(1)
+
+
+def checkpoint_uri(ckpt):
+    return 'lakefs://%s/%s/%s' % (os.environ.get('OUTPUTS_REPO') or '', ckpt[0], ckpt[1])
+
+
+def resume_of(uri):
+    """(commit, path) from a checkpoint URI the runner reported, or None."""
+    m = re.fullmatch(r'lakefs://[^/]+/([0-9a-f]{40,64})/(\S+/)', uri or '')
+    return (m.group(1), m.group(2)) if m else None
+
+
 def on_term(signum, frame):
     # Argo sends TERM on deadline/stop. A PENDING job never started — cancel
     # it so it does not run unobserved hours later (live job 5143859 did
@@ -1476,6 +1635,7 @@ def on_term(signum, frame):
         j = (get(API + '/job/' + str(jid)).get('jobs') or [{}])[0]
         if 'PENDING' in (j.get('job_state') or []):
             cancel(jid)
+            report(siteJobID=str(jid), state='CANCELLED', terminal=True)
     except Exception:
         pass
     sys.exit(143)
@@ -1483,10 +1643,20 @@ def on_term(signum, frame):
 
 signal.signal(signal.SIGTERM, on_term)
 
+START_CONTINUATIONS = 0
+if CONTROLLER:
+    st = ensure_record().get('status') or {}
+    # A retried waiter continues where the record is: its attempt, continuations and resume point.
+    ATTEMPT = max(int(st.get('attempt') or 1), 1)
+    START_CONTINUATIONS = int(st.get('continuations') or 0)
+    RESUME = resume_of((st.get('resume') or {}).get('checkpointRef'))
+    print('HPC job record %s: attempt %d' % (record_name(), ATTEMPT), flush=True)
 jid = find_active()
 if jid is not None:
     print('adopting existing job', jid, flush=True)
 else:
+    if CONTROLLER:
+        await_admission(ATTEMPT)
     jid = submit()
 
 open('/tmp/slurm-job-id', 'w').write(str(jid))
@@ -1530,12 +1700,9 @@ TERMINAL = ('COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL',
 # once: a second long wait after the first resubmit must not strand the run.
 PULL_RESUBMITS = 3
 resubmits = 0
-# PRD-HPC-1461 D-44: exit 85 = the step saved its progress on the stop signal
-# (kaos-lib). The run continues in a new job, which resumes from the run's
-# branch; bounded so a step that never finishes cannot run forever.
-CHECKPOINT_EXIT = 85
-MAX_CONTINUATIONS = 5
-continuations = 0
+# Continuations so far (D-44); a retried waiter starts from its record's count.
+continuations = START_CONTINUATIONS
+reported = None   # the last (state, host, slot) reported to the HPC job record
 
 
 def checkpoint_path(attempt):
@@ -1619,6 +1786,12 @@ while True:
         st = (job.get('state') or {}).get('current') or []
         print('state:', st, flush=True)
         share = share_state(comment_of(job))
+        now = (','.join(st), share.get('host'), share.get('slot'))
+        if CONTROLLER and now != reported and not any(x in TERMINAL for x in st):
+            report(siteJobID=str(jid), state=now[0], startTime=site_time(job, 'start'),
+                   hostSiteJobID=share.get('host'),
+                   slot=int(share['slot']) if (share.get('slot') or '').isdigit() else None)
+            reported = now
         if 'PENDING' in st:
             try:
                 live = (get(API + '/job/' + str(jid)).get('jobs') or [{}])[0]
@@ -1709,17 +1882,28 @@ while True:
                     why = ''
                 if why:
                     print('not continuing the step:', why, flush=True)
+                    report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
+                           startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True,
+                           checkpointRef=checkpoint_uri(ckpt) if ckpt else None)
                     sys.exit(1)
+                report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
+                       startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True,
+                       checkpointRef=checkpoint_uri(ckpt))
                 continuations += 1
                 ATTEMPT += 1
                 RESUME = ckpt
                 print('the step saved its checkpoint (%s) before its wall time - continuing it in a'
                       ' new job (%d/%d)' % (ckpt[0][:12], continuations, MAX_CONTINUATIONS), flush=True)
+                if CONTROLLER:
+                    await_admission(ATTEMPT)   # re-booked like a new step (A4); it may decline
+                reported = None
                 jid = submit()
                 open('/tmp/slurm-job-id', 'w').write(str(jid))
                 continue
             if 'COMPLETED' in st:
                 fetch_outputs()
+            report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
+                   startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True)
             sys.exit(0 if ('COMPLETED' in st and rc in (0, None)) else 1)
     except SystemExit:
         raise
@@ -1834,6 +2018,15 @@ def sharing_env(ctx: dict) -> list:
         return []
     return [{"name": "HPC_SHARING", "value": "on"},
             {"name": "HPC_SCOPE", "value": str(hpc["scope"])}]
+
+
+def controller_env(ctx: dict) -> list:
+    """PRD-HPC-1461 D-34 phase 0: the operator publishes hpc.controller "on" in the pipeline context
+    once the pool's HPC controller serves the project; the waiter then submits only after it admits.
+    Absent: nothing is added and the waiter renders exactly as before."""
+    if (ctx.get("hpc") or {}).get("controller") not in ("on", True):
+        return []
+    return [{"name": "HPC_CONTROLLER", "value": "on"}]
 
 
 def parse_time_limit(value) -> int:
@@ -2126,7 +2319,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
                 {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
             ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else [])
-              + sharing_env(ctx),
+              + sharing_env(ctx) + controller_env(ctx),
         },
         # slurm-job-id plus the union of every routed step's declared outputs
         # (one shared template; each twin fills its own, the rest default).
