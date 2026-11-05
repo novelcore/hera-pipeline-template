@@ -312,6 +312,15 @@ wait budget; a run that outlives that budget keeps running on HPC but is
 no longer observed by the pipeline. Queue time is the one variable you don't
 control — expect minutes to hours depending on the partition's load.
 
+`resumable=True` (or a lead such as `resumable="20m"`, shorter than the wall
+time) makes a GPU step resumable: Slurm sends it USR1 that long before the wall
+time, the step saves with `kaos_lib.checkpoint` and exits 85, the job uploads
+and commits `<work>/output/checkpoint/` to `outputs-<app>` (branch
+`hpc-ckpt-<workflow-uid>-<step>`, folder `hpc-checkpoints/<workflow-uid>/<step>/attempt-<n>/`)
+and records the commit in its job comment, and the waiter submits the next job
+with `KAOS_RESUME_PATH` set, up to 5 times. Only resumable steps get the signal
+or continue, and they never share a node. See docs/hpc.md.
+
 ## 9. Data flow between steps
 
 **Parameters (small)**: declare `outputs=["training-result"]`, write

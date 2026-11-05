@@ -128,7 +128,7 @@ developer choices — are the **WFT name** and the **image**.
 
 **Unknown `platform.kubecore.io/*` annotations hard-fail the enhance** (typo
 protection). The known vocabulary: `compute-class, inject, source, image, shm,
-workspace, hpc` (`hpc` = the Slurm wall-clock limit set by `step(hpc_time_limit=...)`; used only when the step is placed on an HPC class (`meluxina-*`)).
+workspace, hpc, hpc-resumable` (`hpc` = the Slurm wall-clock limit set by `step(hpc_time_limit=...)`; `hpc-resumable` = how long before it a `step(resumable=...)` is told to save; both used only when the step is placed on an HPC class (`meluxina-*`)).
 
 Output: a complete, runnable `WorkflowTemplate` — CI commits it to the gitops
 repo, ArgoCD syncs it, and it becomes the live release. That live WFT's
