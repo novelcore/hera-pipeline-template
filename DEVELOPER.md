@@ -321,6 +321,17 @@ and records the commit in its job comment, and the waiter submits the next job
 with `KAOS_RESUME_PATH` set, up to 5 times. Only resumable steps get the signal
 or continue, and they never share a node. See docs/hpc.md.
 
+**Admission by the pool's HPC controller (PRD-HPC-1461 phase 0).** When the
+pipeline context has `hpc.controller: "on"`, the waiter records each HPC step
+as an `HPCArgoWorkflowJob` (`hpc.kaos.io/v1alpha1`, named `<workflow>-<step>`,
+owned by the Workflow) and submits an attempt only after the controller has
+admitted it and booked it against the project's budget share. It reports the
+Slurm job and its end to the record; the controller settles each attempt and
+admits a continuation again. A retried waiter resumes from the record. If the
+switch is on but the pool has no controller, or the step may not create its
+record, the step fails: it never submits around the admission. Without the
+switch nothing changes.
+
 ## 9. Data flow between steps
 
 **Parameters (small)**: declare `outputs=["training-result"]`, write

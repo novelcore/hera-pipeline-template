@@ -55,7 +55,7 @@ def _block(first, last):
 
 def _payloads():
     ns = {}
-    exec(SRC[SRC.index("CKPTOUT = r"):SRC.index("import base64, json, os, re, shlex")], ns)
+    exec(SRC[SRC.index("CKPTOUT = r"):SRC.index("import base64, hashlib, json, os, re, shlex")], ns)
     return ns["CKPTOUT"], ns["CKPTIN"]
 
 
