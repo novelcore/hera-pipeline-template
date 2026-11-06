@@ -1168,6 +1168,51 @@ def find_active():
 STAGED, STAGE_TRIED = '', False
 
 
+def pull_token():
+    # The registry token the job pulls its image with. Own (metadata server)
+    # token: the pod's GSA, valid 1 h, so a job that queues longer fails with
+    # 231. HPC_PULL_SA (pipeline context hpc.pullServiceAccount) names the org's
+    # read-only pull GSA: impersonate it for a 12 h token instead (the CI GSA
+    # can push and is never stretched). Any failure falls back to the own
+    # token - minting must never fail a submit.
+    try:
+        r = urllib.request.Request(
+            'http://metadata.google.internal/computeMetadata/v1/instance/'
+            'service-accounts/default/token',
+            headers={'Metadata-Flavor': 'Google'})
+        own = json.load(urllib.request.urlopen(r, timeout=5)).get(
+            'access_token', '')
+    except Exception as e:
+        print('no registry token from metadata server (anonymous pull):', e,
+              flush=True)
+        return ''
+    sa = os.environ.get('HPC_PULL_SA', '')
+    if not sa or not own:
+        return own
+    try:
+        r = urllib.request.Request(
+            'https://iamcredentials.googleapis.com/v1/projects/-/'
+            'serviceAccounts/%s:generateAccessToken' % sa,
+            data=json.dumps({
+                'scope': ['https://www.googleapis.com/auth/cloud-platform'],
+                'lifetime': '43200s'}).encode(),
+            headers={'Authorization': 'Bearer ' + own,
+                     'Content-Type': 'application/json'})
+        tok = json.load(urllib.request.urlopen(r, timeout=10)).get(
+            'accessToken', '')
+        if tok:
+            print('registry pull token: 12 h, read-only, as', sa, flush=True)
+            return tok
+        why = 'empty response'
+    except urllib.error.HTTPError as e:
+        why = 'HTTP %s %s' % (e.code, e.read()[:300])
+    except Exception as e:
+        why = e
+    print('12 h pull token as %s unavailable (%s); using the 1 h pod token'
+          % (sa, why), flush=True)
+    return own
+
+
 def submit():
     global STAGED, STAGE_TRIED
     HPC = hpc_class()
@@ -1176,17 +1221,7 @@ def submit():
         # fallback) instead of spending the staging budget again.
         STAGE_TRIED = True
         STAGED = stage_dataset()
-    reg = ''
-    try:
-        r = urllib.request.Request(
-            'http://metadata.google.internal/computeMetadata/v1/instance/'
-            'service-accounts/default/token',
-            headers={'Metadata-Flavor': 'Google'})
-        reg = json.load(urllib.request.urlopen(r, timeout=5)).get(
-            'access_token', '')
-    except Exception as e:
-        print('no registry token from metadata server (anonymous pull):', e,
-              flush=True)
+    reg = pull_token()
     ident = hpc_identity()
     batch = '\n'.join([
         '#!/bin/bash -l',
@@ -2029,6 +2064,14 @@ def controller_env(ctx: dict) -> list:
     return [{"name": "HPC_CONTROLLER", "value": "on"}]
 
 
+def pull_env(ctx: dict) -> list:
+    """The read-only image-pull GSA (<org>-hpc-pull) the operator publishes as hpc.pullServiceAccount;
+    the waiter mints the job's 12 h registry token as it. Absent: nothing is added and the waiter
+    keeps pulling with its own 1 h token."""
+    sa = (ctx.get("hpc") or {}).get("pullServiceAccount")
+    return [{"name": "HPC_PULL_SA", "value": str(sa)}] if sa else []
+
+
 def parse_time_limit(value) -> int:
     """'90' / '90m' -> 90 minutes, '12h' -> 720. Raises ValueError otherwise."""
     text = str(value).strip()
@@ -2319,7 +2362,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "KUBECORE_RUN_ID", "value": "{{workflow.name}}"},
                 {"name": "KUBECORE_WORKFLOW_NAME", "value": "{{workflow.name}}"},
             ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else [])
-              + sharing_env(ctx) + controller_env(ctx),
+              + sharing_env(ctx) + controller_env(ctx) + pull_env(ctx),
         },
         # slurm-job-id plus the union of every routed step's declared outputs
         # (one shared template; each twin fills its own, the rest default).
