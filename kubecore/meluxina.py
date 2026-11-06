@@ -1846,9 +1846,29 @@ def await_admission(attempt):
 
 
 def site_time(job, key):
+    # A Slurm REST time is unset for a job that never started on its own (a shared-node guest) or
+    # whose end accounting has not landed: {set: false} or {infinite: true}, or NO_VAL/INFINITE
+    # (0xFFFFFFFE/0xFFFFFFFF). Turned into a date it settled -41M node-minutes (live 2026-11-06).
     t = ((job.get('time') or {}).get(key))
-    t = t.get('number') if isinstance(t, dict) else t
-    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(t)) if t else None
+    if isinstance(t, dict):
+        if t.get('set') is False or t.get('infinite'):
+            return None
+        t = t.get('number')
+    if not isinstance(t, int) or t <= 0 or t >= 0xFFFFFFFE:
+        return None
+    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(t))
+
+
+def ended(job):
+    # A terminal job's end: the site's, else now (the waiter saw it end) - never missing, so the
+    # controller settles a job that ran (a host whose end had not landed settled 0, live 2026-11-06).
+    return site_time(job, 'end') or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+
+def shared(share):
+    # The host a shared-node guest ran on, and its slot, for every report (terminal ones too).
+    slot = share.get('slot') or ''
+    return {'hostSiteJobID': share.get('host'), 'slot': int(slot) if slot.isdigit() else None}
 
 
 def report(must=False, **run):
@@ -2044,9 +2064,7 @@ while True:
         share = share_state(comment_of(job))
         now = (','.join(st), share.get('host'), share.get('slot'))
         if CONTROLLER and now != reported and not any(x in TERMINAL for x in st):
-            report(siteJobID=str(jid), state=now[0], startTime=site_time(job, 'start'),
-                   hostSiteJobID=share.get('host'),
-                   slot=int(share['slot']) if (share.get('slot') or '').isdigit() else None)
+            report(siteJobID=str(jid), state=now[0], startTime=site_time(job, 'start'), **shared(share))
             reported = now
         if 'PENDING' in st:
             try:
@@ -2139,11 +2157,11 @@ while True:
                 if why:
                     print('not continuing the step:', why, flush=True)
                     report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
-                           startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True,
+                           startTime=site_time(job, 'start'), endTime=ended(job), terminal=True, **shared(share),
                            checkpointRef=checkpoint_uri(ckpt) if ckpt else None)
                     sys.exit(1)
                 report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
-                       startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True,
+                       startTime=site_time(job, 'start'), endTime=ended(job), terminal=True, **shared(share),
                        checkpointRef=checkpoint_uri(ckpt))
                 continuations += 1
                 ATTEMPT += 1
@@ -2159,7 +2177,7 @@ while True:
             if 'COMPLETED' in st:
                 fetch_outputs()
             report(must=True, siteJobID=str(jid), state=','.join(st), exitCode=rc,
-                   startTime=site_time(job, 'start'), endTime=site_time(job, 'end'), terminal=True)
+                   startTime=site_time(job, 'start'), endTime=ended(job), terminal=True, **shared(share))
             sys.exit(0 if ('COMPLETED' in st and rc in (0, None)) else 1)
     except SystemExit:
         raise
