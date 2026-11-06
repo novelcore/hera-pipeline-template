@@ -16,6 +16,9 @@ What it does (F-02/F-03/F-06):
     workflow.uid — a retried pod ADOPTS the queued/running job instead of
     double-submitting a full-node run — then a poll to terminal state,
     emitting `slurm-job-id` as an output.
+    With pipeline-context hpc.controller "serve" (PRD-HPC-1461 phase 1) the
+    same template is instead a credential-free follower of the pool's HPC
+    controller (see follower_template).
 
 Operational notes baked in from the live F-01/F-02 shakedown (2026-08):
   * the rotating Slurm JWT arrives via the `meluxina-jwt` Secret (PRD-1016
@@ -2282,6 +2285,52 @@ def controller_env(ctx: dict) -> list:
     return [{"name": "HPC_CONTROLLER", "value": "on"}]
 
 
+def controller_serves(ctx: dict) -> bool:
+    """PRD-HPC-1461 D-58/D-63 phase 1: the operator publishes hpc.controller "serve" once the pool's
+    controller runs every MeluXina step. The twin is then the credential-free follower. "on" (phase 0)
+    and absent keep the in-pod waiter."""
+    return (ctx.get("hpc") or {}).get("controller") == "serve"
+
+
+def follower_template(ctx: dict, tpl: dict, provider: str, dataset: str) -> dict:
+    """The `meluxina-run` template as the phase-1 follower (PRD-HPC-1461 D-59): it creates the step's
+    HPCArgoWorkflowJob, prints its progress and writes the Argo outputs from its status. It holds no
+    Slurm, staging or MLflow credential and no Secret volume: the controller's runner Job carries them,
+    and the endpoints come from the runner's trusted ConfigMap, not from here. Inputs, outputs, deadline,
+    retry and labels are the waiter's (`tpl`)."""
+    image = (ctx.get("hpc") or {}).get("followerImage")
+    if not image:
+        raise ValueError("meluxina: pipeline-context hpc.controller is 'serve' but hpc.followerImage is "
+                         "missing — the operator publishes the kaos-hpc-operator image there")
+    env = [
+        {"name": "HPC_JOB_NAMESPACE", "valueFrom": {"fieldRef": {"fieldPath": "metadata.namespace"}}},
+        {"name": "WF_NAME", "value": "{{workflow.name}}"},
+        {"name": "WF_UID", "value": "{{workflow.uid}}"},
+        {"name": "STEP_NAME", "value": "{{inputs.parameters.step-name}}"},
+        # The twin's DAG task name: unique per task in the entrypoint DAG, and the same on every Argo
+        # retry of the twin (a retry is a new pod of the same task; only Argo's node name gets a
+        # "(n)" suffix, which is not in this parameter). The job name derives from it and WF_UID.
+        {"name": "NODE_KEY", "value": "{{inputs.parameters.step-name}}-%s" % provider},
+        {"name": "IMAGE_REF", "value": "{{inputs.parameters.image}}"},
+        {"name": "STEP_COMMAND", "value": "{{inputs.parameters.step-command}}"},
+        {"name": "SLURM_TIME_LIMIT", "value": "{{inputs.parameters.time-limit}}"},
+        {"name": "HPC_CLASS", "value": "{{inputs.parameters.hpc-class}}"},
+        {"name": "HPC_RESUMABLE_LEAD", "value": "{{inputs.parameters.resumable-lead}}"},
+        {"name": "HPC_MAX_CONTINUATIONS", "value": str(HPC_MAX_CONTINUATIONS)},
+        {"name": "STEP_OUTPUTS", "value": "{{inputs.parameters.step-outputs}}"},
+        {"name": "DATASET", "value": dataset},
+        # The only spec env the controller admits (allowlist).
+        {"name": "OUTPUTS_REPO", "value": outputs_repo(ctx)},
+        {"name": "OUTPUTS_REF", "value": OUTPUTS_REF},
+        {"name": "CHECKPOINT_BUCKET", "value": outputs_repo(ctx)},
+        {"name": "CHECKPOINT_PREFIX", "value": checkpoint_prefix()},
+    ] + ([{"name": KAOS_LIB_SUPPORT_ENV, "value": support_value(ctx)}] if support_value(ctx) else []) \
+      + sharing_env(ctx)
+    follower = {k: v for k, v in tpl.items() if k not in ("volumes", "container")}
+    follower["container"] = {"image": str(image), "command": ["/follower"], "env": env}
+    return follower
+
+
 def parse_time_limit(value) -> int:
     """'90' / '90m' -> 90 minutes, '12h' -> 720. Raises ValueError otherwise."""
     text = str(value).strip()
@@ -2489,7 +2538,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
     wf_params = {p.get("name") for p in parameters}
     dataset = ("{{workflow.parameters.dataset}}"
                if "dataset" in wf_params else "")
-    spec["templates"].append({
+    tpl = {
         "name": "meluxina-run",
         "inputs": {"parameters": [
             {"name": "step-name"}, {"name": "image"}, {"name": "step-command"},
@@ -2581,4 +2630,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                     + [{"name": n, "valueFrom": {"path": "/tmp/outputs/%s.json" % n,
                                                  "default": "{}"}}
                        for n in sorted(outputs_union)]},
-    })
+    }
+    if controller_serves(ctx):
+        tpl = follower_template(ctx, tpl, provider, dataset)
+    spec["templates"].append(tpl)

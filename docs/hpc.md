@@ -36,7 +36,8 @@ account the run uses.
    exactly as for a step on your project's own machines. Its declared outputs reach the next step as usual. MLflow and
    lakeFS are reached with a short-lived token minted for each job.
 
-Nothing in your code changes.
+Nothing in your code changes. While the job waits, the step's log shows its state and the
+queue's reason for holding it. If you stop or delete the run, the platform cancels the HPC job.
 
 ## Set a time limit
 

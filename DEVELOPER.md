@@ -332,6 +332,19 @@ switch is on but the pool has no controller, or the step may not create its
 record, the step fails: it never submits around the admission. Without the
 switch nothing changes.
 
+**Controller-only HPC (PRD-HPC-1461 phase 1).** With `hpc.controller: "serve"`
+(and `hpc.followerImage`, the controller's image; the render fails without it)
+the `meluxina-run` template is a *follower* instead of the waiter: command
+`/follower`, no Secret volume or credential env. It creates the step's
+`HPCArgoWorkflowJob` (named from the workflow uid and the twin's task name, so
+an Argo retry of the twin re-attaches), prints its phase and the queue's
+pending reason, and writes the step's declared outputs from the job's
+`status.outputs`. The pool's controller runs the job and holds every
+credential; cancelling or deleting the run cancels the Slurm job. Its inputs,
+outputs, deadline and retry are the waiter's, so authoring is unchanged. `"on"`
+and an absent switch render exactly as before. The render of a `serve` context
+is covered by `tests/test_meluxina_follower.py`.
+
 ## 9. Data flow between steps
 
 **Parameters (small)**: declare `outputs=["training-result"]`, write
