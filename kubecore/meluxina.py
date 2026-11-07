@@ -335,9 +335,11 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
         if lead >= minutes:
             raise ValueError("step %s: resumable lead %d min is not shorter than its wall time %d min"
                              % (step["name"], lead, minutes))
-        # A resumable step may run (1 + HPC_MAX_CONTINUATIONS) jobs, each queuing, preparing and
-        # running again; any other step runs one, so its waiter's deadline stays one job's.
-        jobs = 1 + HPC_MAX_CONTINUATIONS if lead else 1
+        # Resumability is discovered (D-74): the controller may continue ANY step that is not opted out
+        # (resumable=False), up to (1 + HPC_MAX_CONTINUATIONS) jobs, each queuing, preparing and running
+        # again, so the waiter's Argo deadline must cover all of them or Argo would cut a continuing step.
+        # Only an opted-out step runs one job and keeps a one-job deadline.
+        jobs = 1 if step_resumable_opt_out(step) else 1 + HPC_MAX_CONTINUATIONS
         step_outputs = [o["name"] for o in
                         ((step.get("outputs") or {}).get("parameters") or [])]
         outputs_union.update(step_outputs)

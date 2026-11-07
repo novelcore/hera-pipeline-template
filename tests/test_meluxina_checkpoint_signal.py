@@ -57,9 +57,13 @@ def test_resumable_needs_a_gpu_step():
 
 def test_a_resumable_steps_follower_gets_its_lead_and_a_deadline_for_every_continuation():
     from kubecore import meluxina
-    plain = _render(hpc_time_limit="2h")
+    one_job = (120 + meluxina.QUEUE_ALLOWANCE_MINUTES) * 60
+    all_jobs = (1 + meluxina.HPC_MAX_CONTINUATIONS) * one_job
+    plain = _render(hpc_time_limit="2h")      # not declared: resumability is discovered, so it may continue
     assert plain["resumable-lead"] == "0"
-    assert int(plain["deadline-seconds"]) == (120 + meluxina.QUEUE_ALLOWANCE_MINUTES) * 60
+    assert int(plain["deadline-seconds"]) == all_jobs
+    opted_out = _render(hpc_time_limit="2h", resumable=False)
+    assert int(opted_out["deadline-seconds"]) == one_job
     resumable = _render(hpc_time_limit="2h", resumable="20m")
     assert resumable["resumable-lead"] == "20"
     assert int(resumable["deadline-seconds"]) == \
