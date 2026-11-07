@@ -307,7 +307,7 @@ run = step("run", gpu=True, needs=[prep], walltime="12h",
 ```
 
 `walltime` takes minutes or hours (`"90m"`, `"12h"`, `"720"`; `hpc_time_limit` is the older name and still works);
-Slurm kills the job when it elapses. The platform adds a queue allowance on top for its own wait budget. Queue time is
+Slurm kills the job when it elapses. The platform adds a queue allowance on top for its own wait budget, for every job a step may be continued in (up to 5 continuations; `resumable=False` keeps the budget of a single job). Queue time is
 the one variable you don't control: expect minutes to hours depending on the partition's load.
 
 ### 8.2 Resilience on every compute: one folder, no code

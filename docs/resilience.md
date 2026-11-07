@@ -52,6 +52,8 @@ none of this happens.
     `pipeline.py` (for example `disk="30Gi"`). Only the two newest copies are kept, and all are deleted when the step
     succeeds.
 
+A step that may be continued is never cut by the run's own waiting budget: that budget covers up to 5 continuations, each with its queue wait. A step with `resumable=False` gets the budget of one job.
+
 ## Settings (all optional)
 
 Set them on the step in `pipeline.py`:

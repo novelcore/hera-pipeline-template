@@ -50,7 +50,7 @@ train = step("model-training", gpu=True, needs=[load], walltime="12h",
 ```
 
 The value takes minutes or hours: `"90m"`, `"12h"`, or `"720"` (minutes). `hpc_time_limit` is the older name and
-still works. The platform adds a queue allowance on top for its own wait.
+still works. The platform adds a queue allowance on top for its own wait, for every continuation a step may need (a step with `resumable=False` gets one job's).
 
 For a short step (up to 2 hours) that has finished a few times, the platform asks the site for a time limit based on
 those runs, which starts it sooner. If such a step is cut short anyway, it is run again once at your limit, so it is
