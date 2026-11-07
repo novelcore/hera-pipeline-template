@@ -82,7 +82,9 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 |---|---|
 | no `meluxina-*` in the class dropdown | your project has no HPC (Slurm) environment yet ([Run on HPC (Slurm)](../hpc.md)); HPC class names start with `meluxina-`, the provider's name |
 | an HPC step waits for hours | the Slurm queue is busy; the waiting time is real |
-| it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py` |
+| it ends at its time limit | raise `walltime` for the step in `pipeline.py`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](../resilience.md)) |
+| a step ran twice after a machine was reclaimed | by design: it is repeated at most twice, from its last checkpoint if it wrote one ([details](../resilience.md)) |
+| it ends with `Idle` | no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
 
 ## Still stuck
 

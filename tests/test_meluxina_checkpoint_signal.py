@@ -57,9 +57,13 @@ def test_resumable_needs_a_gpu_step():
 
 def test_a_resumable_steps_follower_gets_its_lead_and_a_deadline_for_every_continuation():
     from kubecore import meluxina
-    plain = _render(hpc_time_limit="2h")
+    one_job = (120 + meluxina.QUEUE_ALLOWANCE_MINUTES) * 60
+    all_jobs = (1 + meluxina.HPC_MAX_CONTINUATIONS) * one_job
+    plain = _render(hpc_time_limit="2h")      # not declared: resumability is discovered, so it may continue
     assert plain["resumable-lead"] == "0"
-    assert int(plain["deadline-seconds"]) == (120 + meluxina.QUEUE_ALLOWANCE_MINUTES) * 60
+    assert int(plain["deadline-seconds"]) == all_jobs
+    opted_out = _render(hpc_time_limit="2h", resumable=False)
+    assert int(opted_out["deadline-seconds"]) == one_job
     resumable = _render(hpc_time_limit="2h", resumable="20m")
     assert resumable["resumable-lead"] == "20"
     assert int(resumable["deadline-seconds"]) == \
@@ -69,3 +73,23 @@ def test_a_resumable_steps_follower_gets_its_lead_and_a_deadline_for_every_conti
 def test_a_lead_not_shorter_than_the_wall_time_is_refused():
     with pytest.raises(ValueError, match="not shorter than its wall time"):
         _render(hpc_time_limit="30m", resumable="30m")
+
+
+def test_resumable_false_is_the_opt_out_the_follower_passes_on_as_hpc_resumable_zero():
+    """resumable=False -> annotation "off" -> twin argument resumable="0" -> HPC_RESUMABLE=0 on the follower,
+    which the controller maps to HPCArgoWorkflowJob spec.resumableOptOut. Unset leaves "auto" (discovered)."""
+    from kubecore import authoring
+    assert _render(resumable=False)["resumable"] == "0"
+    assert _render(resumable=False)["resumable-lead"] == "0"
+    assert _render()["resumable"] == "auto"
+    assert _render(resumable="20m")["resumable"] == "auto"
+    with authoring.pipeline("t") as p:
+        authoring.step("train", gpu=True, resumable=False)
+    (tmpl,) = [t for t in yaml.safe_load(p.wt.to_yaml())["spec"]["templates"] if t["name"] == "train"]
+    assert tmpl["metadata"]["annotations"][authoring.HPC_RESUMABLE_ANNOTATION] == "off"
+
+
+def test_resumable_false_is_accepted_on_a_cpu_step():
+    from kubecore import authoring
+    with authoring.pipeline("t"):
+        authoring.step("prep", resumable=False)

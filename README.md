@@ -40,6 +40,13 @@ with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
 writes a result to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
 form**: every plain value in `config/` becomes a field.
 
+### Long runs are not lost
+
+A step on a reclaimed machine, a failed node or an HPC time limit is run again by the platform, and a training that
+keeps its checkpoints in `KAOS_CHECKPOINT_DIR` (Ultralytics, Lightning and Hugging Face are picked up automatically
+by `kaos_lib`) continues from the last one. You write nothing for this: see
+[When a machine is lost or a time limit hits](docs/resilience.md).
+
 ## Layout
 
 ```

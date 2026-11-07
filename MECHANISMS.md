@@ -118,6 +118,7 @@ on plain dicts (no Hera dependency). The exact ordered pipeline (`enhance()`):
 | `enhance_sizing_knobs` | `{step}-cpu` / `{step}-mem` form params + a `podSpecPatch` wiring them | per-run sizing; runs BEFORE scheduling so dev-set values are distinguishable |
 | `enhance_scheduling` | `nodeSelector` (`nodegroup-type: {{workflow.parameters.{step}-class}}`), tolerations, whole-node `requests==limits` from the class `allocatable`, `nvidia.com/gpu` for GPU steps | fill-absent; developer-set resources win |
 | `enhance_volumes` | `/dev/shm` emptyDir (size via `shm` annotation), optional `/workspace` PVC (via `workspace` annotation) | fill-absent; raw Hera volumes win |
+| `enhance_resilience` | per step: `retryStrategy` (pod loss only), `KAOS_CHECKPOINT_DIR` + an emptyDir, and for GPU steps (or `checkpoint_every`) the restore init container and copy sidecar (`kubecore/checkpoint_helper.py`) | default-on; `checkpoint_every=False` removes the helper, `inject lakefs=false` too |
 | `enhance_workspace_pvc` | one workflow-level `volumeClaimTemplate` if any step requested a workspace | opt-in only |
 | `enhance_pipeline_info` | a read-only `pipeline-info` doc parameter (first on the form) | — |
 
@@ -128,7 +129,7 @@ developer choices — are the **WFT name** and the **image**.
 
 **Unknown `platform.kubecore.io/*` annotations hard-fail the enhance** (typo
 protection). The known vocabulary: `compute-class, inject, source, image, shm,
-workspace, hpc, hpc-resumable` (`hpc` = the Slurm wall-clock limit set by `step(hpc_time_limit=...)`; `hpc-resumable` = how long before it a `step(resumable=...)` is told to save; both used only when the step is placed on an HPC class (`meluxina-*`)).
+workspace, hpc, hpc-resumable, checkpoint-every` (`hpc` = the Slurm wall-clock limit set by `step(hpc_time_limit=...)`; `hpc-resumable` = how long before it a `step(resumable=...)` is told to save; both used only when the step is placed on an HPC class (`meluxina-*`); `checkpoint-every` = minutes between copies of the step's checkpoint folder, or `off`).
 
 Output: a complete, runnable `WorkflowTemplate` — CI commits it to the gitops
 repo, ArgoCD syncs it, and it becomes the live release. That live WFT's
