@@ -36,7 +36,7 @@ def test_every_step_installs_the_same_default():
 
 def test_the_template_declares_the_range_of_its_package():
     compat = yaml.safe_load((ROOT / ".kaos" / "compat.yaml").read_text())
-    assert compat == {"kaos-lib": ">=0.4.0rc1,<0.5"}
+    assert compat == {"kaos-lib": ">=0.4.0rc15,<0.5"}
     assert INSTALLED.startswith("0.4."), "the pinned package is inside the declared range"
 
 

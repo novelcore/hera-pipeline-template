@@ -35,7 +35,7 @@ no change in your repository.
 ## Your range: `.kaos/compat.yaml`
 
 ```yaml
-kaos-lib: ">=0.4.0rc1,<0.5"
+kaos-lib: ">=0.4.0rc15,<0.5"
 ```
 
 This file says which released versions your code works with. The platform only moves your
@@ -77,7 +77,7 @@ you get a new pull request for that one, and the platform closes the older one.
 
 ## Which version is my pipeline running?
 
-- The first line of every step's log: `kaos-lib 0.4.0rc5`.
+- The first line of every step's log: `kaos-lib 0.4.0rc15`.
 - A step that logs an MLflow run should tag it `kaos_lib.version` (the yolo template's
   training and registration steps do).
 - Each step image carries the label `io.kaos.lib` with the exact requirement it was built
