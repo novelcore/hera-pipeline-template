@@ -33,7 +33,7 @@ After **Submit**, Argo shows the run as a graph of steps:
 - grey and *skipped*: the step's `when=` condition was false. That is normal.
 
 Click a step, then **Logs**, to read what it printed. The first line of every step is the kaos-lib
-version it runs (`kaos-lib 0.4.0rc5`). You can close the tab: the run keeps going. Find it again
+version it runs (`kaos-lib 0.4.0rc15`). You can close the tab: the run keeps going. Find it again
 under Argo → **Workflows**, or console → **Pipelines** → your app → **Runs in Argo**.
 
 **You should see** every step green and, for the shipped pipeline, `[hello-world] result committed

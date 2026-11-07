@@ -5,4 +5,4 @@
 # range. A version outside it arrives as a pull request on the branch
 # kaos-lib/bump-<version> that changes this line: merge it to take the new version.
 # See docs/kaos-lib-versions.md.
-kaos-lib: ">=0.4.0rc1,<0.5"
+kaos-lib: ">=0.4.0rc15,<0.5"
