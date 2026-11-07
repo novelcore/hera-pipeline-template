@@ -6,6 +6,7 @@ Run:  python -m pytest tests/ -v
 """
 import copy
 import json
+import os
 import runpy
 import sys
 from pathlib import Path
@@ -164,3 +165,26 @@ def test_the_refusal_and_the_follower_share_the_dag(serve):
     refusal = _render(controller=None)
     strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "meluxina-run"]  # noqa: E731
     assert strip(serve) == strip(refusal)
+
+
+def test_follower_runs_as_the_hpc_submitter_account(serve):
+    """PRD-HPC-1461 AC-18: only the follower pod may create HPC jobs, so only it runs as hpc-submitter
+    (template-level); every other template keeps the workflow's account, which has no HPC right."""
+    assert _tpl(serve)["serviceAccountName"] == "hpc-submitter" == meluxina.HPC_SUBMITTER_SA
+    others = [t["name"] for t in serve["spec"]["templates"]
+              if t["name"] != "meluxina-run" and t.get("serviceAccountName")]
+    assert others == []
+    assert serve["spec"]["serviceAccountName"] != "hpc-submitter"
+
+
+def test_refusal_does_not_run_as_the_hpc_submitter_account():
+    tpl = _tpl(_render(controller=None))
+    assert "serviceAccountName" not in tpl
+
+
+def test_follower_template_matches_the_golden_file(serve):
+    text = yaml.safe_dump(_tpl(serve), sort_keys=False)
+    path = GOLDEN / "meluxina_follower.yaml"
+    if os.environ.get("UPDATE_GOLDEN"):
+        path.write_text(text)
+    assert text == path.read_text()

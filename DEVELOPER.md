@@ -350,6 +350,15 @@ pending reason, and writes the step's declared outputs from the job's
 project's budget share, runs it and holds every credential; cancelling or
 deleting the run cancels the Slurm job.
 
+The follower is the only pod that may create an `HPCArgoWorkflowJob` (PRD-HPC-1461
+AC-18): its template sets `serviceAccountName: hpc-submitter` (template level,
+`meluxina.HPC_SUBMITTER_SA`), an account the platform creates in every ML
+environment namespace and binds, alone, to the job-create role. Step pods keep
+the pipeline's account, which has no right on HPC jobs, so step code cannot
+create one. Do not set the account on any other template. Covered by
+`tests/test_meluxina_follower.py` and `tests/golden/meluxina_follower.yaml`
+(regenerate with `UPDATE_GOLDEN=1`).
+
 There is no in-pod submitter any more. For a project the controller does not
 serve (the pool has no `operators.hpc`, or the project's MeluXina budget is not
 known yet) `meluxina-run` is a step that fails at once with a message naming
