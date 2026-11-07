@@ -54,8 +54,19 @@ def test_should_retry_every_step_only_when_the_node_is_lost(tpls):
     for name in ("prep", "train", "cpu-opt-in", "gpu-off", "compose-and-validate"):
         retry = tpls[name]["retryStrategy"]
         assert retry["retryPolicy"] == "Always" and retry["limit"] == "2"
-        assert retry["expression"] == meluxina.POD_LOSS_RETRY      # one expression for both backends
+        assert retry["expression"] == resilience.RETRY_EXPRESSION
         assert retry["backoff"]["duration"] == "30s"
+
+
+def test_should_keep_the_pod_loss_rule_and_exclude_a_step_ended_as_idle():
+    """The pool's idle watchdog (kaos-hpc-operator internal/idlewatch) ends a step with a pod status
+    message that starts with KaosIdle. Checked against the real Argo expression engine (expr-lang/expr
+    v1.17) for these inputs: Failed+KaosIdle -> not re-run, Error+KaosIdle -> not re-run, "pod deleted"
+    -> re-run, node shutdown -> re-run, Error (exit code 1) -> not re-run."""
+    expr = resilience.RETRY_EXPRESSION
+    assert expr.startswith("(%s)" % meluxina.POD_LOSS_RETRY)     # the pod-loss rule is unchanged
+    assert expr.endswith("and not (lastRetry.message startsWith '%s')" % resilience.IDLE_END_PREFIX)
+    assert resilience.IDLE_END_PREFIX == "KaosIdle"
 
 
 def test_should_not_retry_the_steps_own_failure(tpls):
@@ -213,3 +224,20 @@ def test_should_render_the_gpu_step_like_the_golden_file(tpls):
     if os.environ.get("UPDATE_GOLDEN"):
         GOLDEN.write_text(text)
     assert text == GOLDEN.read_text()
+
+
+@pytest.mark.parametrize("given,annotation", [
+    (None, None), (0, "0"), (False, "0"), ("0", "0"), (40, "40"), ("40m", "40"), ("2h", "120")])
+def test_should_map_idle_timeout_to_the_annotation(given, annotation):
+    def steps():
+        authoring.step("a", gpu=True, idle_timeout=given)
+    tpl = render(steps)["a"]
+    got = (tpl.get("metadata") or {}).get("annotations", {}).get(authoring.IDLE_TIMEOUT_ANNOTATION)
+    assert got == annotation
+
+
+@pytest.mark.parametrize("bad", [True, -5, "soon", "1d", "20s", 1.5])
+def test_should_reject_a_bad_idle_timeout(bad):
+    with pytest.raises(authoring.AuthoringError, match="idle_timeout"):
+        with authoring.pipeline("p"):
+            authoring.step("a", gpu=True, idle_timeout=bad)

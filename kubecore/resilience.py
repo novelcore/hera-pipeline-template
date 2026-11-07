@@ -6,6 +6,8 @@
                           pod) is re-run, at most twice, with backoff. NEVER on the step's own non-zero
                           exit (same expression as the HPC follower, `meluxina.POD_LOSS_RETRY`).
                           Safe because step outputs are published only on success.
+                          A step the pool's idle watchdog ended (reason Idle, message "KaosIdle: ...")
+                          is not re-run either: the expression excludes that message.
   Folder  KAOS_CHECKPOINT_DIR   every step gets the env var and a pod-local emptyDir behind it.
   Tier 2  persistence     for GPU steps (and any step that sets `checkpoint_every`): an init container
                           restores the newest verified copy of the folder from lakeFS, a sidecar copies it
@@ -47,9 +49,17 @@ HELPER_PATH = Path(__file__).with_name("checkpoint_helper.py")
 EVERY_RE = re.compile(r"^(off|[0-9]+)$")
 
 
+# The pool's idle watchdog ends a step by setting its pod Failed with a status message that starts with
+# this prefix (kaos-hpc-operator internal/idlewatch: MessagePrefix). Argo copies it to the step's message.
+IDLE_END_PREFIX = "KaosIdle"
+# An Idle end is the step's own outcome, never a lost node: whatever else the message says (a pod that
+# was deleted after it, a node-level word), a message that starts with the prefix is not re-run.
+RETRY_EXPRESSION = "(%s) and not (lastRetry.message startsWith '%s')" % (POD_LOSS_RETRY, IDLE_END_PREFIX)
+
+
 def retry_strategy() -> dict:
-    """Tier 1: retry only a step lost with its node, never one that failed by itself."""
-    return {"limit": RETRY_LIMIT, "retryPolicy": "Always", "expression": POD_LOSS_RETRY,
+    """Tier 1: retry only a step lost with its node, never one that failed by itself or was ended as Idle."""
+    return {"limit": RETRY_LIMIT, "retryPolicy": "Always", "expression": RETRY_EXPRESSION,
             "backoff": dict(RETRY_BACKOFF)}
 
 

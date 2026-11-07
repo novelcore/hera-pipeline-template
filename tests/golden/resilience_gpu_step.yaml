@@ -1,9 +1,10 @@
 retryStrategy:
   limit: '2'
   retryPolicy: Always
-  expression: lastRetry.status == 'Error' or lastRetry.message matches '.*(imminent
+  expression: (lastRetry.status == 'Error' or lastRetry.message matches '.*(imminent
     node shutdown|node is shutting down|node is draining|The node was low on resource|The
-    node had condition|Pod was rejected|Evicted|evicted|pod deleted|Pod was deleted).*'
+    node had condition|Pod was rejected|Evicted|evicted|pod deleted|Pod was deleted).*')
+    and not (lastRetry.message startsWith 'KaosIdle')
   backoff:
     duration: 30s
     factor: '2'
