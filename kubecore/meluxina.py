@@ -115,6 +115,12 @@ QUEUE_ALLOWANCE_MINUTES = 480
 # at most this many times (MAX_CONTINUATIONS in the waiter). Each job may queue,
 # prepare and run again, so the waiter's deadline covers all of them.
 HPC_MAX_CONTINUATIONS = 5
+
+# PRD-HPC-1461 AC-18, D-22: the follower is the only pod that may create an HPCArgoWorkflowJob. It runs
+# as this ServiceAccount (kubecore-operator kubenv renders it in every ml environment namespace and binds
+# it, alone, to the controller's submitter role plus Argo's workflowtaskresults Role); ordinary step pods
+# run as the pipeline's account, which holds no HPC right.
+HPC_SUBMITTER_SA = "hpc-submitter"
 HPC_ANNOTATION = "platform.kubecore.io/hpc"
 # step(resumable=...): how long before its wall time the step is told to save (D-44 as amended
 # 2026-11-05). Only resumable steps get the signal and continue.
@@ -188,6 +194,8 @@ def follower_template(ctx: dict, tpl: dict, provider: str, dataset: str) -> dict
       + sharing_env(ctx)
     follower = dict(tpl)
     follower["container"] = {"image": str(image), "command": ["/follower"], "env": env}
+    # Template-level: overrides the workflow's account for this one template (AC-18).
+    follower["serviceAccountName"] = HPC_SUBMITTER_SA
     return follower
 
 
