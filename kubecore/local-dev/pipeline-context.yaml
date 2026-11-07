@@ -151,4 +151,6 @@ hpc:
 checkpoints:
   bucket: PLACEHOLDER-bucket
   prefix: main/checkpoints
+  # The platform-registry image of the checkpoint helper containers (the operator publishes it for every app).
+  helperImage: "registry.example/kaos-hpc-operator:v0.0.0"
 serviceAccountName: argo-workflow

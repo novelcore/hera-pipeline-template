@@ -64,6 +64,7 @@ _HPC_TIME_LIMIT_RE = re.compile(r"^[0-9]+[mh]?$")
 # step(resumable=True) gets the stop signal this long before its HPC wall time.
 DEFAULT_RESUMABLE_LEAD = "10m"
 HPC_RESUMABLE_ANNOTATION = "platform.kubecore.io/hpc-resumable"
+RESUMABLE_OFF = "off"   # the annotation value of resumable=False
 CHECKPOINT_EVERY_ANNOTATION = "platform.kubecore.io/checkpoint-every"
 _CHECKPOINT_EVERY_RE = re.compile(r"^([0-9]+)([mh]?)$")
 
@@ -136,14 +137,16 @@ def step(name, reads=None, gpu=False, needs=None, outputs=None, when=None, disk=
         )
     if resumable is True:
         resumable = DEFAULT_RESUMABLE_LEAD
-    elif resumable in (None, False):
+    elif resumable is False:
+        resumable = RESUMABLE_OFF        # resumable=False: never continued from a checkpoint (opt-out)
+    elif resumable is None:
         resumable = None
     elif not (isinstance(resumable, str) and _HPC_TIME_LIMIT_RE.match(resumable) and int(resumable.rstrip("mh")) != 0):
         raise AuthoringError(
             f"step {name!r}: resumable={resumable!r} must be True or a lead time like '20m' or '1h': how long "
             f"before its HPC wall time the step is told to save its checkpoint (kaos_lib.checkpoint)."
         )
-    if resumable is not None and not gpu:
+    if resumable not in (None, RESUMABLE_OFF) and not gpu:
         raise AuthoringError(
             f"step {name!r}: resumable only applies to gpu=True steps — only GPU steps are routed to the "
             f"HPC target."

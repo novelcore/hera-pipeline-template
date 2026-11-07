@@ -11,6 +11,8 @@
                           restores the newest verified copy of the folder from lakeFS, a sidecar copies it
                           periodically and on SIGTERM. The code is `kubecore/checkpoint_helper.py`.
 
+The helper image comes from the platform registry only (`checkpoints.helperImage`, see helper_image).
+
 Opt-out per step: annotation `platform.kubecore.io/checkpoint-every: "off"` (authoring:
 `checkpoint_every=False`) removes the persistence helper only; the re-run and the folder stay.
 
@@ -22,6 +24,7 @@ the same name is left alone.
 """
 import base64
 import re
+import sys
 import zlib
 from pathlib import Path
 
@@ -40,10 +43,6 @@ RETRY_LIMIT = "2"
 RETRY_BACKOFF = {"duration": "30s", "factor": "2", "maxDuration": "10m"}
 INIT_NAME = "kaos-ckpt-restore"
 SIDECAR_NAME = "kaos-ckpt-copy"
-# The same python-alpine base the HPC controller image is built on (pinned by digest); used only when
-# the pipeline context names no platform image (ctx.checkpoints.helperImage, then ctx.hpc.followerImage).
-DEFAULT_HELPER_IMAGE = ("python:3.13-alpine@sha256:"
-                        "4d511039677430640754cd1417737349067dfcdaba4dcf7e576334516f9f4c30")
 HELPER_PATH = Path(__file__).with_name("checkpoint_helper.py")
 EVERY_RE = re.compile(r"^(off|[0-9]+)$")
 
@@ -55,11 +54,14 @@ def retry_strategy() -> dict:
 
 
 def helper_image(ctx: dict) -> str:
-    """The image the helper containers run: a platform image when the context names one."""
+    """The image the helper containers run, from the platform registry: `checkpoints.helperImage`, which the
+    operator publishes in every app's pipeline context (the pool's pinned kaos-hpc-operator image), else the
+    HPC follower image (the same image). Empty when the context has neither: there is deliberately NO public
+    registry fallback (no third-party pull in tenant pods); the step then gets the re-run and the folder
+    but no copies, and the app picks the image up on its next render."""
     named = (ctx.get("checkpoints") or {}).get("helperImage")
-    hpc = ctx.get("hpc") or {}
-    follower = hpc.get("followerImage") if hpc.get("enabled") and hpc.get("controller") == "serve" else None
-    return str(named or follower or DEFAULT_HELPER_IMAGE)
+    follower = (ctx.get("hpc") or {}).get("followerImage")
+    return str(named or follower or "")
 
 
 def helper_boot() -> str:
@@ -95,7 +97,14 @@ def wants_helper(step: dict, gpu: bool, every: str, ctx: dict, inject_off: bool,
     lakefs = ctx.get("lakefs") or {}
     if not (lakefs.get("endpoint") and lakefs.get("adminSecret") and lakefs.get("adminSecretKeys")):
         return False
-    return gpu or bool(every)    # CPU steps opt in with a checkpoint_every value
+    if not (gpu or every):
+        return False
+    if not helper_image(ctx):
+        print("kubecore: step %r: no checkpoints.helperImage in the pipeline context; its checkpoint copies are "
+              "off until the platform publishes it (re-run and folder are still injected)" % step["name"],
+              file=sys.stderr)
+        return False
+    return True    # CPU steps opt in with a checkpoint_every value
 
 
 def _add_named(items: list, entry: dict) -> None:

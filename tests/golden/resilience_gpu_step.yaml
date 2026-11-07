@@ -22,7 +22,7 @@ volumes:
   emptyDir: {}
 initContainers:
 - name: kaos-ckpt-restore
-  image: python:3.13-alpine@sha256:4d511039677430640754cd1417737349067dfcdaba4dcf7e576334516f9f4c30
+  image: registry.example/kaos-hpc-operator:v0.0.0
   command:
   - python3
   - -c
@@ -78,7 +78,7 @@ initContainers:
     mountPath: /stage
 sidecars:
 - name: kaos-ckpt-copy
-  image: python:3.13-alpine@sha256:4d511039677430640754cd1417737349067dfcdaba4dcf7e576334516f9f4c30
+  image: registry.example/kaos-hpc-operator:v0.0.0
   command:
   - python3
   - -c

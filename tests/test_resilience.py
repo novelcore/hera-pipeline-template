@@ -121,12 +121,27 @@ def test_should_embed_exactly_the_helper_source_without_argo_markers():
     assert "{{" not in boot and "{{" not in source.decode()
 
 
-def test_should_prefer_a_platform_image_over_the_default():
-    assert resilience.helper_image({}) == resilience.DEFAULT_HELPER_IMAGE
-    ctx = {"hpc": {"enabled": True, "controller": "serve", "followerImage": "reg/kaos-hpc-operator:v1"}}
+def test_should_take_the_helper_image_from_the_platform_registry_only():
+    assert resilience.helper_image({}) == ""      # no public-registry fallback
+    ctx = {"hpc": {"followerImage": "reg/kaos-hpc-operator:v1"}}
     assert resilience.helper_image(ctx) == "reg/kaos-hpc-operator:v1"
     ctx["checkpoints"] = {"helperImage": "reg/helper:v2"}
     assert resilience.helper_image(ctx) == "reg/helper:v2"
+
+
+def test_should_run_the_helper_from_the_context_image(tpls):
+    for c in tpls["train"]["initContainers"] + tpls["train"]["sidecars"]:
+        assert c["image"] == "registry.example/kaos-hpc-operator:v0.0.0"
+
+
+def test_should_keep_retry_and_folder_but_skip_copies_and_say_so_without_a_platform_image(capsys):
+    ctx = copy.deepcopy(CONTEXT)
+    ctx["checkpoints"].pop("helperImage")
+    tpls_no_image = render(pipeline_steps, ctx)
+    assert "sidecars" not in tpls_no_image["train"] and "initContainers" not in tpls_no_image["train"]
+    assert tpls_no_image["train"]["retryStrategy"]["limit"] == "2"
+    assert env_of(tpls_no_image["train"])["KAOS_CHECKPOINT_DIR"]
+    assert "no checkpoints.helperImage" in capsys.readouterr().err
 
 
 def test_should_skip_the_helper_for_fan_out_and_shared_templates():

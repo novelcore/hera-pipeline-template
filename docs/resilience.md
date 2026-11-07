@@ -68,7 +68,7 @@ train = step("model-training", gpu=True, needs=[load],
 | `walltime` | the longest the step may run on HPC. The platform may ask the site for less after it has seen the step finish a few times (short steps only), and runs it again at your limit if it was cut short, so a step is never stopped where your limit would have passed. |
 | `checkpoint_every` | how often the folder is copied. Saving stays near 10 % of the run time: a slow save lengthens the interval. `checkpoint_every=False` turns copies off for the step (the repeat after a lost machine stays). A CPU step is copied only if you set a value here. |
 | `idle_timeout` | how long a step may show no GPU use and no new log lines before it is ended as `Idle`. Raise it for a step with a long silent phase. |
-| `resumable` | normally not needed: a step is continued when it uses the folder. Set `resumable="30m"` only to be signalled earlier before the HPC time limit, for a large checkpoint. |
+| `resumable` | normally not needed: a step is continued when it uses the folder. Set `resumable="30m"` only to be signalled earlier before the HPC time limit, for a large checkpoint. `resumable=False` opts the step out: on HPC it is never continued from a checkpoint (a lost machine still re-runs it). |
 
 ## What you will see
 

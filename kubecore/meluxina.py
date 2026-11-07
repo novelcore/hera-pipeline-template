@@ -172,6 +172,7 @@ def follower_template(ctx: dict, tpl: dict, provider: str, dataset: str) -> dict
         {"name": "SLURM_TIME_LIMIT", "value": "{{inputs.parameters.time-limit}}"},
         {"name": "HPC_CLASS", "value": "{{inputs.parameters.hpc-class}}"},
         {"name": "HPC_RESUMABLE_LEAD", "value": "{{inputs.parameters.resumable-lead}}"},
+        {"name": "HPC_RESUMABLE", "value": "{{inputs.parameters.resumable}}"},
         {"name": "HPC_MAX_CONTINUATIONS", "value": str(HPC_MAX_CONTINUATIONS)},
         {"name": "STEP_OUTPUTS", "value": "{{inputs.parameters.step-outputs}}"},
         {"name": "DATASET", "value": dataset},
@@ -220,10 +221,21 @@ def parse_time_limit(value) -> int:
     return minutes * 60 if m.group(2) == "h" else minutes
 
 
-def step_resumable_lead(step: dict) -> int:
-    """Minutes before the wall time a resumable step gets the stop signal; 0 when it is not resumable."""
+RESUMABLE_OFF = "off"   # step(resumable=False): never continued from a checkpoint
+
+
+def step_resumable_opt_out(step: dict) -> bool:
+    """True when the step declared resumable=False (the follower then sets HPC_RESUMABLE=0, which the
+    controller maps to HPCArgoWorkflowJob spec.resumableOptOut)."""
     raw = ((step.get("metadata") or {}).get("annotations") or {}).get(HPC_RESUMABLE_ANNOTATION)
-    return parse_time_limit(raw) if raw not in (None, "") else 0
+    return raw == RESUMABLE_OFF
+
+
+def step_resumable_lead(step: dict) -> int:
+    """Minutes before the wall time a resumable step gets the stop signal; 0 when it is not resumable
+    or opted out."""
+    raw = ((step.get("metadata") or {}).get("annotations") or {}).get(HPC_RESUMABLE_ANNOTATION)
+    return parse_time_limit(raw) if raw not in (None, "", RESUMABLE_OFF) else 0
 
 
 def step_time_limit(step: dict) -> int:
@@ -342,6 +354,8 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "deadline-seconds",
                  "value": str(jobs * (minutes + QUEUE_ALLOWANCE_MINUTES) * 60)},
                 {"name": "resumable-lead", "value": str(lead)},
+                # "0" = resumable=False; "auto" lets the controller discover resumability (D-74)
+                {"name": "resumable", "value": "0" if step_resumable_opt_out(step) else "auto"},
                 {"name": "step-outputs", "value": ",".join(step_outputs)},
                 {"name": "hpc-class", "value": "{{workflow.parameters.%s-class}}" % step["name"]},
             ]},
@@ -416,7 +430,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
             {"name": "step-name"}, {"name": "image"}, {"name": "step-command"},
             {"name": "time-limit"}, {"name": "deadline-seconds"},
             {"name": "step-outputs", "value": ""}, {"name": "hpc-class"},
-            {"name": "resumable-lead", "value": "0"}]},
+            {"name": "resumable-lead", "value": "0"}, {"name": "resumable", "value": "auto"}]},
         # Per-step: Slurm time limit + queue/prep allowance (see
         # QUEUE_ALLOWANCE_MINUTES). Argo resolves the parameter here.
         "activeDeadlineSeconds": "{{inputs.parameters.deadline-seconds}}",

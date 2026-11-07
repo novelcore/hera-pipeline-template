@@ -323,7 +323,9 @@ included) and on HPC:
   with a sha256 manifest (at most two copies, deleted when the step succeeds), and restores the newest verified copy
   before the step starts again. On the cluster this is an init container and a sidecar the enhancer adds to GPU steps
   (and to any step that sets `checkpoint_every`); copies live in your `outputs-<app>` repository on their own branch
-  `kaos-checkpoints`, under `resume/<run>/<step>/`, never merged into `main`. On HPC the controller does the same
+  `kaos-checkpoints`, under `resume/<run>/<step>/`, never merged into `main`. The helper runs the platform's own
+  image from the platform registry (the context's `checkpoints.helperImage`); if a context does not carry it yet,
+  the step keeps the re-run and the folder and its copies start once the app is re-rendered. On HPC the controller does the same
   with scratch storage and continues the job after the time limit.
 - **In your process.** `kaos_lib` hooks Ultralytics, PyTorch Lightning and the Hugging Face Trainer when your step
   imports `kaos_lib` and that framework: they write their checkpoints into the folder and resume from it. The
@@ -332,7 +334,8 @@ included) and on HPC:
   (`idle_timeout` changes the window; `0` turns it off).
 
 Optional step settings: `checkpoint_every="20m"` (or `False` for none; a CPU step is copied only when this is set),
-`idle_timeout`, `walltime`, and `resumable="30m"` to be signalled earlier before an HPC time limit. See
+`idle_timeout`, `walltime`, and `resumable="30m"` to be signalled earlier before an HPC time limit
+(`resumable=False` opts a step out of being continued on HPC; exit code 85 means "saved, continue me"). See
 docs/resilience.md for what users see.
 
 **MeluXina runs only through the pool's HPC controller (PRD-HPC-1461).**
