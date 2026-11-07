@@ -84,11 +84,30 @@ def _checkpoint_every_minutes(name, value):
         )
     minutes = int(match.group(1))
     return str(minutes * 60 if match.group(2) == "h" else minutes)
+IDLE_TIMEOUT_ANNOTATION = "platform.kubecore.io/idle-timeout"
+
+
+def _idle_timeout_minutes(name, value):
+    """step(idle_timeout=...) -> annotation value (whole minutes, "0" = off): None keeps the platform rule
+    (a GPU step with GPU use below 5 % and no new log line for 20 minutes is ended as Idle), 0 or False turns
+    it off, '40m' / '1h' / 40 raise the window. Read by the pool's idle watchdog."""
+    if value is None:
+        return None
+    if value is False or (not isinstance(value, bool) and str(value).strip() == "0"):
+        return "0"
+    match = _CHECKPOINT_EVERY_RE.match(str(value).strip()) if value is not True else None
+    if not match or int(match.group(1)) == 0:
+        raise AuthoringError(
+            f"step {name!r}: idle_timeout={value!r} must be 0 (never end the step as idle) or minutes like "
+            f"'40m', '1h' or 40: how long the step may show no GPU use and no new log lines."
+        )
+    minutes = int(match.group(1))
+    return str(minutes * 60 if match.group(2) == "h" else minutes)
 
 
 class Step:
     def __init__(self, name, reads=None, gpu=False, needs=None, outputs=None, when=None, disk=None,
-                 hpc_time_limit=None, resumable=None, checkpoint_every=None):
+                 hpc_time_limit=None, resumable=None, checkpoint_every=None, idle_timeout=None):
         self.name = name
         self.reads = list(reads or [])
         self.gpu = gpu
@@ -99,10 +118,11 @@ class Step:
         self.hpc_time_limit = hpc_time_limit
         self.resumable = resumable
         self.checkpoint_every = checkpoint_every
+        self.idle_timeout = idle_timeout
 
 
 def step(name, reads=None, gpu=False, needs=None, outputs=None, when=None, disk=None,
-         hpc_time_limit=None, resumable=None, checkpoint_every=None) -> Step:
+         hpc_time_limit=None, resumable=None, checkpoint_every=None, idle_timeout=None) -> Step:
     if _current is None:
         raise RuntimeError("step() must be called inside `with pipeline(...):`")
     if not isinstance(name, str) or not _STEP_NAME_RE.match(name):
@@ -152,7 +172,9 @@ def step(name, reads=None, gpu=False, needs=None, outputs=None, when=None, disk=
             f"HPC target."
         )
     checkpoint_every = _checkpoint_every_minutes(name, checkpoint_every)
-    s = Step(name, reads, gpu, needs, outputs, when, disk, hpc_time_limit, resumable, checkpoint_every)
+    idle_timeout = _idle_timeout_minutes(name, idle_timeout)
+    s = Step(name, reads, gpu, needs, outputs, when, disk, hpc_time_limit, resumable, checkpoint_every,
+             idle_timeout)
     _current.steps.append(s)
     return s
 
@@ -227,7 +249,8 @@ class pipeline:
                     annotations={k: v for k, v in (
                         ("platform.kubecore.io/hpc", s.hpc_time_limit),
                         (HPC_RESUMABLE_ANNOTATION, s.resumable),
-                        (CHECKPOINT_EVERY_ANNOTATION, s.checkpoint_every)) if v}
+                        (CHECKPOINT_EVERY_ANNOTATION, s.checkpoint_every),
+                        (IDLE_TIMEOUT_ANNOTATION, s.idle_timeout)) if v}
                     or None,
                     inputs=inputs,
                     outputs=[

@@ -173,6 +173,9 @@ def follower_template(ctx: dict, tpl: dict, provider: str, dataset: str) -> dict
         {"name": "HPC_CLASS", "value": "{{inputs.parameters.hpc-class}}"},
         {"name": "HPC_RESUMABLE_LEAD", "value": "{{inputs.parameters.resumable-lead}}"},
         {"name": "HPC_RESUMABLE", "value": "{{inputs.parameters.resumable}}"},
+        # step(idle_timeout=...): minutes, "0" = off, "" = the platform's 20 (D-72); the follower copies it
+        # to the job's idleTimeoutMinutes. The same annotation drives the in-cluster idle watchdog.
+        {"name": "HPC_IDLE_TIMEOUT_MINUTES", "value": "{{inputs.parameters.idle-timeout}}"},
         {"name": "HPC_MAX_CONTINUATIONS", "value": str(HPC_MAX_CONTINUATIONS)},
         {"name": "STEP_OUTPUTS", "value": "{{inputs.parameters.step-outputs}}"},
         {"name": "DATASET", "value": dataset},
@@ -222,6 +225,12 @@ def parse_time_limit(value) -> int:
 
 
 RESUMABLE_OFF = "off"   # step(resumable=False): never continued from a checkpoint
+
+
+def step_idle_timeout(step: dict) -> str:
+    """The step's idle_timeout in minutes as text ("0" = off), or "" for the platform default."""
+    raw = ((step.get("metadata") or {}).get("annotations") or {}).get("platform.kubecore.io/idle-timeout")
+    return str(raw) if raw is not None else ""
 
 
 def step_resumable_opt_out(step: dict) -> bool:
@@ -358,6 +367,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
                 {"name": "resumable-lead", "value": str(lead)},
                 # "0" = resumable=False; "auto" lets the controller discover resumability (D-74)
                 {"name": "resumable", "value": "0" if step_resumable_opt_out(step) else "auto"},
+                {"name": "idle-timeout", "value": step_idle_timeout(step)},
                 {"name": "step-outputs", "value": ",".join(step_outputs)},
                 {"name": "hpc-class", "value": "{{workflow.parameters.%s-class}}" % step["name"]},
             ]},
@@ -432,7 +442,8 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
             {"name": "step-name"}, {"name": "image"}, {"name": "step-command"},
             {"name": "time-limit"}, {"name": "deadline-seconds"},
             {"name": "step-outputs", "value": ""}, {"name": "hpc-class"},
-            {"name": "resumable-lead", "value": "0"}, {"name": "resumable", "value": "auto"}]},
+            {"name": "resumable-lead", "value": "0"}, {"name": "resumable", "value": "auto"},
+            {"name": "idle-timeout", "value": ""}]},
         # Per-step: Slurm time limit + queue/prep allowance (see
         # QUEUE_ALLOWANCE_MINUTES). Argo resolves the parameter here.
         "activeDeadlineSeconds": "{{inputs.parameters.deadline-seconds}}",

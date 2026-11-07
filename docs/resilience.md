@@ -69,7 +69,7 @@ train = step("model-training", gpu=True, needs=[load],
 |---|---|
 | `walltime` | the longest the step may run on HPC. The platform may ask the site for less after it has seen the step finish a few times (short steps only), and runs it again at your limit if it was cut short, so a step is never stopped where your limit would have passed. |
 | `checkpoint_every` | how often the folder is copied. Saving stays near 10 % of the run time: a slow save lengthens the interval. `checkpoint_every=False` turns copies off for the step (the repeat after a lost machine stays). A CPU step is copied only if you set a value here. |
-| `idle_timeout` | how long a step may show no GPU use and no new log lines before it is ended as `Idle`. Raise it for a step with a long silent phase. |
+| `idle_timeout` | how long a GPU step may show no GPU use (below 5 %) and no new log lines before it is ended as `Idle`. Default 20 minutes; raise it for a step with a long silent phase, or `idle_timeout=0` to turn the rule off. Same rule on HPC and on a cloud GPU node. An `Idle` step is not repeated: it ends as failed. |
 | `resumable` | normally not needed: a step is continued when it uses the folder. Set `resumable="30m"` only to be signalled earlier before the HPC time limit, for a large checkpoint. `resumable=False` opts the step out: on HPC it is never continued from a checkpoint (a lost machine still re-runs it). |
 
 ## What you will see
@@ -98,5 +98,6 @@ repeating the same hours.
 | the step ends as failed after its machine was reclaimed | the step ran out of its two repeats; run it again, or use an on-demand class for this step |
 | `NoProgress` | the step restarted without loading its checkpoint, or saved the same state again: check that loading restores your epoch counter |
 | copies fail with a disk message | raise `disk=` for the step |
-| the step was ended as `Idle` but was working | raise `idle_timeout` for it |
+| the step was ended as `Idle` but was working | raise `idle_timeout` for it (or `idle_timeout=0`) |
+| on a cloud GPU node, the step shows `KaosIdle: ended by the idle watchdog ...` as its failure message | the platform saw no GPU use and no new log line for the window and stopped the step so the GPU stops costing money; this is the `Idle` end described above |
 | a CPU step is not copied | set `checkpoint_every` on it (short CPU steps are simply repeated) |

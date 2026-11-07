@@ -50,6 +50,10 @@ release-gate rule):
                                       the step's KAOS_CHECKPOINT_DIR; "off"
                                       removes the persistence helper (see
                                       kubecore/resilience.py)
+  platform.kubecore.io/idle-timeout   minutes a GPU step may show no GPU use
+                                      and no new log line before the pool's
+                                      idle watchdog ends it as Idle; "0" turns
+                                      it off (carried to the pod unchanged)
 
 connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every
 developer step, never on meluxina-run.
@@ -74,7 +78,7 @@ from kubecore.resilience import enhance_resilience, shared_templates
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
 KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc", "hpc-resumable",
-                     "checkpoint-every"}
+                     "checkpoint-every", "idle-timeout"}
 WORKSPACE_MOUNT = "/workspace"
 # Mount path for the Zitadel machine-key secret backing MLflow bearer auth
 # (#868) — matches the previous DSL's working reference (/etc/mlflow-svc).

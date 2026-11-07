@@ -67,7 +67,7 @@ A continued job waits in the queue again and its time counts against your budget
 continuation that does not get past the previous checkpoint ends with the reason `NoProgress`. A step that writes no
 checkpoint ends at its limit with a message that names the limit; if the node fails it is run again from the start, at
 most twice. A step that hangs (no GPU use and no new log lines for 20 minutes) ends with the reason `Idle`
-(`idle_timeout` changes the window).
+(`idle_timeout="40m"` changes the window, `idle_timeout=0` turns it off; the same setting applies on your project's own machines).
 
 On your project's own machines the same folder is kept safe by the platform too, so the same step code runs everywhere.
 `resumable="30m"` stays available to be signalled earlier before the time limit when a checkpoint is large.

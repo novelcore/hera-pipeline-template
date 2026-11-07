@@ -70,6 +70,16 @@ def test_a_resumable_steps_follower_gets_its_lead_and_a_deadline_for_every_conti
         (1 + meluxina.HPC_MAX_CONTINUATIONS) * (120 + meluxina.QUEUE_ALLOWANCE_MINUTES) * 60
 
 
+def test_idle_timeout_reaches_the_follower_as_minutes_and_unset_leaves_the_platform_default():
+    """step(idle_timeout=...) -> annotation (minutes, "0" = off) -> twin argument idle-timeout ->
+    HPC_IDLE_TIMEOUT_MINUTES on the follower -> HPCArgoWorkflowJob spec.idleTimeoutMinutes. Unset: ""."""
+    assert _render()["idle-timeout"] == ""
+    assert _render(idle_timeout=40)["idle-timeout"] == "40"
+    assert _render(idle_timeout="1h")["idle-timeout"] == "60"
+    assert _render(idle_timeout=0)["idle-timeout"] == "0"
+    assert _render(idle_timeout=False)["idle-timeout"] == "0"
+
+
 def test_a_lead_not_shorter_than_the_wall_time_is_refused():
     with pytest.raises(ValueError, match="not shorter than its wall time"):
         _render(hpc_time_limit="30m", resumable="30m")
