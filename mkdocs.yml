@@ -115,6 +115,7 @@ nav:
       - Run your pipeline: run-it.md
   - Results: results.md
   - Run on HPC (Slurm): hpc.md
+  - When a machine is lost: resilience.md
   - kaos-lib:
       - Versions and upgrades: kaos-lib-versions.md
       - kaos-lib reference: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html

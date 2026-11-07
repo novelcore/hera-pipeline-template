@@ -1,0 +1,140 @@
+retryStrategy:
+  limit: '2'
+  retryPolicy: Always
+  expression: lastRetry.status == 'Error' or lastRetry.message matches '.*(imminent
+    node shutdown|node is shutting down|node is draining|The node was low on resource|The
+    node had condition|Pod was rejected|Evicted|evicted|pod deleted|Pod was deleted).*'
+  backoff:
+    duration: 30s
+    factor: '2'
+    maxDuration: 10m
+volumes:
+- name: mlflow-svc
+  secret:
+    secretName: PLACEHOLDER-mlflow-svc
+- name: dshm
+  emptyDir:
+    medium: Memory
+    sizeLimit: 1Gi
+- name: kaos-checkpoint
+  emptyDir: {}
+- name: kaos-checkpoint-stage
+  emptyDir: {}
+initContainers:
+- name: kaos-ckpt-restore
+  image: python:3.13-alpine@sha256:4d511039677430640754cd1417737349067dfcdaba4dcf7e576334516f9f4c30
+  command:
+  - python3
+  - -c
+  - '<helper source, compressed: see kubecore/checkpoint_helper.py>'
+  - restore
+  env:
+  - name: KAOS_CHECKPOINT_DIR
+    value: /kaos/checkpoint
+  - name: LAKEFS_ENDPOINT
+    value: http://lakefs.internal.invalid
+  - name: LAKEFS_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: PLACEHOLDER-lakefs-admin
+        key: accessKeyId
+  - name: LAKEFS_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: PLACEHOLDER-lakefs-admin
+        key: secretAccessKey
+  - name: CKPT_REPO
+    value: outputs-PLACEHOLDER-app
+  - name: CKPT_BRANCH
+    value: kaos-checkpoints
+  - name: CKPT_ROOT
+    value: resume
+  - name: CKPT_KEY
+    value: '{{workflow.name}}/train'
+  - name: CKPT_EVERY_MIN
+    value: '10'
+  - name: CKPT_STAGE
+    value: /stage
+  - name: PYTHONDONTWRITEBYTECODE
+    value: '1'
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
+  securityContext:
+    runAsUser: 65532
+    runAsGroup: 65532
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  volumeMounts:
+  - name: kaos-checkpoint
+    mountPath: /kaos/checkpoint
+  - name: kaos-checkpoint-stage
+    mountPath: /stage
+sidecars:
+- name: kaos-ckpt-copy
+  image: python:3.13-alpine@sha256:4d511039677430640754cd1417737349067dfcdaba4dcf7e576334516f9f4c30
+  command:
+  - python3
+  - -c
+  - '<helper source, compressed: see kubecore/checkpoint_helper.py>'
+  - watch
+  env:
+  - name: KAOS_CHECKPOINT_DIR
+    value: /kaos/checkpoint
+  - name: LAKEFS_ENDPOINT
+    value: http://lakefs.internal.invalid
+  - name: LAKEFS_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: PLACEHOLDER-lakefs-admin
+        key: accessKeyId
+  - name: LAKEFS_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: PLACEHOLDER-lakefs-admin
+        key: secretAccessKey
+  - name: CKPT_REPO
+    value: outputs-PLACEHOLDER-app
+  - name: CKPT_BRANCH
+    value: kaos-checkpoints
+  - name: CKPT_ROOT
+    value: resume
+  - name: CKPT_KEY
+    value: '{{workflow.name}}/train'
+  - name: CKPT_EVERY_MIN
+    value: '10'
+  - name: CKPT_STAGE
+    value: /stage
+  - name: PYTHONDONTWRITEBYTECODE
+    value: '1'
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
+  securityContext:
+    runAsUser: 65532
+    runAsGroup: 65532
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+  volumeMounts:
+  - name: kaos-checkpoint
+    mountPath: /kaos/checkpoint
+  - name: kaos-checkpoint-stage
+    mountPath: /stage
+checkpointEnv:
+- name: KAOS_CHECKPOINT_DIR
+  value: /kaos/checkpoint
+checkpointMount:
+- name: kaos-checkpoint
+  mountPath: /kaos/checkpoint

@@ -45,44 +45,32 @@ Slurm stops a job at its wall-clock limit. The default is 4 hours. Give long ste
 in `pipeline.py`:
 
 ```python
-train = step("model-training", gpu=True, needs=[load], hpc_time_limit="12h",
+train = step("model-training", gpu=True, needs=[load], walltime="12h",
              reads=["experiment", "dataset", "train"])
 ```
 
-The value takes minutes or hours: `"90m"`, `"12h"`, or `"720"` (minutes). The platform adds a queue
-allowance on top for its own wait.
+The value takes minutes or hours: `"90m"`, `"12h"`, or `"720"` (minutes). `hpc_time_limit` is the older name and
+still works. The platform adds a queue allowance on top for its own wait.
 
-### Long runs continue after the wall time
+For a short step (up to 2 hours) that has finished a few times, the platform asks the site for a time limit based on
+those runs, which starts it sooner. If such a step is cut short anyway, it is run again once at your limit, so it is
+never stopped where your limit would have passed. Long steps keep the limit you set.
 
-Declare a step resumable and it can save a checkpoint before its wall time and continue in a new job:
+### Long runs continue after the time limit
 
-```python
-train = step("model-training", gpu=True, needs=[load], hpc_time_limit="12h",
-             resumable=True,              # or resumable="20m": the signal comes 20 minutes before the wall time
-             reads=["experiment", "dataset", "train"])
-```
+A step that keeps its checkpoints in the folder `KAOS_CHECKPOINT_DIR` (or uses `kaos_lib`'s framework hooks for
+Ultralytics, Lightning or Hugging Face) continues in a new job from its last checkpoint when the time limit, a node
+failure or maintenance ends a job. You do not mark the step: there is nothing to declare and no code to write. See
+[When a machine is lost or a time limit hits](resilience.md).
 
-A resumable step is told to stop 10 minutes before its wall time (or the lead you give). Your step code
-decides when it is safe to save, and writes and reads its own state with `kaos_lib.checkpoint`:
+A continued job waits in the queue again and its time counts against your budget, up to 5 continuations per step. A
+continuation that does not get past the previous checkpoint ends with the reason `NoProgress`. A step that writes no
+checkpoint ends at its limit with a message that names the limit; if the node fails it is run again from the start, at
+most twice. A step that hangs (no GPU use and no new log lines for 20 minutes) ends with the reason `Idle`
+(`idle_timeout` changes the window).
 
-```python
-from kaos_lib import checkpoint
-
-state = load_state(checkpoint.resume_path()) if checkpoint.is_resume() else fresh_state()
-for epoch in range(state.epoch, epochs):
-    train_one_epoch(state)
-    if checkpoint.stop_requested():                               # a safe point
-        checkpoint.save(lambda path: save_state(state, path))     # writes, then ends the job
-```
-
-`save_state` and `load_state` are yours: write whatever your framework needs into the folder you are given.
-`save` ends the job with exit code 85. The checkpoint is uploaded to `outputs-<app>` before the job ends,
-and the step continues in a new job from that checkpoint, up to 5 times. If the upload does not finish
-before the wall time, the step fails instead of starting over: give a longer lead for large checkpoints.
-
-A continued job waits in the queue again, and its time counts against your budget. On your project's own
-machines no signal comes, so the same code runs to the end. A resumable step runs alone on its node.
-Steps that are not resumable run to the wall time as before; one that exits 85 anyway fails.
+On your project's own machines the same folder is kept safe by the platform too, so the same step code runs everywhere.
+`resumable="30m"` stays available to be signalled earlier before the time limit when a checkpoint is large.
 
 ## What you should see
 
@@ -97,10 +85,11 @@ Steps that are not resumable run to the wall time as before; one that exits 85 a
 |---|---|
 | no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet; ask your KAOS contact |
 | the step waits for hours | the queue is busy; this is the HPC queue, not your run |
-| the step stops at its wall time | raise `hpc_time_limit`, or make it `resumable=True` and save with `kaos_lib.checkpoint` |
-| "not continuing the step: its checkpoint did not reach the outputs repository" | the upload ran out of time: give a longer lead, `resumable="30m"`, or save a smaller checkpoint |
-| "not continuing the step: ... not declared resumable" | the step exited 85: add `resumable=True` to it in `pipeline.py` |
+| the step stops at its time limit | raise `walltime`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](resilience.md)) |
+| the step ends with `Idle` | it showed no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
+| the step ends with `NoProgress` | the continuation did not get past its checkpoint: check that loading restores your epoch counter |
+| a large checkpoint is not saved in time before the limit | `resumable="30m"` signals the step earlier, or save less (weights only) |
 | the job is refused or never starts | the HPC allocation may be used up or not cover that class; ask your KAOS contact |
 | a lost waiting pod | it is retried twice and re-attaches to the same Slurm job; a job that failed on HPC is not retried |
 
-DEVELOPER.md §8.1 has the details for template maintainers.
+DEVELOPER.md §8.1 and §8.2 have the details for template maintainers.

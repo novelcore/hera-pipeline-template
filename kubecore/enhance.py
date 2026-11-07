@@ -46,6 +46,10 @@ release-gate rule):
   platform.kubecore.io/workspace      per-run RWO PVC at /workspace (e.g. "50Gi")
   platform.kubecore.io/hpc            future MeluXina leg (accepted,
                                       not acted on)
+  platform.kubecore.io/checkpoint-every  minutes between checkpoint copies of
+                                      the step's KAOS_CHECKPOINT_DIR; "off"
+                                      removes the persistence helper (see
+                                      kubecore/resilience.py)
 
 connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every
 developer step, never on meluxina-run.
@@ -66,9 +70,11 @@ from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
 from kubecore.kaos_lib_support import support_value
 from kubecore.meluxina import enhance_hpc, hpc_classes
 from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
+from kubecore.resilience import enhance_resilience, shared_templates
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
-KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc", "hpc-resumable"}
+KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc", "hpc-resumable",
+                     "checkpoint-every"}
 WORKSPACE_MOUNT = "/workspace"
 # Mount path for the Zitadel machine-key secret backing MLflow bearer auth
 # (#868) — matches the previous DSL's working reference (/etc/mlflow-svc).
@@ -965,6 +971,7 @@ def enhance(wft: dict, ctx: dict) -> dict:
     steps = step_templates(spec)
     enhance_arguments(spec, ctx, steps)
     gpu_step_names: set = set()
+    shared = shared_templates(spec)  # before enhance_hpc adds twin tasks
     for step in steps:
         annots = platform_annotations(step)  # validates; raises on unknown keys
         # Captured BEFORE enhance_gpu_routing strips the typed request — the
@@ -986,6 +993,7 @@ def enhance(wft: dict, ctx: dict) -> dict:
         # the full gpu-tier picture.
         enhance_gpu_routing(spec, step, ctx, annots)
         enhance_volumes(step, annots, ctx)
+        enhance_resilience(spec, step, ctx, annots, gpu, inject_disabled(annots, "lakefs"), shared)
         enhance_connections(step, ctx)
     enhance_workspace_pvc(spec, steps)
     enhance_platform_group(steps, ctx)

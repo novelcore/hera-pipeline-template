@@ -302,24 +302,38 @@ public endpoints with a short-lived token minted per job.
 Give long steps a wall-clock limit (default 4 h):
 
 ```python
-run = step("run", gpu=True, needs=[prep], hpc_time_limit="12h",
+run = step("run", gpu=True, needs=[prep], walltime="12h",
            reads=["experiment", "train"])
 ```
 
-`hpc_time_limit` takes minutes or hours (`"90m"`, `"12h"`, `"720"`); Slurm kills
-the job when it elapses. The platform adds a queue allowance on top for its own
-wait budget; a run that outlives that budget keeps running on HPC but is
-no longer observed by the pipeline. Queue time is the one variable you don't
-control — expect minutes to hours depending on the partition's load.
+`walltime` takes minutes or hours (`"90m"`, `"12h"`, `"720"`; `hpc_time_limit` is the older name and still works);
+Slurm kills the job when it elapses. The platform adds a queue allowance on top for its own wait budget. Queue time is
+the one variable you don't control: expect minutes to hours depending on the partition's load.
 
-`resumable=True` (or a lead such as `resumable="20m"`, shorter than the wall
-time) makes a GPU step resumable: Slurm sends it USR1 that long before the wall
-time, the step saves with `kaos_lib.checkpoint` and exits 85, the job uploads
-and commits `<work>/output/checkpoint/` to `outputs-<app>` (branch
-`hpc-ckpt-<workflow-uid>-<step>`, folder `hpc-checkpoints/<workflow-uid>/<step>/attempt-<n>/`)
-and records the commit in its job comment, and the pool's HPC controller submits the next job
-with `KAOS_RESUME_PATH` set, up to 5 times. Only resumable steps get the signal
-or continue, and they never share a node. See docs/hpc.md.
+### 8.2 Resilience on every compute: one folder, no code
+
+Every step gets `KAOS_CHECKPOINT_DIR`, a folder. The same contract holds on your project's own cluster (spot nodes
+included) and on HPC:
+
+- **Re-run.** A step lost with its node (preemption, eviction, node shutdown, a deleted pod, an HPC node failure or
+  maintenance) is run again, at most twice, never because the step itself failed. This is safe because results
+  are published only when a step succeeds. On the cluster the enhancer adds the Argo `retryStrategy`
+  (`retryPolicy: Always` plus an expression on the pod-loss messages, backoff 30 s doubling to 10 min).
+- **Persistence.** The platform copies the folder periodically and when the machine is being stopped, as one archive
+  with a sha256 manifest (at most two copies, deleted when the step succeeds), and restores the newest verified copy
+  before the step starts again. On the cluster this is an init container and a sidecar the enhancer adds to GPU steps
+  (and to any step that sets `checkpoint_every`); copies live in your `outputs-<app>` repository on their own branch
+  `kaos-checkpoints`, under `resume/<run>/<step>/`, never merged into `main`. On HPC the controller does the same
+  with scratch storage and continues the job after the time limit.
+- **In your process.** `kaos_lib` hooks Ultralytics, PyTorch Lightning and the Hugging Face Trainer when your step
+  imports `kaos_lib` and that framework: they write their checkpoints into the folder and resume from it. The
+  template holds no checkpoint code. For anything else, write into the folder, or `kaos_lib.checkpoint.register`.
+- **Idle watchdog.** An HPC step with no GPU use and no new log lines for 20 minutes ends as `Idle`
+  (`idle_timeout` changes the window; `0` turns it off).
+
+Optional step settings: `checkpoint_every="20m"` (or `False` for none; a CPU step is copied only when this is set),
+`idle_timeout`, `walltime`, and `resumable="30m"` to be signalled earlier before an HPC time limit. See
+docs/resilience.md for what users see.
 
 **MeluXina runs only through the pool's HPC controller (PRD-HPC-1461).**
 When the controller serves the project the pipeline context has
