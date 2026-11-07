@@ -1,6 +1,7 @@
-"""PRD-HPC-1461 phase 1 (D-58/D-59/D-63): with pipeline-context hpc.controller "serve" the `meluxina-run`
-template is the credential-free follower of the pool's HPC controller. "on" (phase 0) and an absent switch
-render the in-pod waiter exactly as before (goldens in tests/golden, taken from dev be9e52b).
+"""PRD-HPC-1461 (D-58/D-59/D-63, F-35): with pipeline-context hpc.controller "serve" the `meluxina-run`
+template is the credential-free follower of the pool's HPC controller. Any other value, or none (the
+controller does not serve the project), renders a template that only fails with a clear message: there
+is no in-pod path to fall back to.
 Run:  python -m pytest tests/ -v
 """
 import copy
@@ -85,20 +86,25 @@ def test_serve_has_no_secret_volume_env_or_endpoint(serve):
 
 
 def test_serve_keeps_inputs_outputs_deadline_retry_labels(serve):
-    old, new = _tpl(_render()), _tpl(serve)
-    for k in ("inputs", "outputs", "activeDeadlineSeconds", "retryStrategy", "metadata"):
-        assert new[k] == old[k], k
+    new = _tpl(serve)
+    assert {p["name"] for p in new["inputs"]["parameters"]} == {
+        "step-name", "image", "step-command", "time-limit", "deadline-seconds", "step-outputs", "hpc-class",
+        "resumable-lead"}
+    assert new["activeDeadlineSeconds"] == "{{inputs.parameters.deadline-seconds}}"
+    assert new["retryStrategy"]["retryPolicy"] == "Always" and new["retryStrategy"]["limit"] == "2"
+    assert new["retryStrategy"]["expression"] == meluxina.POD_LOSS_RETRY
+    assert new["metadata"]["labels"]["platform.kubecore.io/compute-type"] == "hpc"
     assert {"slurm-job-id"} <= {p["name"] for p in new["outputs"]["parameters"]}
 
 
 def test_serve_dag_is_unchanged_apart_from_the_template(serve):
-    old = _render()
+    old = _render(controller=None)
     strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "meluxina-run"]  # noqa: E731
     assert strip(serve) == strip(old)
 
 
 def test_serve_without_follower_image_fails_the_render():
-    for hpc in ({"controller": "serve"}, {"controller": "serve", "followerImage": ""}):
+    for hpc in ({"controller": "serve", "followerImage": None}, {"controller": "serve", "followerImage": ""}):
         with pytest.raises(ValueError, match="followerImage"):
             _render(**hpc)
 
@@ -123,12 +129,35 @@ def test_node_key_is_unique_per_twin_and_stable_across_retries(serve):
     assert not any(k in t for t in twins for k in ("withItems", "withParam", "withSequence"))
 
 
-@pytest.mark.parametrize("name,hpc", [("absent", {}), ("on", {"controller": "on"})])
-def test_on_and_absent_render_the_waiter_unchanged(name, hpc):
-    golden = json.loads((GOLDEN / ("meluxina-run-%s.json" % name)).read_text())
-    assert json.loads(json.dumps(_tpl(_render(**hpc)))) == golden
+def test_serve_without_sharing_adds_no_sharing_env(serve):
+    env = _env(_tpl(serve))
+    assert "HPC_SHARING" not in env and "HPC_SCOPE" not in env
+    assert meluxina.sharing_env({"hpc": {"sharing": "on"}}) == [], "no scope, no sharing"
+    assert meluxina.sharing_env({"hpc": {"sharing": "off", "scope": "a1b2c3d4e5"}}) == []
+    assert meluxina.sharing_env({"hpc": {"sharing": True, "scope": "a1b2c3d4e5"}})[0]["value"] == "on", \
+        "a bare YAML on (read as True) still means on"
 
 
-def test_other_controller_values_stay_the_waiter():
-    for v in ("off", "", None, "Serve"):
-        assert _tpl(_render(controller=v)) == _tpl(_render())
+@pytest.mark.parametrize("controller", [None, "on", "off", "", "Serve", True])
+def test_a_project_the_controller_does_not_serve_gets_a_refusal_never_the_waiter(controller):
+    """F-35: absent, the retired phase-0 value "on" and anything else is a step that fails with the
+    message; it holds no credential, no volume, no Slurm or staging code, and is not retried."""
+    tpl = _tpl(_render(controller=controller))
+    c = tpl["container"]
+    assert c["command"] == ["sh", "-c"] and "exit 1" in c["args"][0]
+    assert c["env"] == [{"name": "HPC_NOT_SERVED", "value": meluxina.HPC_NOT_SERVED_MESSAGE}]
+    assert "enable operators.hpc on the pool" in meluxina.HPC_NOT_SERVED_MESSAGE
+    assert "volumes" not in tpl and "volumeMounts" not in c
+    assert "retryStrategy" not in tpl and "activeDeadlineSeconds" not in tpl
+    text = json.dumps(tpl)
+    for needle in ("secretKeyRef", "SLURM_TOKEN", "meluxina-jwt", "meluxina-staging", "mlflow-svc", "ZITADEL",
+                   "HPC_CONTROLLER", "slurm-api.lxp.lu", "python3"):
+        assert needle not in text, needle
+    # the DAG still renders: a pipeline that never picks a MeluXina class is unaffected
+    assert {p["name"] for p in tpl["inputs"]["parameters"]} >= {"step-name", "image", "hpc-class"}
+
+
+def test_the_refusal_and_the_follower_share_the_dag(serve):
+    refusal = _render(controller=None)
+    strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "meluxina-run"]  # noqa: E731
+    assert strip(serve) == strip(refusal)

@@ -317,33 +317,27 @@ time) makes a GPU step resumable: Slurm sends it USR1 that long before the wall
 time, the step saves with `kaos_lib.checkpoint` and exits 85, the job uploads
 and commits `<work>/output/checkpoint/` to `outputs-<app>` (branch
 `hpc-ckpt-<workflow-uid>-<step>`, folder `hpc-checkpoints/<workflow-uid>/<step>/attempt-<n>/`)
-and records the commit in its job comment, and the waiter submits the next job
+and records the commit in its job comment, and the pool's HPC controller submits the next job
 with `KAOS_RESUME_PATH` set, up to 5 times. Only resumable steps get the signal
 or continue, and they never share a node. See docs/hpc.md.
 
-**Admission by the pool's HPC controller (PRD-HPC-1461 phase 0).** When the
-pipeline context has `hpc.controller: "on"`, the waiter records each HPC step
-as an `HPCArgoWorkflowJob` (`hpc.kaos.io/v1alpha1`, named `<workflow>-<step>`,
-owned by the Workflow) and submits an attempt only after the controller has
-admitted it and booked it against the project's budget share. It reports the
-Slurm job and its end to the record; the controller settles each attempt and
-admits a continuation again. A retried waiter resumes from the record. If the
-switch is on but the pool has no controller, or the step may not create its
-record, the step fails: it never submits around the admission. Without the
-switch nothing changes.
-
-**Controller-only HPC (PRD-HPC-1461 phase 1).** With `hpc.controller: "serve"`
-(and `hpc.followerImage`, the controller's image; the render fails without it)
-the `meluxina-run` template is a *follower* instead of the waiter: command
-`/follower`, no Secret volume or credential env. It creates the step's
+**MeluXina runs only through the pool's HPC controller (PRD-HPC-1461).**
+When the controller serves the project the pipeline context has
+`hpc.controller: "serve"` (and `hpc.followerImage`, the controller's image; the
+render fails without it) and the `meluxina-run` template is a *follower*:
+command `/follower`, no Secret volume or credential env. It creates the step's
 `HPCArgoWorkflowJob` (named from the workflow uid and the twin's task name, so
 an Argo retry of the twin re-attaches), prints its phase and the queue's
 pending reason, and writes the step's declared outputs from the job's
-`status.outputs`. The pool's controller runs the job and holds every
-credential; cancelling or deleting the run cancels the Slurm job. Its inputs,
-outputs, deadline and retry are the waiter's, so authoring is unchanged. `"on"`
-and an absent switch render exactly as before. The render of a `serve` context
-is covered by `tests/test_meluxina_follower.py`.
+`status.outputs`. The pool's controller admits and books the job against the
+project's budget share, runs it and holds every credential; cancelling or
+deleting the run cancels the Slurm job.
+
+There is no in-pod submitter any more. For a project the controller does not
+serve (the pool has no `operators.hpc`, or the project's MeluXina budget is not
+known yet) `meluxina-run` is a step that fails at once with a message naming
+the fix and submits nothing; pipelines that never pick a MeluXina class are
+unaffected. The render is covered by `tests/test_meluxina_follower.py`.
 
 ## 9. Data flow between steps
 
