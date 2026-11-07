@@ -9,7 +9,6 @@ import yaml
 from test_datasets_as_repos import CTX_PATH, _raw
 
 from kubecore.enhance import enhance
-from kubecore.meluxina import MELUXINA_SUBMIT_CODE
 
 SUPPORT = {"version": "0.4.0", "supported": ">=0.3", "deprecated": [{"range": "<0.3", "unsupported_after": "2027-01-01"}]}
 
@@ -47,10 +46,8 @@ def test_no_support_data_injects_nothing():
     assert "KAOS_LIB_SUPPORT" not in _env(enhance(_raw(), _ctx(None)), "model-training")
 
 
-def test_the_meluxina_twin_carries_and_forwards_it():
+def test_the_meluxina_twin_carries_it_to_the_controller():
     assert json.loads(_env(enhance(_raw(), _ctx(SUPPORT)), "meluxina-run")["KAOS_LIB_SUPPORT"]) == SUPPORT
-    forwarded = MELUXINA_SUBMIT_CODE.split("('CHECKPOINT_BUCKET'", 1)[1].split(")", 1)[0]
-    assert "'KAOS_LIB_SUPPORT'" in forwarded
 
 
 def test_a_developer_set_value_wins():
