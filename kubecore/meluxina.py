@@ -11,17 +11,17 @@ What it does (F-02/F-03/F-06):
     task with complementary `when:` clauses on `target`;
   * downstream `depends` tokens that reference a routed step are rewritten to
     gate on the Succeeded||Skipped twin pair (exactly one twin runs);
-  * one `meluxina-run` CONTAINER template is appended (the release gate
+  * one `hpc-follower` CONTAINER template is appended (the release gate
     rejects script templates).
 
 MeluXina runs only through the pool's HPC controller (PRD-HPC-1461 D-58, D-59,
 F-35). The operator publishes pipeline-context hpc.controller "serve" (and
-hpc.followerImage) when the controller serves the project; `meluxina-run` is
+hpc.followerImage) when the controller serves the project; `hpc-follower` is
 then a credential-free follower (see follower_template): it creates the step's
 HPCArgoWorkflowJob, prints its progress and writes the Argo outputs from its
 status. The controller's runner Job owns submission, staging, the Slurm token,
 continuation and resubmits. The in-pod waiter this module used to embed is
-gone: for a project the controller does not serve, `meluxina-run` is a step
+gone: for a project the controller does not serve, `hpc-follower` is a step
 that fails at once with HPC_NOT_SERVED_MESSAGE (see refusal_template) and
 nothing is submitted.
 """
@@ -121,6 +121,10 @@ HPC_MAX_CONTINUATIONS = 5
 # it, alone, to the controller's submitter role plus Argo's workflowtaskresults Role); ordinary step pods
 # run as the pipeline's account, which holds no HPC right.
 HPC_SUBMITTER_SA = "hpc-submitter"
+# The WorkflowTemplate template every `<step>-meluxina` twin task calls (follower, or the refusal
+# when the controller does not serve the project). Was `meluxina-run` until PRD-HPC-1461 AC-12; a
+# Workflow submitted before the rename keeps the old name in its own spec and runs to the end.
+HPC_TWIN_TEMPLATE = "hpc-follower"
 HPC_ANNOTATION = "platform.kubecore.io/hpc"
 # step(resumable=...): how long before its wall time the step is told to save (D-44 as amended
 # 2026-11-05). Only resumable steps get the signal and continue.
@@ -155,7 +159,7 @@ def controller_serves(ctx: dict) -> bool:
 
 
 def follower_template(ctx: dict, tpl: dict, provider: str, dataset: str) -> dict:
-    """The `meluxina-run` template as the follower (PRD-HPC-1461 D-59): it creates the step's
+    """The `hpc-follower` template as the follower (PRD-HPC-1461 D-59): it creates the step's
     HPCArgoWorkflowJob, prints its progress and writes the Argo outputs from its status. It holds no
     Slurm, staging or MLflow credential and no Secret volume: the controller's runner Job carries them,
     and the endpoints come from the runner's trusted ConfigMap, not from here. Inputs, outputs, deadline,
@@ -208,7 +212,7 @@ HPC_NOT_SERVED_MESSAGE = ("MeluXina steps run through the pool's HPC controller,
 
 
 def refusal_template(tpl: dict) -> dict:
-    """The `meluxina-run` template for a project the controller does not serve (PRD-HPC-1461 F-35).
+    """The `hpc-follower` template for a project the controller does not serve (PRD-HPC-1461 F-35).
     It only prints HPC_NOT_SERVED_MESSAGE and fails, so the run stops with a clear reason; it holds no
     credential, never submits to the site and is not retried. The template still renders (rather than
     failing the whole pipeline's render) because the author may never pick a MeluXina class; the
@@ -362,7 +366,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
         outputs_union.update(step_outputs)
         twin = {
             "name": task["name"] + "-" + provider,
-            "template": "meluxina-run",
+            "template": HPC_TWIN_TEMPLATE,
             "when": twin_when,
             "arguments": {"parameters": [
                 {"name": "step-name", "value": task["name"]},
@@ -445,7 +449,7 @@ def enhance_hpc(spec: dict, ctx: dict, steps: list, gpu_step_names: set) -> None
     dataset = ("{{workflow.parameters.dataset}}"
                if "dataset" in wf_params else "")
     tpl = {
-        "name": "meluxina-run",
+        "name": HPC_TWIN_TEMPLATE,
         "inputs": {"parameters": [
             {"name": "step-name"}, {"name": "image"}, {"name": "step-command"},
             {"name": "time-limit"}, {"name": "deadline-seconds"},

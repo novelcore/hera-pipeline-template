@@ -27,7 +27,7 @@ def _ctx(support):
 
 def test_every_step_gets_the_support_window():
     out = enhance(_raw(), _ctx(SUPPORT))
-    steps = [t["name"] for t in out["spec"]["templates"] if "container" in t and t["name"] != "meluxina-run"]
+    steps = [t["name"] for t in out["spec"]["templates"] if "container" in t and t["name"] != "hpc-follower"]
     checked = 0
     for name in steps:
         env = _env(out, name)
@@ -47,7 +47,7 @@ def test_no_support_data_injects_nothing():
 
 
 def test_the_meluxina_twin_carries_it_to_the_controller():
-    assert json.loads(_env(enhance(_raw(), _ctx(SUPPORT)), "meluxina-run")["KAOS_LIB_SUPPORT"]) == SUPPORT
+    assert json.loads(_env(enhance(_raw(), _ctx(SUPPORT)), "hpc-follower")["KAOS_LIB_SUPPORT"]) == SUPPORT
 
 
 def test_a_developer_set_value_wins():

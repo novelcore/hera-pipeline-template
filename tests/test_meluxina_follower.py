@@ -1,4 +1,4 @@
-"""PRD-HPC-1461 (D-58/D-59/D-63, F-35): with pipeline-context hpc.controller "serve" the `meluxina-run`
+"""PRD-HPC-1461 (D-58/D-59/D-63, F-35): with pipeline-context hpc.controller "serve" the `hpc-follower`
 template is the credential-free follower of the pool's HPC controller. Any other value, or none (the
 controller does not serve the project), renders a template that only fails with a clear message: there
 is no in-pod path to fall back to.
@@ -32,7 +32,7 @@ def _render(**hpc):
 
 
 def _tpl(wf):
-    return next(t for t in wf["spec"]["templates"] if t["name"] == "meluxina-run")
+    return next(t for t in wf["spec"]["templates"] if t["name"] == "hpc-follower")
 
 
 def _env(tpl):
@@ -42,6 +42,20 @@ def _env(tpl):
 @pytest.fixture(scope="module")
 def serve():
     return _render(controller="serve", followerImage=IMAGE)
+
+
+@pytest.mark.parametrize("hpc", [{"controller": "serve", "followerImage": IMAGE}, {}],
+                         ids=["serve", "not_served"])
+def test_no_template_is_named_meluxina_run(hpc):
+    """PRD-HPC-1461 AC-12: the old in-pod template name is gone from every render; the twin tasks
+    call the one HPC template, followed or refused, under its HPC_TWIN_TEMPLATE name."""
+    wf = _render(**hpc)
+    names = {t["name"] for t in wf["spec"]["templates"]}
+    assert "meluxina-run" not in names
+    assert meluxina.HPC_TWIN_TEMPLATE in names
+    called = {t.get("template") for t in next(t for t in wf["spec"]["templates"] if "dag" in t)["dag"]["tasks"]
+              if t["name"].endswith("-meluxina")}
+    assert called == {meluxina.HPC_TWIN_TEMPLATE}
 
 
 def test_serve_template_is_the_follower(serve):
@@ -103,7 +117,7 @@ def test_serve_keeps_inputs_outputs_deadline_retry_labels(serve):
 
 def test_serve_dag_is_unchanged_apart_from_the_template(serve):
     old = _render(controller=None)
-    strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "meluxina-run"]  # noqa: E731
+    strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "hpc-follower"]  # noqa: E731
     assert strip(serve) == strip(old)
 
 
@@ -124,7 +138,7 @@ def test_node_key_is_unique_per_twin_and_stable_across_retries(serve):
     the twin is a new pod of the same task with the same parameter (Argo's "(n)" retry suffix is on the node
     name, never in an input parameter)."""
     dag = next(t for t in serve["spec"]["templates"] if t["name"] == serve["spec"]["entrypoint"])
-    twins = [t for t in dag["dag"]["tasks"] if t.get("template") == "meluxina-run"]
+    twins = [t for t in dag["dag"]["tasks"] if t.get("template") == "hpc-follower"]
     assert twins
     keys = [next(p["value"] for p in t["arguments"]["parameters"] if p["name"] == "step-name") + "-meluxina"
             for t in twins]
@@ -163,7 +177,7 @@ def test_a_project_the_controller_does_not_serve_gets_a_refusal_never_the_waiter
 
 def test_the_refusal_and_the_follower_share_the_dag(serve):
     refusal = _render(controller=None)
-    strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "meluxina-run"]  # noqa: E731
+    strip = lambda wf: [t for t in wf["spec"]["templates"] if t["name"] != "hpc-follower"]  # noqa: E731
     assert strip(serve) == strip(refusal)
 
 
@@ -172,7 +186,7 @@ def test_follower_runs_as_the_hpc_submitter_account(serve):
     (template-level); every other template keeps the workflow's account, which has no HPC right."""
     assert _tpl(serve)["serviceAccountName"] == "hpc-submitter" == meluxina.HPC_SUBMITTER_SA
     others = [t["name"] for t in serve["spec"]["templates"]
-              if t["name"] != "meluxina-run" and t.get("serviceAccountName")]
+              if t["name"] != "hpc-follower" and t.get("serviceAccountName")]
     assert others == []
     assert serve["spec"]["serviceAccountName"] != "hpc-submitter"
 

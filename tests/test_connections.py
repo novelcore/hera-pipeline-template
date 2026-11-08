@@ -1,6 +1,6 @@
 """PRD #1034 (app connections): the enhancer appends optional envFrom refs to
 the connection ConfigMaps listed in pipeline-context `connections[]` on every
-developer step, and never on platform templates (meluxina-run).
+developer step, and never on platform templates (hpc-follower).
 Run:  python -m pytest tests/ -v
 """
 
@@ -74,12 +74,12 @@ def test_envfrom_is_last_container_key():
 
 def test_platform_templates_untouched():
     t = {t["name"]: t for t in _enhanced(_ctx(CONNS))["spec"]["templates"]}
-    assert "meluxina-run" in t and "envFrom" not in t["meluxina-run"]["container"]
+    assert "hpc-follower" in t and "envFrom" not in t["hpc-follower"]["container"]
 
 
 def test_meluxina_twin_untouched():
     a, b = _enhanced(_ctx(CONNS)), _enhanced(_ctx(None))
-    mr = lambda w: next(t for t in w["spec"]["templates"] if t["name"] == "meluxina-run")
+    mr = lambda w: next(t for t in w["spec"]["templates"] if t["name"] == "hpc-follower")
     assert mr(a) == mr(b)
     dag = lambda w: next(t for t in w["spec"]["templates"] if "dag" in t)
     assert dag(a) == dag(b)  # twin tasks unchanged

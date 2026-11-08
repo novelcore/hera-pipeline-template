@@ -209,7 +209,7 @@ def test_should_map_checkpoint_every_to_the_annotation(given, annotation):
 def test_should_not_change_the_hpc_follower_template():
     ctx = yaml.safe_load((ROOT / "kubecore" / "local-dev" / "pipeline-context.yaml").read_text())
     tpls = render(pipeline_steps, ctx)
-    follower = tpls["meluxina-run"]
+    follower = tpls["hpc-follower"]
     assert follower["retryStrategy"]["limit"] == "2" and "sidecars" not in follower
     assert "KAOS_CHECKPOINT_DIR" not in str(follower["container"]["env"])
 

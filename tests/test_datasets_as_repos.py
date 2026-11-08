@@ -41,7 +41,7 @@ def test_results_go_to_the_apps_outputs_repository():
     assert env["CHECKPOINT_PREFIX"] == "main/checkpoints"
     assert env["KUBECORE_RUN_ID"] == "{{workflow.name}}"
     assert env["KUBECORE_WORKFLOW_NAME"] == "{{workflow.name}}", "names the MLflow run"
-    mr = next(t for t in out["spec"]["templates"] if t["name"] == "meluxina-run")
+    mr = next(t for t in out["spec"]["templates"] if t["name"] == "hpc-follower")
     menv = {e["name"]: e.get("value") for e in mr["container"]["env"]}
     assert menv["DATASET"] == "{{workflow.parameters.dataset}}"
     assert menv["OUTPUTS_REPO"] == "outputs-myapp" and menv["OUTPUTS_REF"] == "main"
@@ -63,5 +63,5 @@ def test_a_pipeline_without_a_dataset_parameter_runs_data_less_on_hpc():
     ctx = yaml.safe_load(CTX_PATH.read_text())
     raw = _raw()
     raw["spec"]["arguments"]["parameters"] = []
-    mr = next(t for t in enhance(raw, ctx)["spec"]["templates"] if t["name"] == "meluxina-run")
+    mr = next(t for t in enhance(raw, ctx)["spec"]["templates"] if t["name"] == "hpc-follower")
     assert {e["name"]: e.get("value") for e in mr["container"]["env"]}["DATASET"] == ""

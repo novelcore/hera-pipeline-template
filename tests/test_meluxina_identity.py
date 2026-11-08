@@ -22,9 +22,9 @@ def _twin_env(ctx):
     ns = runpy.run_path(str(ROOT / "pipeline.py"), run_name="__pipeline__")
     wf = enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), ctx)
     for t in wf["spec"]["templates"]:
-        if t["name"] == "meluxina-run":
+        if t["name"] == "hpc-follower":
             return {e["name"]: e.get("value") for e in t["container"]["env"]}
-    raise AssertionError("meluxina-run template not rendered")
+    raise AssertionError("hpc-follower template not rendered")
 
 
 def test_twin_carries_no_project_identity():
