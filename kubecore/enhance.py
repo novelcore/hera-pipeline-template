@@ -72,7 +72,7 @@ import yaml
 
 from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
 from kubecore.kaos_lib_support import support_value
-from kubecore.meluxina import enhance_hpc, hpc_classes
+from kubecore.meluxina import HPC_TWIN_TEMPLATE, enhance_hpc, hpc_classes
 from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
 from kubecore.resilience import enhance_resilience, shared_templates
 
@@ -87,6 +87,44 @@ MLFLOW_SVC_MOUNT = "/etc/mlflow-svc"
 
 class EnhanceError(Exception):
     pass
+
+
+# PRD-HPC-1461 D-79 F-37: template names only the platform may produce (the follower twin, and its
+# pre-AC-12 name that a Workflow submitted before the rename may still call).
+RESERVED_TEMPLATE_NAMES = (HPC_TWIN_TEMPLATE, "meluxina-run")
+
+
+def refuse_client_identity(wft: dict) -> None:
+    """Refuse a raw WorkflowTemplate that picks its own service account or patches its pod spec.
+
+    Why: the ServiceAccount `hpc-submitter` may create HPC jobs (AC-18) and only the platform follower
+    template may run as it. A pipeline.py that set `serviceAccountName`, `executor.serviceAccountName`
+    or `podSpecPatch` could run its own code as that account, so the render fails instead. The platform
+    adds all of these itself, later, in enhance(); a raw template never carries any of them.
+    """
+    spec = wft.get("spec") or {}
+    if "serviceAccountName" in spec:
+        raise EnhanceError(
+            "pipeline.py sets a service account for the whole pipeline (serviceAccountName). The platform "
+            "chooses the account every step runs as; remove it from your pipeline.")
+    if "podSpecPatch" in spec:
+        raise EnhanceError(
+            "pipeline.py sets podSpecPatch on the pipeline. The platform sizes and places pods itself; "
+            "use step(...) resources and compute classes instead.")
+    for tpl in spec.get("templates") or []:
+        name = tpl.get("name", "?")
+        if name in RESERVED_TEMPLATE_NAMES:
+            raise EnhanceError(
+                f"step or template '{name}' uses a name the platform reserves for its HPC follower "
+                f"({', '.join(RESERVED_TEMPLATE_NAMES)}). Rename it.")
+        if "serviceAccountName" in tpl or "serviceAccountName" in (tpl.get("executor") or {}):
+            raise EnhanceError(
+                f"step '{name}' sets a service account (serviceAccountName). The platform chooses the "
+                f"account every step runs as; remove it from your pipeline.")
+        if "podSpecPatch" in tpl:
+            raise EnhanceError(
+                f"step '{name}' sets podSpecPatch. The platform sizes and places pods itself; use "
+                f"step(...) resources and compute classes instead.")
 
 
 def _param_names(parameters: list) -> set:
@@ -969,6 +1007,7 @@ def enhance_connections(step: dict, ctx: dict) -> None:
 
 
 def enhance(wft: dict, ctx: dict) -> dict:
+    refuse_client_identity(wft)  # before the platform adds its own account and patches
     enhance_metadata(wft, ctx)
     spec = wft["spec"]
     enhance_spec_top_level(spec, ctx)
