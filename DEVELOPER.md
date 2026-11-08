@@ -341,7 +341,7 @@ docs/resilience.md for what users see.
 **MeluXina runs only through the pool's HPC controller (PRD-HPC-1461).**
 When the controller serves the project the pipeline context has
 `hpc.controller: "serve"` (and `hpc.followerImage`, the controller's image; the
-render fails without it) and the `meluxina-run` template is a *follower*:
+render fails without it) and the `hpc-follower` template is a *follower*:
 command `/follower`, no Secret volume or credential env. It creates the step's
 `HPCArgoWorkflowJob` (named from the workflow uid and the twin's task name, so
 an Argo retry of the twin re-attaches), prints its phase and the queue's
@@ -361,7 +361,7 @@ create one. Do not set the account on any other template. Covered by
 
 There is no in-pod submitter any more. For a project the controller does not
 serve (the pool has no `operators.hpc`, or the project's MeluXina budget is not
-known yet) `meluxina-run` is a step that fails at once with a message naming
+known yet) `hpc-follower` is a step that fails at once with a message naming
 the fix and submits nothing; pipelines that never pick a MeluXina class are
 unaffected. The render is covered by `tests/test_meluxina_follower.py`.
 

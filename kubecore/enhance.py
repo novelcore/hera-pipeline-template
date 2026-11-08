@@ -56,7 +56,7 @@ release-gate rule):
                                       it off (carried to the pod unchanged)
 
 connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every
-developer step, never on meluxina-run.
+developer step, never on hpc-follower.
 
 This file deals in plain dicts (parsed with pyyaml), not Hera objects. The
 enhancer runs at CI render time, after Hera has already produced Argo-native

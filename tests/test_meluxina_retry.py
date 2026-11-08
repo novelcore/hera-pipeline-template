@@ -37,7 +37,7 @@ STEP_FAILED = [
 def _twin():
     ns = runpy.run_path(str(ROOT / "pipeline.py"), run_name="__pipeline__")
     wf = enhance.enhance(yaml.safe_load(ns["p"].wt.to_yaml()), CONTEXT)
-    return next(t for t in wf["spec"]["templates"] if t["name"] == "meluxina-run")
+    return next(t for t in wf["spec"]["templates"] if t["name"] == "hpc-follower")
 
 
 def _retried(status: str, message: str) -> bool:
