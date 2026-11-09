@@ -355,7 +355,13 @@ AC-18): its template sets `serviceAccountName: hpc-submitter` (template level,
 `meluxina.HPC_SUBMITTER_SA`), an account the platform creates in every ML
 environment namespace and binds, alone, to the job-create role. Step pods keep
 the pipeline's account, which has no right on HPC jobs, so step code cannot
-create one. Do not set the account on any other template. Covered by
+create one. Do not set the account on any other template. The enhancer
+enforces this (D-79 F-37): `enhance.refuse_client_identity` fails the render, with
+a plain message naming the step, when the raw template sets `serviceAccountName`
+(pipeline or step, also `executor.serviceAccountName`), sets `podSpecPatch`, or
+names a template `hpc-follower` / `meluxina-run`. The platform adds the account
+and the sizing patches itself afterwards. A cluster-side admission policy repeats
+the check at apply time. Covered by `tests/test_refuse_client_identity.py`,
 `tests/test_meluxina_follower.py` and `tests/golden/meluxina_follower.yaml`
 (regenerate with `UPDATE_GOLDEN=1`).
 
