@@ -55,7 +55,7 @@ names the other ([Results](results.md#log-to-mlflow-from-a-step)).
 
 ## 4. On HPC (Slurm)
 
-Nothing changes in your code. When a person picks an HPC class (`meluxina-*`) for the step, the step
+Nothing changes in your code. When a person picks an HPC class for the step, the step
 writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([Run on HPC (Slurm)](hpc.md)). A long step continues from its checkpoints after a time limit or a lost machine,
 with nothing to call ([When a machine is lost or a time limit hits](resilience.md)).
 

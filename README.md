@@ -82,6 +82,7 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 | add a step that reads the dataset | [guide: add a step](docs/guide-step-with-data.md) |
 | run a step on HPC (Slurm) | [Run on HPC (Slurm)](docs/hpc.md) |
 | the operating manual: config, tests, HPC | [DEVELOPER.md](DEVELOPER.md) |
+| why the render refuses a service account or `podSpecPatch` | [Settings the platform owns](docs/platform-owned-settings.md) |
 
 ## Checking the docs
 

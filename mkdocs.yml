@@ -115,6 +115,7 @@ nav:
       - Run your pipeline: run-it.md
   - Results: results.md
   - Run on HPC (Slurm): hpc.md
+  - Settings the platform owns: platform-owned-settings.md
   - When a machine is lost: resilience.md
   - kaos-lib:
       - Versions and upgrades: kaos-lib-versions.md
