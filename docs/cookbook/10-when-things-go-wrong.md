@@ -62,7 +62,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | it stops in seconds with "invalid value" | a field is outside its allowed values; the message lists them |
 | `dataset-loading` fails | the dataset or version does not exist; the message lists what does |
 | `hello-world` says "holds no files yet" | the dataset is empty; this is not an error. Push data and release a version ([chapter 5](5-your-data.md)) |
-| a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On an HPC class (`meluxina-*`) it waits in the HPC queue |
+| a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On an HPC class (`meluxina-*`) it waits in the HPC queue; its log gives the reason ([why a step is waiting or refused](../hpc.md#why-a-step-is-waiting-or-refused)) |
 | a step is red with `ImagePullBackOff` | its image was not built; check `kubecore-ml-ci` for that commit |
 | a step is red with `OOMKilled` | it ran out of memory; pick a bigger `<step>-class` or raise `<step>-mem` |
 | a retry started from scratch | you used **Resubmit**, which is a new run; **Retry** keeps the run name and resumes ([chapter 7](7-run-it.md)) |
@@ -80,10 +80,14 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 
 | symptom | cause and fix |
 |---|---|
-| no `meluxina-*` in the class dropdown | your project has no HPC (Slurm) environment yet ([Run on HPC (Slurm)](../hpc.md)); HPC class names start with `meluxina-`, the provider's name |
+| no `meluxina-*` in the class dropdown | your project has no HPC (Slurm) environment yet ([Run on HPC (Slurm)](../hpc.md)) |
 | an HPC step waits for hours | the Slurm queue is busy; the waiting time is real |
-| it ends at its time limit | raise `walltime` for the step in `pipeline.py`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](../resilience.md)) |
+| it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](../resilience.md)) |
+| it is refused with `TooLongNotResumable` | its time limit is longer than one HPC job may run and the step is not resumable: make it resumable or shorten it ([details](../hpc.md#long-runs-continue-after-the-time-limit)) |
+| it fails with `SubmitLimit` | the site allows only so many queued and running jobs; run it again when some have finished |
+| it waits with `SiteLimit` or `BudgetBlocked` | the allocation for that kind of machine (GPU, CPU, ...) is used up; ask your KAOS contact ([details](../hpc.md#why-a-step-is-waiting-or-refused)) |
 | a step ran twice after a machine was reclaimed | by design: it is repeated at most twice, from its last checkpoint if it wrote one ([details](../resilience.md)) |
+| the render fails: "sets a service account", "sets podSpecPatch" or "reserves" a name | `pipeline.py` set something the platform owns ([Settings the platform owns](../platform-owned-settings.md)) |
 | it ends with `Idle` | no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
 
 ## Still stuck

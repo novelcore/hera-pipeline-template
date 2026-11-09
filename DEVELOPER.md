@@ -284,92 +284,67 @@ exact section and step named (see §10) — nothing silently breaks.
 
 ### 8.1 Running steps on HPC (Slurm)
 
-When the project's pool is HPC-enabled, every step's `{step}-class` dropdown
-also offers the HPC classes (named `meluxina-*`, after the provider) — `meluxina-gpu` (4× A100-40GB), `meluxina-cpu`
-(2× EPYC 7452, 128 cores, 512 GB), `meluxina-largemem` (4 TB). Pick one for a
+On a project with an HPC (Slurm) environment, every step's `{step}-class` dropdown
+also offers the HPC classes: `meluxina-gpu` (4x A100-40GB), `meluxina-cpu`
+(2x EPYC 7452, 128 cores, 512 GB) and `meluxina-largemem` (4 TB). Pick one for a
 step and that step runs as a Slurm job on HPC; every other step keeps its
-in-cluster class. There is no global switch: placement is per step, per run
-(a GPU step on `meluxina-gpu`, a lighter step on `gpu-small`, another step
-in-cluster is a normal combination).
+class on your project's own machines. There is no global switch: placement is per
+step, per run. You never name a Slurm queue or quality-of-service; the platform
+chooses the lane and may use a shorter time limit learned from earlier runs.
 
 What the platform does for an HPC-placed step: waits in the queue on your
-behalf, stages the dataset ref to Lustre (cached), pulls the step image into an
-Apptainer SIF (cached), runs the same command the pod would run, uploads the
-step's declared outputs to lakeFS and hands them to the next step exactly as
-if it had run in the cluster. MLflow and lakeFS are reached through the
-public endpoints with a short-lived token minted per job.
+behalf, stages the dataset ref (cached), prepares the step image (cached), runs the
+same command it would run on your own machines, and hands the step's declared
+outputs to the next step as usual. You write no endpoint and no credential.
 
-Give long steps a wall-clock limit (default 4 h):
+Give long GPU steps a wall-clock limit (default 4 h) with `hpc_time_limit`:
 
 ```python
-run = step("run", gpu=True, needs=[prep], walltime="12h",
+run = step("run", gpu=True, needs=[prep], hpc_time_limit="12h",
            reads=["experiment", "train"])
 ```
 
-`walltime` takes minutes or hours (`"90m"`, `"12h"`, `"720"`; `hpc_time_limit` is the older name and still works);
-Slurm kills the job when it elapses. The platform adds a queue allowance on top for its own wait budget, for every job a step may be continued in (up to 5 continuations; `resumable=False` keeps the budget of a single job). Queue time is
-the one variable you don't control: expect minutes to hours depending on the partition's load.
+`hpc_time_limit` takes minutes or hours as a string (`"90m"`, `"12h"`, `"720"`) and only
+applies to `gpu=True` steps; Slurm stops the job when it elapses. The platform adds a queue allowance on top for its
+own wait, for every job a step may be continued in (up to 5 continuations; `resumable=False` keeps the allowance of a
+single job). Queue time is the one variable you don't control: expect minutes to hours.
+A limit longer than the longest run the site allows needs a resumable step (capped attempts that continue from the
+checkpoint); otherwise the step is refused before it is submitted (`TooLongNotResumable`).
+[Run on HPC (Slurm)](docs/hpc.md) lists what a waiting or refused step says
+(`SiteLimit`, `BudgetBlocked`, `SubmitLimit`, `GPUViolation`, ...).
 
 ### 8.2 Resilience on every compute: one folder, no code
 
-Every step gets `KAOS_CHECKPOINT_DIR`, a folder. The same contract holds on your project's own cluster (spot nodes
+Every step gets `KAOS_CHECKPOINT_DIR`, a folder. The same contract holds on your project's own machines (spot nodes
 included) and on HPC:
 
-- **Re-run.** A step lost with its node (preemption, eviction, node shutdown, a deleted pod, an HPC node failure or
+- **Re-run.** A step lost with its machine (preemption, eviction, node shutdown, a deleted pod, an HPC node failure or
   maintenance) is run again, at most twice, never because the step itself failed. This is safe because results
-  are published only when a step succeeds. On the cluster the enhancer adds the Argo `retryStrategy`
-  (`retryPolicy: Always` plus an expression on the pod-loss messages, backoff 30 s doubling to 10 min).
-- **Persistence.** The platform copies the folder periodically and when the machine is being stopped, as one archive
-  with a sha256 manifest (at most two copies, deleted when the step succeeds), and restores the newest verified copy
-  before the step starts again. On the cluster this is an init container and a sidecar the enhancer adds to GPU steps
-  (and to any step that sets `checkpoint_every`); copies live in your `outputs-<app>` repository on their own branch
-  `kaos-checkpoints`, under `resume/<run>/<step>/`, never merged into `main`. The helper runs the platform's own
-  image from the platform registry (the context's `checkpoints.helperImage`); if a context does not carry it yet,
-  the step keeps the re-run and the folder and its copies start once the app is re-rendered. On HPC the controller does the same
-  with scratch storage and continues the job after the time limit.
+  are published only when a step succeeds.
+- **Persistence.** The platform copies the folder periodically and when the machine is being stopped (at most two
+  copies, verified by checksum, deleted when the step succeeds), and restores the newest verified copy
+  before the step starts again. Large checkpoints need room: raise `disk=` for the step.
 - **In your process.** `kaos_lib` hooks Ultralytics, PyTorch Lightning and the Hugging Face Trainer when your step
   imports `kaos_lib` and that framework: they write their checkpoints into the folder and resume from it. The
-  template holds no checkpoint code. For anything else, write into the folder, or `kaos_lib.checkpoint.register`.
-- **Idle watchdog.** An HPC step with no GPU use and no new log lines for 20 minutes ends as `Idle`
+  template holds no checkpoint code. For anything else, write into the folder, or use `kaos_lib.checkpoint`.
+- **Idle rule.** A GPU step with no GPU use and no new log lines for 20 minutes ends as `Idle`
   (`idle_timeout` changes the window; `0` turns it off).
 
 Optional step settings: `checkpoint_every="20m"` (or `False` for none; a CPU step is copied only when this is set),
-`idle_timeout`, `walltime`, and `resumable="30m"` to be signalled earlier before an HPC time limit
-(`resumable=False` opts a step out of being continued on HPC; exit code 85 means "saved, continue me"). See
-docs/resilience.md for what users see.
+`idle_timeout`, `hpc_time_limit`, and `resumable`: `True` or a lead time such as `"3m"` (how long before an HPC time
+limit the step is told to save; default 10 minutes, shorter than the limit, `gpu=True` steps only).
+The platform also treats a step as resumable on its own once an earlier continuation loaded its checkpoint and got
+further; `resumable=False` opts a step out of being continued on HPC. Exit code 85 means "saved, continue me".
+See [docs/resilience.md](docs/resilience.md) for what you see.
 
-**MeluXina runs only through the pool's HPC controller (PRD-HPC-1461).**
-When the controller serves the project the pipeline context has
-`hpc.controller: "serve"` (and `hpc.followerImage`, the controller's image; the
-render fails without it) and the `hpc-follower` template is a *follower*:
-command `/follower`, no Secret volume or credential env. It creates the step's
-`HPCArgoWorkflowJob` (named from the workflow uid and the twin's task name, so
-an Argo retry of the twin re-attaches), prints its phase and the queue's
-pending reason, and writes the step's declared outputs from the job's
-`status.outputs`. The pool's controller admits and books the job against the
-project's budget share, runs it and holds every credential; cancelling or
-deleting the run cancels the Slurm job.
+### 8.3 What the platform sets for you
 
-The follower is the only pod that may create an `HPCArgoWorkflowJob` (PRD-HPC-1461
-AC-18): its template sets `serviceAccountName: hpc-submitter` (template level,
-`meluxina.HPC_SUBMITTER_SA`), an account the platform creates in every ML
-environment namespace and binds, alone, to the job-create role. Step pods keep
-the pipeline's account, which has no right on HPC jobs, so step code cannot
-create one. Do not set the account on any other template. The enhancer
-enforces this (D-79 F-37): `enhance.refuse_client_identity` fails the render, with
-a plain message naming the step, when the raw template sets `serviceAccountName`
-(pipeline or step, also `executor.serviceAccountName`), sets `podSpecPatch`, or
-names a template `hpc-follower` / `meluxina-run`. The platform adds the account
-and the sizing patches itself afterwards. A cluster-side admission policy repeats
-the check at apply time. Covered by `tests/test_refuse_client_identity.py`,
-`tests/test_meluxina_follower.py` and `tests/golden/meluxina_follower.yaml`
-(regenerate with `UPDATE_GOLDEN=1`).
-
-There is no in-pod submitter any more. For a project the controller does not
-serve (the pool has no `operators.hpc`, or the project's MeluXina budget is not
-known yet) `hpc-follower` is a step that fails at once with a message naming
-the fix and submits nothing; pipelines that never pick a MeluXina class are
-unaffected. The render is covered by `tests/test_meluxina_follower.py`.
+The platform chooses the account each step runs as and sizes and places the pods. The render therefore fails,
+with a plain message that names the step, when `pipeline.py` sets a `serviceAccountName` (for the pipeline or a
+step, also `executor.serviceAccountName`), sets `podSpecPatch`, or names a step `hpc-follower` (or the old
+`meluxina-run`), which the platform reserves for its HPC support. Remove the setting and use
+`step(...)` arguments and the `{step}-class`, `{step}-cpu` and `{step}-mem` form fields instead; see
+[Settings the platform owns](docs/platform-owned-settings.md).
 
 ## 9. Data flow between steps
 
@@ -538,41 +513,39 @@ training run.
 ## 13. What CI does for you (PR checks + per-step builds)
 
 You never run the render or the image builds by hand — the platform's
-**in-cluster CI (Argo Workflows)** does it and reports back on the commit.
-There are **no GitHub Actions** in this repo, and none are needed: every
-check you see on GitHub is posted by a workflow running on the cluster, and
-its link opens that run.
+**CI** does it and reports back on the commit.
+Every check you see on a pull request or a commit is posted by the platform's
+CI (Argo Workflows), and its link opens that run. (The only GitHub workflow in this repository
+publishes this guide's website.)
 
 **On a PR to `dev`** (`wft-render` commit status):
 
 - The platform renders your pipeline exactly the way it will after merge
-  (`pipeline.py` → enhance with the *real* cluster context → the
-  release-hygiene gate → the step ↔ folder check).
+  (`pipeline.py` to a runnable pipeline, then the release checks and the
+  step-to-folder check).
 - The **`wft-render` status check** gates the PR: green = your DAG builds,
   every `reads=` section exists, every step is declared, every step has a
-  buildable `steps/<dir>/Dockerfile` (or a verbatim-image annotation), no
-  duplicate form params. The check's description carries the step / form-param
-  counts; its link opens the Argo run — if the render fails, the error is in
-  that run's `hera-enhance-gate` (or `hera-render`) log.
-- Nothing is written anywhere on a PR. The gate only checks.
+  buildable `steps/<dir>/Dockerfile`, no duplicate form params, and nothing in
+  `pipeline.py` sets a service account or `podSpecPatch` (§8.3). The check's
+  description carries the step / form-param counts; its link opens the Argo run,
+  and if the render fails the error is in that run's log.
+- Nothing is released on a PR. The gate only checks.
 
-**On merge to `dev`** (`kubecore-ml-ci` commit status + `ml-ci` deployment):
+**On merge to `dev`** (`kubecore-ml-ci` commit status):
 
-- The same render runs again and this time **commits** the rendered
-  WorkflowTemplate to the project's GitOps repo.
-- Every `steps/*/` whose contents changed is built (kaniko → the platform
-  registry) and wired into the WorkflowTemplate as `image-<step>`. The matrix
-  is discovered from the folders, so a step you add gets built automatically,
-  with no CI edits.
-- One **`kubecore-ml-ci`** status on the commit (pending → success/failure,
-  link = the Argo build run) and one GitHub **Deployment** (`ml-ci`) that
-  resolves to the same run. A missed webhook is caught within ~3 minutes by
-  the platform's reconciler — no build is ever lost.
+- The same render runs again and this time **releases** the pipeline: it appears in
+  Argo as your pipeline's template.
+- Every `steps/*/` whose contents changed is built and its image wired into the
+  pipeline. The steps are discovered from the folders, so a step you add gets built
+  automatically, with no CI edits.
+- One **`kubecore-ml-ci`** status on the commit (pending, then success or failure;
+  its link opens the Argo build run). A missed webhook is caught within a few minutes,
+  so no build is lost.
 
 So the whole loop for adding a step (§5) is: add `steps/<name>/` + a config
 section + one `pipeline.py` line → **open a PR** → `wft-render` renders your
-WFT → merge → `kubecore-ml-ci` builds your step image and updates the
-WorkflowTemplate → it is ready to run in the Argo UI.
+pipeline → merge → `kubecore-ml-ci` builds your step image and updates the
+pipeline → it is ready to run in the Argo UI.
 
 ---
 

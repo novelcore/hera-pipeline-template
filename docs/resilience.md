@@ -13,7 +13,7 @@ every kind of machine: your project's own cluster (GPU or CPU, spot included) an
 |---|---|---|
 | machine lost, reclaimed or drained | runs again and **continues from its last checkpoint** | runs again from the start, at most twice |
 | HPC time limit reached | continues from the last checkpoint in a new job | ends with a message that names the limit |
-| the step hangs (HPC: no GPU use and no output for 20 minutes) | ends with the reason `Idle`; with a checkpoint it continues | ends with the reason `Idle` |
+| the step hangs (no GPU use and no new log lines for 20 minutes) | on HPC, with a checkpoint it continues; on your project's own machines it ends with the reason `Idle` | ends with the reason `Idle` |
 | your own code fails (a non-zero exit, out of memory, a Python error) | ends as failed: **not** repeated | ends as failed: **not** repeated |
 
 Running a step again is always safe: a step's results are published only when it succeeds.
@@ -32,7 +32,7 @@ framework you already use, with nothing for you to call:
 
 | framework | saved | on the repeated step |
 |---|---|---|
-| Ultralytics (YOLO) | `last.pt` at the end of each epoch | training continues, same total epochs |
+| Ultralytics (YOLO) | `last.pt` at the end of each epoch, and `best.pt` once one exists | training continues, same total epochs, and `best.pt` is kept |
 | PyTorch Lightning | a full Lightning checkpoint | `fit` continues from it |
 | Hugging Face `Trainer` | the Trainer's `checkpoint-*` folders | `train` resumes from them |
 
@@ -54,23 +54,25 @@ none of this happens.
 
 A step that may be continued is never cut by the run's own waiting budget: that budget covers up to 5 continuations, each with its queue wait. A step with `resumable=False` gets the budget of one job.
 
+A step whose time limit is longer than the longest run the HPC site allows needs this too: if it is resumable it runs as capped attempts that continue from the checkpoint, and if it is not, it is refused before it is submitted (`TooLongNotResumable`). See [Run on HPC (Slurm)](hpc.md#long-runs-continue-after-the-time-limit).
+
 ## Settings (all optional)
 
 Set them on the step in `pipeline.py`:
 
 ```python
 train = step("model-training", gpu=True, needs=[load],
-             walltime="12h",             # HPC time limit for this step (hpc_time_limit still works)
+             hpc_time_limit="12h",      # HPC time limit for this step (default 4 hours)
              checkpoint_every="20m",     # copy the checkpoint folder every 20 minutes (default: 10, adapts to size)
              idle_timeout="40m")         # raise the 20-minute idle rule; 0 turns it off
 ```
 
 | setting | meaning |
 |---|---|
-| `walltime` | the longest the step may run on HPC. The platform may ask the site for less after it has seen the step finish a few times (short steps only), and runs it again at your limit if it was cut short, so a step is never stopped where your limit would have passed. |
+| `hpc_time_limit` | the longest the step may run on HPC (`gpu=True` steps). The platform may ask the site for less after it has seen the step finish a few times (short steps only), and runs it again at your limit if it was cut short, so a step is never stopped where your limit would have passed. |
 | `checkpoint_every` | how often the folder is copied. Saving stays near 10 % of the run time: a slow save lengthens the interval. `checkpoint_every=False` turns copies off for the step (the repeat after a lost machine stays). A CPU step is copied only if you set a value here. |
-| `idle_timeout` | how long a GPU step may show no GPU use (below 5 %) and no new log lines before it is ended as `Idle`. Default 20 minutes; raise it for a step with a long silent phase, or `idle_timeout=0` to turn the rule off. Same rule on HPC and on a cloud GPU node. An `Idle` step is not repeated: it ends as failed. |
-| `resumable` | normally not needed: a step is continued when it uses the folder. Set `resumable="30m"` only to be signalled earlier before the HPC time limit, for a large checkpoint. `resumable=False` opts the step out: on HPC it is never continued from a checkpoint (a lost machine still re-runs it). |
+| `idle_timeout` | how long a GPU step may show no GPU use (below 5 %) and no new log lines before it is ended as `Idle`. Default 20 minutes; raise it for a step with a long silent phase, or `idle_timeout=0` to turn the rule off. Same rule on HPC and on a cloud GPU node. On your project's own machines an `Idle` step is not repeated: it ends as failed. |
+| `resumable` | `True` or a lead time such as `"3m"` (default 10 minutes, shorter than the time limit): the step is told to save that long before its HPC time limit; use a longer lead for a large checkpoint. Declaring it is one way to be resumable; the platform also decides on its own once an earlier continuation loaded its checkpoint and got further. `resumable=False` opts the step out: on HPC it is never continued from a checkpoint (a lost machine still re-runs it). Only for `gpu=True` steps. |
 
 ## What you will see
 
