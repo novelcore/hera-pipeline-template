@@ -276,6 +276,10 @@ exact section and step named (see §10) — nothing silently breaks.
 
 - `step("run", gpu=True, ...)` is the entire GPU
   configuration.
+- On the platform's own GPU machines the platform puts the NVIDIA driver folders on the step's library and
+  program paths and fails the step in its first second, with a clear `KAOS:` line, when the driver cannot be
+  reached (no silent CPU fallback). Never on HPC (Slurm). Example step and Dockerfile: `examples/gpu_check/`,
+  guide: `docs/gpu-steps.md`.
 - Per-run sizing is automatic: every step gets `{step}-cpu` and
   `{step}-mem` fields on the submit form (defaults = a whole node).
   Dial a smoke-run down at submit time; you never configure this.

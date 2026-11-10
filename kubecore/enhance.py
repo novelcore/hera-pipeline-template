@@ -55,6 +55,11 @@ release-gate rule):
                                       idle watchdog ends it as Idle; "0" turns
                                       it off (carried to the pod unchanged)
 
+GPU driver prelude (enhance_gpu_driver): a gpu step that runs on a KAOS GPU node has its command wrapped in a
+POSIX `sh -c` that prepends the node's NVIDIA driver paths to LD_LIBRARY_PATH / PATH, fails the step in its
+first second when libcuda cannot be initialised, then `exec`s the original command. Never on an hpc (Slurm)
+step: that runs through the follower and Apptainer `--nv`.
+
 connections (pipeline-context `connections[]`): optional envFrom ConfigMap refs on every
 developer step, never on hpc-follower.
 
@@ -83,6 +88,46 @@ WORKSPACE_MOUNT = "/workspace"
 # Mount path for the Zitadel machine-key secret backing MLflow bearer auth
 # (#868) — matches the previous DSL's working reference (/etc/mlflow-svc).
 MLFLOW_SVC_MOUNT = "/etc/mlflow-svc"
+
+
+# GPU driver prelude (see enhance_gpu_driver). GKE and EKS GPU nodes mount the NVIDIA driver under
+# /usr/local/nvidia; a step image built on a plain python/pip base has none of it on its search paths, so torch
+# cannot load libcuda and silently trains on CPU. The prelude PREPENDS to the image's own LD_LIBRARY_PATH and
+# PATH (a fixed value would break conda and nvidia/cuda images). Positional args: $1 = GPUs the step was given
+# ("0" when a cpu class was chosen: no check), then the original command and args, which `exec "$@"` keeps
+# exactly (exit code, signals, argv). No "{{" and no "$(NAME)" form may appear in it: Argo and Kubernetes
+# would expand them inside the command.
+GPU_PRELUDE_NAME = "kaos-gpu-prelude"
+GPU_DRIVER_CHECK_PY = (
+    'import ctypes, sys\n'
+    'try:\n'
+    '    lib = ctypes.CDLL("libcuda.so.1")\n'
+    'except OSError as e:\n'
+    '    sys.exit("libcuda.so.1 not found: " + str(e).replace(chr(10), " "))\n'
+    'rc = lib.cuInit(0)\n'
+    'if rc != 0:\n'
+    '    sys.exit("cuInit returned error " + str(rc))\n'
+)
+GPU_PRELUDE_SCRIPT = (
+    "LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/nvidia/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\n"
+    "export LD_LIBRARY_PATH\n"
+    "PATH=/usr/local/nvidia/bin:$PATH\n"
+    "export PATH\n"
+    "kaos_gpus=$1\n"
+    "shift\n"
+    'if [ "$kaos_gpus" != "0" ]; then\n'
+    "  if command -v python3 >/dev/null 2>&1; then\n"
+    "    if ! kaos_why=`python3 -c '" + GPU_DRIVER_CHECK_PY + "' 2>&1`; then\n"
+    '      echo "KAOS: this GPU step cannot reach the NVIDIA driver ($kaos_why); '
+    'the image or node is not set up for GPU" >&2\n'
+    "      exit 1\n"
+    "    fi\n"
+    "  else\n"
+    '    echo "KAOS: python3 not found in the image; skipping the NVIDIA driver check" >&2\n'
+    "  fi\n"
+    "fi\n"
+    'exec "$@"\n'
+)
 
 
 class EnhanceError(Exception):
@@ -656,6 +701,23 @@ def enhance_scheduling(step: dict, ctx: dict, annots: dict) -> None:
         limits.setdefault("nvidia.com/gpu", "1")
 
 
+def enhance_gpu_driver(step: dict) -> None:
+    """Wrap a gpu step's container command in the driver prelude (GPU_PRELUDE_SCRIPT).
+
+    Why: on a KAOS GPU node the driver sits in /usr/local/nvidia, which a plain python image does not search,
+    so the step would fall back to CPU unnoticed. Called from enhance() AFTER enhance_hpc so the Slurm twin
+    (which copies the step's command) never carries the prelude. A step without an explicit command (image
+    ENTRYPOINT only) is left alone: its argv cannot be preserved. Idempotent: a wrapped step is skipped.
+    """
+    container = step.get("container") or {}
+    command = container.get("command") or []
+    if not command or command[0] == "sh" and GPU_PRELUDE_NAME in command[:4]:
+        return
+    has_param = any(p.get("name") == "gpus" for p in (step.get("inputs") or {}).get("parameters") or [])
+    gpus = "{{inputs.parameters.gpus}}" if has_param else "1"  # class-routable steps get gpus="0" on a cpu class
+    container["command"] = ["sh", "-c", GPU_PRELUDE_SCRIPT, GPU_PRELUDE_NAME, gpus] + list(command)
+
+
 def _parse_cpu(value) -> float:
     """Kubernetes CPU quantity -> cores ("500m" -> 0.5, "2" -> 2.0)."""
     text = str(value).strip()
@@ -1045,6 +1107,11 @@ def enhance(wft: dict, ctx: dict) -> dict:
     # step's FINAL container image/command, and the depends rewrite needs the
     # final DAG). See kubecore/meluxina.py.
     enhance_hpc(spec, ctx, steps, gpu_step_names)
+    # After enhance_hpc on purpose: the twin copied the step's plain command; only the in-cluster (KAOS GPU
+    # node) container gets the driver prelude.
+    for step in steps:
+        if step["name"] in gpu_step_names:
+            enhance_gpu_driver(step)
     return wft
 
 
