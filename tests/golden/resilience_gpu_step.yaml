@@ -21,13 +21,16 @@ volumes:
   emptyDir: {}
 - name: kaos-checkpoint-stage
   emptyDir: {}
+- name: kaos-ckpt-helper
+  configMap:
+    name: PLACEHOLDER-app-ckpt-helper
+    defaultMode: 292
 initContainers:
 - name: kaos-ckpt-restore
   image: registry.example/kaos-hpc-operator:v0.0.0
   command:
   - python3
-  - -c
-  - '<helper source, compressed: see kubecore/checkpoint_helper.py>'
+  - /ckpt-helper/checkpoint_helper.py
   - restore
   env:
   - name: KAOS_CHECKPOINT_DIR
@@ -77,13 +80,15 @@ initContainers:
     mountPath: /kaos/checkpoint
   - name: kaos-checkpoint-stage
     mountPath: /stage
+  - name: kaos-ckpt-helper
+    mountPath: /ckpt-helper
+    readOnly: true
 sidecars:
 - name: kaos-ckpt-copy
   image: registry.example/kaos-hpc-operator:v0.0.0
   command:
   - python3
-  - -c
-  - '<helper source, compressed: see kubecore/checkpoint_helper.py>'
+  - /ckpt-helper/checkpoint_helper.py
   - watch
   env:
   - name: KAOS_CHECKPOINT_DIR
@@ -133,6 +138,9 @@ sidecars:
     mountPath: /kaos/checkpoint
   - name: kaos-checkpoint-stage
     mountPath: /stage
+  - name: kaos-ckpt-helper
+    mountPath: /ckpt-helper
+    readOnly: true
 checkpointEnv:
 - name: KAOS_CHECKPOINT_DIR
   value: /kaos/checkpoint

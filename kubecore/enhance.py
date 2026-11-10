@@ -74,7 +74,7 @@ from kubecore.kaos_lib_support import ENV as KAOS_LIB_SUPPORT_ENV
 from kubecore.kaos_lib_support import support_value
 from kubecore.meluxina import HPC_TWIN_TEMPLATE, enhance_hpc, hpc_classes
 from kubecore.outputs_repo import checkpoint_prefix, outputs_repo
-from kubecore.resilience import enhance_resilience, shared_templates
+from kubecore.resilience import enhance_resilience, shared_templates, write_helper_configmap
 
 ANNOTATION_PREFIX = "platform.kubecore.io/"
 KNOWN_ANNOTATIONS = {"compute-class", "inject", "source", "image", "shm", "workspace", "hpc", "hpc-resumable",
@@ -1057,6 +1057,10 @@ def main(argv=None) -> None:
     # it keeps rendering.
     parser.add_argument("--catalog", default="", help=argparse.SUPPRESS)
     parser.add_argument("--output", required=True, help="Path to write the enhanced WorkflowTemplate YAML.")
+    parser.add_argument("--helper-configmap", default="",
+                        help="Path to write the ConfigMap that carries the checkpoint helper source once for "
+                             "every step that mounts it (removed when no step does). The CI commits it next to "
+                             "the WorkflowTemplate; without it a render that uses the helper is not runnable.")
     args = parser.parse_args(argv)
 
     raw = yaml.safe_load(Path(args.raw).read_text())
@@ -1067,6 +1071,9 @@ def main(argv=None) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(yaml.safe_dump(enhanced, sort_keys=False, default_flow_style=False))
     print(f"wrote {out}")
+    if args.helper_configmap:
+        wrote = write_helper_configmap(enhanced, ctx, Path(args.helper_configmap))
+        print(f"{'wrote' if wrote else 'no steps use the helper; removed'} {args.helper_configmap}")
 
 
 if __name__ == "__main__":
