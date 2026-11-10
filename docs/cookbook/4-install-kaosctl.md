@@ -17,7 +17,7 @@ environment of its own:
     python3 -m venv ~/.venvs/kaos
     . ~/.venvs/kaos/bin/activate          # Windows: %USERPROFILE%\.venvs\kaos\Scripts\activate
     pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib-rc/simple/ \
-        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc5"
+        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc22"
     ```
 
 === "Production projects (stable)"
@@ -40,7 +40,8 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
     The command is called `kaosctl` from kaos-lib **0.4.0rc5** on. Older versions only have
     `kaos-cli`, which still works as a hidden alias and prints a note. The `kubecore` command and
     package are the deprecated names from before kaos-lib. If you get `kaosctl: command not found`,
-    run the `pip install` line above again with `-U`.
+    run the `pip install` line above again with `-U`. `kaosctl lint`, `kaosctl dev`, `kaosctl step run` and
+    `kaosctl build` need **0.4.0rc22** or newer ([Check and try a step on your computer](../check-and-try-locally.md)).
 
 !!! tip "Why the virtual environment?"
     Many computers no longer let `pip install` change the system's own Python. You then see a

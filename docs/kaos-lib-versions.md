@@ -77,7 +77,7 @@ you get a new pull request for that one, and the platform closes the older one.
 
 ## Which version is my pipeline running?
 
-- The first line of the template steps' log: `kaos-lib 0.4.0rc15`.
+- The first line of the template steps' log: `kaos-lib 0.4.0rc20`.
 - A step that logs an MLflow run should tag it `kaos_lib.version` (the yolo template's
   training and registration steps do).
 - Each step image carries the label `io.kaos.lib` with the exact requirement it was built
