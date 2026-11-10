@@ -7,6 +7,7 @@ They run from your app folder, the one that holds `pipeline.py` and `steps/`.
 | Command | What it does | Needs |
 |---|---|---|
 | `kaosctl lint` | reads `pipeline.py`, `config/` and your step folders and reports problems the platform would refuse, or that usually go wrong later (a step limit longer than the longest HPC (Slurm) run with no way to continue, an unpinned dataset, a Dockerfile problem). It never runs your code | nothing: no login, no network |
+| `kaosctl render --context FILE` | renders `pipeline.py` with the pipeline engine the platform uses and writes `out/raw-workflow-template.yaml`: a render that passes here passes on your pull request. Your app holds no copy of the engine | the platform's pipeline-context file of your app (or `--engine-wheel`), and Python 3.11 or newer |
 | `kaosctl dev` | gives each step its own Python environment from what its Dockerfile installs | Python and a package index connection |
 | `kaosctl step run <step>` | starts one step the way the platform does, in its environment, with an optional small sample of your dataset | the step's environment |
 | `kaosctl build [step]` | builds the step image with the same Dockerfile and arguments as the platform's build, and never pushes | a container engine on your computer; `kaosctl build` tells you which and how to get it |

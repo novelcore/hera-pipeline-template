@@ -48,10 +48,6 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
     message that mentions `externally-managed-environment`. The virtual environment avoids that.
     Run `. ~/.venvs/kaos/bin/activate` again in every new terminal.
 
-    Keep it apart from the app folder's `.venv`, which `./run.sh` makes for rendering the pipeline:
-    that one installs the template's engine, `kubecore/`, which has the same import name as a
-    module kaos-lib still ships for older code.
-
 ## 2. Check the version
 
 ```bash

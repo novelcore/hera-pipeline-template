@@ -40,7 +40,7 @@ def burn_gpu(torch, seconds: float) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--params", required=True, help="Resolved params.yaml content (from compose-and-validate).")
+    parser.add_argument("--params", required=True, help="Resolved params.yaml content (composed by the platform).")
     args, _ = parser.parse_known_args()
     cfg = yaml.safe_load(args.params) or {}
     import torch  # imported here so the tests can run the helpers with a stand-in

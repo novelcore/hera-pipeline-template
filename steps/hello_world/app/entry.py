@@ -1,11 +1,12 @@
-"""hello-world: the example step. Reads the pinned dataset and writes a result.
+"""hello-world: the example step. Reads the run's dataset and writes a result.
 
 Every step is a small container that receives the resolved params.yaml (the composed
-config tree) on --params, and the outputs of the steps it needs (here `--dataset-info`
-from dataset-loading). This one:
+config tree) on --params, and the outputs of the steps it needs (this one needs none). This one:
 
-  1. reads the dataset at the commit dataset-loading pinned, through kaos-lib
-     package (`datasets.materialize`). The package picks the dataset's format from its
+  1. reads the run's dataset through the kaos-lib
+     package (`datasets.materialize`). The platform pins every dataset of a run to one commit
+     once and gives each step that lock, so the package reads that commit even when `latest` has
+     moved on. The package picks the dataset's format from its
      `kaos.template` label (an unlabelled repository is read as plain files) and returns
      the local entry point. On HPC the platform stages the commit and the package
      uses that copy. A dataset with no files yet (a new project's `dataset-default`) is
@@ -35,16 +36,12 @@ except ImportError:  # kaos-lib before 0.4.0rc3 (an app pinned to it): an empty 
 READS = ["experiment", "dataset"]
 
 
-def read_dataset(info: dict, client=None) -> Path:
-    """Local entry point of the pinned dataset commit (downloaded once, or the staged copy).
+def read_dataset(ref: "datasets.DatasetRef", client=None) -> Path:
+    """Local entry point of the run's dataset (downloaded once, or the staged copy).
 
     For a labelled dataset such as a yolo one it is the `data.yaml`; for a plain
-    repository it is the folder holding the files.
+    repository it is the folder holding the files. Read at the commit the run's data lock gives `ref`.
     """
-    commit = info.get("dataset_commit") or ""
-    if not commit:
-        raise SystemExit("[hello-world] --dataset-info carries no dataset_commit: run dataset-loading first.")
-    ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(commit)  # read the pinned commit, never a moving ref
     return datasets.materialize(ref, client=client)  # the format comes from the repository's label
 
 
@@ -83,25 +80,26 @@ def kaos_lib_version() -> str:
     return "unknown"
 
 
-def main() -> None:
+def main(client=None) -> None:
     print(f"kaos-lib {kaos_lib_version()}", flush=True)  # the package this image runs
     parser = argparse.ArgumentParser()
     parser.add_argument("--params", required=True,
-                        help="Resolved params.yaml content (from compose-and-validate).")
-    parser.add_argument("--dataset-info", default="{}",
-                        help="dataset-loading's {dataset, dataset_commit}: the pinned dataset.")
+                        help="Resolved params.yaml content (composed by the platform).")
     args, _ = parser.parse_known_args()
     cfg = yaml.safe_load(args.params) or {}
-    info = json.loads(args.dataset_info or "{}")
+    ref = datasets.DatasetRef.parse(cfg["dataset"])
+    commit = datasets.resolve(ref, client)  # KAOS_LIB_LOCK (set by the platform) supplies the commit
+    ref = ref.with_commit(commit)
+    info = {"dataset": cfg["dataset"], "dataset_commit": commit}
 
     try:
-        entry = read_dataset(info)
+        entry = read_dataset(ref, client)
         print(f"[hello-world] {info['dataset']} @ {info['dataset_commit']} -> {entry}")
     except EmptyDataset:
         entry = None
         print(f"[hello-world] {info['dataset']} @ {info['dataset_commit']} holds no files yet. Add yours with "
               f"`kaosctl dataset push <folder> <dataset>` (docs/first-run.md), then run again.")
-    commit = write_result(cfg, info, entry)
+    commit = write_result(cfg, info, entry, client)
     print(f"[hello-world] result committed to outputs: {commit}")
 
 

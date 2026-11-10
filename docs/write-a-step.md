@@ -61,7 +61,7 @@ with nothing to call ([When a machine is lost or a time limit hits](resilience.m
 
 ## 5. Test it on your laptop
 
-Step code that imports `kaos_lib` has its own test command, separate from the engine tests: see
+Step code that imports `kaos_lib` is tested with `python -m pytest` (the tests are in `step_tests/`): see
 `step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS, vendored
 as `step_tests/fake_lakefs.py`.
 

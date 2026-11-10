@@ -1,15 +1,17 @@
 """The example step's results: one merge commit per step per run, a retry is a success."""
 from conftest import load_step
+from kaos_lib import datasets
 
 CFG = {"experiment": {"name": "exp1"}, "dataset": "dataset-default@latest"}
 
 
 def _write(client, monkeypatch):
     hello = load_step("hello_world")
-    info = load_step("dataset_loading").pin("dataset-default@v1", client)
+    ref = datasets.DatasetRef.parse(CFG["dataset"])
+    info = {"dataset": CFG["dataset"], "dataset_commit": datasets.resolve(ref, client)}
     monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
     monkeypatch.setenv("KUBECORE_RUN_ID", "wf-abc")
-    data_yaml = hello.read_dataset(info, client)
+    data_yaml = hello.read_dataset(ref.with_commit(info["dataset_commit"]), client)
     return lambda: hello.write_result(CFG, info, data_yaml, client)
 
 

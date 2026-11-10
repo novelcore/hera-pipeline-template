@@ -41,8 +41,8 @@ When you send your files in, the platform takes over. You do not set any of this
 ## Where data and results live
 
 - **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
-  picks one in the `dataset` field. Its first step, `dataset-loading`, pins it to one commit, and
-  every later step reads that commit ([Datasets](datasets.md)).
+  picks one in the `dataset` field. The platform pins it to one commit when the run starts, and
+  every step reads that commit ([Datasets](datasets.md)).
 - **Results** go to your app's `outputs-<app>` repository, one commit per step per run, written with
   kaos-lib ([Results](results.md)).
 - A step never writes to a dataset.

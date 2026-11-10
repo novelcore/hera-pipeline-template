@@ -60,7 +60,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 | symptom | cause and fix |
 |---|---|
 | it stops in seconds with "invalid value" | a field is outside its allowed values; the message lists them |
-| `dataset-loading` fails | the dataset or version does not exist; the message lists what does |
+| `hello-world` fails reading the dataset | the dataset or version does not exist; the message lists what does |
 | `hello-world` says "holds no files yet" | the dataset is empty; this is not an error. Push data and release a version ([chapter 5](5-your-data.md)) |
 | a step stays **Pending** | no machine of that class is free yet; give it a few minutes. On an HPC class (`meluxina-*`) it waits in the HPC queue; its log gives the reason ([why a step is waiting or refused](../hpc.md#why-a-step-is-waiting-or-refused)) |
 | a step is red with `ImagePullBackOff` | its image was not built; check `kubecore-ml-ci` for that commit |

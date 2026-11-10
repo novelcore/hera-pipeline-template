@@ -33,7 +33,7 @@ seconds of work on it, plus a known-good Dockerfile. It is not part of your pipe
 2. Add one line to `pipeline.py`, inside the `with pipeline(...)` block:
 
     ```python
-    gpu_check = step("gpu-check", reads=["experiment"], needs=[load], gpu=True)
+    gpu_check = step("gpu-check", reads=["experiment"], gpu=True)
     ```
 
 3. Send your change in, as in [Send your change in and go live](send-it-in.md), and run the pipeline.

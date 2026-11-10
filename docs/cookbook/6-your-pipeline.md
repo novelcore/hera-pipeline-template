@@ -15,20 +15,17 @@ config/                every setting; each one becomes a field on the run form
   experiment.yaml        experiment.name, experiment.description
   dataset.yaml           dataset: "dataset-default@latest"  (the dropdown)
 steps/<step_name>/     one folder per step: app/entry.py and a Dockerfile
-kubecore/              helper code that ships with the template; do not edit
 ```
 
-The shipped `pipeline.py` has two steps:
+The shipped `pipeline.py` has one step:
 
 ```python
 with pipeline("ml-pipeline") as p:   # KAOS names it <app>-pipeline
-    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
 ```
 
-- **`dataset-loading`** turns the run's `dataset` pick into one lakeFS commit and hands it on as
-  `dataset-info`.
-- **`hello-world`** reads that commit and writes a small `hello.json` to `outputs-<app>`.
+- **`hello-world`** reads the run's dataset, at the one commit the platform pinned when the run
+  started, and writes a small `hello.json` to `outputs-<app>`.
 
 `reads=` lists the config sections a step receives, `needs=` sets the order, and `outputs=` names
 the small results it hands to later steps. [How it works](../how-it-works.md) explains the rest.
@@ -39,7 +36,7 @@ Before you change anything, prove the pipeline works. Argo → **Workflow Templa
 `<app>-pipeline` → **Submit**. Leave every field as it is and press **Submit**
 ([chapter 7](7-run-it.md)).
 
-**You should see** both steps go green. `dataset-default` is still empty, so the `hello-world` log
+**You should see** the step go green. `dataset-default` is still empty, so the `hello-world` log
 says:
 
 ```
@@ -61,7 +58,7 @@ classes, and a new `hello.json` in `outputs-<app>`
 Make the folder, write the entry point and the Dockerfile, and add one line to `pipeline.py`:
 
 ```python
-    mine = step("my-step", reads=["experiment", "dataset"], needs=[load])
+    mine = step("my-step", reads=["experiment", "dataset"])
 ```
 
 The step name uses dashes (`my-step`); its folder uses underscores (`steps/my_step/`). Follow
