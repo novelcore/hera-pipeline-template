@@ -1,8 +1,8 @@
 """Checkpoint persistence helper for in-cluster steps (PRD-HPC-1461 D-76, Kubernetes backend).
 
 Runs as two extra containers of a step pod, injected by `kubecore.resilience` (the step's own code is
-never touched). Python standard library only; the enhancer embeds this file, compressed, in the rendered
-WorkflowTemplate, so the file must stay free of the Argo template marker (two opening braces in a row).
+never touched). Python standard library only; the CI ships this file once per app as the ConfigMap
+`<app>-ckpt-helper`, mounted at /ckpt-helper and run as `python3 /ckpt-helper/checkpoint_helper.py <mode>`.
 
   restore  (init container)  put the newest VERIFIED copy of the step's checkpoint folder back before the
                              step starts, and expire copies of long-dead runs.

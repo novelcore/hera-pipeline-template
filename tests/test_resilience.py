@@ -5,12 +5,10 @@ container + copy sidecar on GPU steps (or any step with checkpoint_every). The G
 are compared with tests/golden/resilience_gpu_step.yaml (regenerate: UPDATE_GOLDEN=1 pytest).
 Run:  python -m pytest tests/ -v
 """
-import base64
 import copy
 import os
 import re
 import sys
-import zlib
 from pathlib import Path
 
 import pytest
@@ -124,12 +122,59 @@ def test_should_lock_down_the_helper_and_give_it_small_requests(tpls):
         assert c["resources"]["requests"] == {"cpu": "10m", "memory": "64Mi"}
 
 
-def test_should_embed_exactly_the_helper_source_without_argo_markers():
-    boot = resilience.helper_boot()
-    blob = re.search(r"b64decode\('([^']+)'\)", boot).group(1)
-    source = zlib.decompress(base64.b64decode(blob))
-    assert source == resilience.HELPER_PATH.read_bytes()
-    assert "{{" not in boot and "{{" not in source.decode()
+def test_should_not_embed_the_helper_source_in_any_step(tpls):
+    """The helper ships once, as a ConfigMap: no step carries it (the render stays under the etcd limits)."""
+    for name in ("train", "cpu-opt-in"):
+        for c in tpls[name]["initContainers"] + tpls[name]["sidecars"]:
+            assert c["command"] == ["python3", "/ckpt-helper/checkpoint_helper.py", c["command"][2]]
+            assert c["command"][2] in ("restore", "watch")
+            assert {"name": "kaos-ckpt-helper", "mountPath": "/ckpt-helper", "readOnly": True} in c["volumeMounts"]
+        vol = next(v for v in tpls[name]["volumes"] if v["name"] == "kaos-ckpt-helper")
+        assert vol["configMap"] == {"name": "PLACEHOLDER-app-ckpt-helper", "defaultMode": 0o444}
+    assert "kaos-ckpt-helper" not in str(tpls["gpu-off"]) and "kaos-ckpt-helper" not in str(tpls["prep"])
+
+
+def test_should_grow_by_a_small_constant_per_helper_step():
+    """Regression for the 256 KiB last-applied limit: five GPU steps with helpers stay far below it."""
+    def five():
+        for i in range(5):
+            authoring.step("s%d" % i, gpu=True)
+    tpls = render(five)
+    per_step = max(len(yaml.safe_dump(tpls["s%d" % i])) for i in range(5))
+    assert per_step < 8000, "a helper step weighs %d bytes: is the helper source embedded again?" % per_step
+
+
+def test_should_write_the_helper_configmap_for_the_gitops_commit(tmp_path):
+    with authoring.pipeline("t") as p:
+        authoring.step("train", gpu=True)
+    wft = enhance.enhance(yaml.safe_load(p.wt.to_yaml()), CONTEXT)
+    out = tmp_path / "ckpt-helper.yaml"
+    assert resilience.write_helper_configmap(wft, CONTEXT, out) is True
+    cm = yaml.safe_load(out.read_text())
+    assert cm["kind"] == "ConfigMap" and cm["metadata"]["name"] == "PLACEHOLDER-app-ckpt-helper"
+    assert cm["metadata"]["namespace"] == CONTEXT["namespace"]
+    assert cm["data"]["checkpoint_helper.py"] == resilience.HELPER_PATH.read_text()
+
+
+def test_should_remove_a_stale_helper_configmap_when_no_step_uses_it(tmp_path):
+    with authoring.pipeline("t") as p:
+        authoring.step("prep")
+    wft = enhance.enhance(yaml.safe_load(p.wt.to_yaml()), CONTEXT)
+    out = tmp_path / "ckpt-helper.yaml"
+    out.write_text("stale")
+    assert resilience.write_helper_configmap(wft, CONTEXT, out) is False
+    assert not out.exists()
+
+
+def test_should_write_the_helper_configmap_from_the_cli(tmp_path):
+    with authoring.pipeline("t") as p:
+        authoring.step("train", gpu=True)
+    raw, ctx = tmp_path / "raw.yaml", tmp_path / "ctx.yaml"
+    raw.write_text(p.wt.to_yaml())
+    ctx.write_text(yaml.safe_dump(CONTEXT))
+    enhance.main(["--raw", str(raw), "--context", str(ctx), "--output", str(tmp_path / "wft.yaml"),
+                  "--helper-configmap", str(tmp_path / "cm.yaml")])
+    assert yaml.safe_load((tmp_path / "cm.yaml").read_text())["kind"] == "ConfigMap"
 
 
 def test_should_take_the_helper_image_from_the_platform_registry_only():
@@ -216,8 +261,6 @@ def test_should_not_change_the_hpc_follower_template():
 
 def test_should_render_the_gpu_step_like_the_golden_file(tpls):
     got = {k: copy.deepcopy(tpls["train"][k]) for k in INJECTED}
-    for c in got["initContainers"] + got["sidecars"]:
-        c["command"][2] = "<helper source, compressed: see kubecore/checkpoint_helper.py>"
     got["checkpointEnv"] = [e for e in tpls["train"]["container"]["env"] if e["name"] == "KAOS_CHECKPOINT_DIR"]
     got["checkpointMount"] = [m for m in tpls["train"]["container"]["volumeMounts"] if m["name"] == "kaos-checkpoint"]
     text = yaml.safe_dump(got, sort_keys=False)

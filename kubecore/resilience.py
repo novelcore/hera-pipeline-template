@@ -11,7 +11,11 @@
   Folder  KAOS_CHECKPOINT_DIR   every step gets the env var and a pod-local emptyDir behind it.
   Tier 2  persistence     for GPU steps (and any step that sets `checkpoint_every`): an init container
                           restores the newest verified copy of the folder from lakeFS, a sidecar copies it
-                          periodically and on SIGTERM. The code is `kubecore/checkpoint_helper.py`.
+                          periodically and on SIGTERM. The code is `kubecore/checkpoint_helper.py`, shipped
+                          ONCE per app as the ConfigMap `<app>-ckpt-helper` (helper_configmap) that every
+                          helper container mounts read-only. It used to be embedded (compressed) in every
+                          helper container, ~19 KB per step: five GPU steps with their twins pushed the
+                          rendered WorkflowTemplate past the 256 KiB last-applied annotation limit.
 
 The helper image comes from the platform registry only (`checkpoints.helperImage`, see helper_image).
 
@@ -24,11 +28,11 @@ Where copies live: the app's lakeFS outputs repository `outputs-<app>` (see outp
 Fill-absent like every pass of the enhancer: a developer-set retryStrategy, env var, volume or sidecar of
 the same name is left alone.
 """
-import base64
 import re
 import sys
-import zlib
 from pathlib import Path
+
+import yaml
 
 from kubecore.meluxina import POD_LOSS_RETRY
 from kubecore.outputs_repo import outputs_repo
@@ -46,6 +50,10 @@ RETRY_BACKOFF = {"duration": "30s", "factor": "2", "maxDuration": "10m"}
 INIT_NAME = "kaos-ckpt-restore"
 SIDECAR_NAME = "kaos-ckpt-copy"
 HELPER_PATH = Path(__file__).with_name("checkpoint_helper.py")
+HELPER_FILE = "checkpoint_helper.py"   # the ConfigMap key and the file name under HELPER_MOUNT
+HELPER_VOLUME = "kaos-ckpt-helper"
+HELPER_MOUNT = "/ckpt-helper"
+HELPER_CONFIGMAP_SUFFIX = "-ckpt-helper"
 EVERY_RE = re.compile(r"^(off|[0-9]+)$")
 
 
@@ -74,11 +82,43 @@ def helper_image(ctx: dict) -> str:
     return str(named or follower or "")
 
 
-def helper_boot() -> str:
-    """`python3 -c` program that runs the embedded helper: argv[1] is `restore` or `watch`."""
-    blob = base64.b64encode(zlib.compress(HELPER_PATH.read_bytes(), 9)).decode()
-    return ("import base64,zlib;exec(zlib.decompress(base64.b64decode('%s')).decode(),"
-            "{'__name__':'__main__'})" % blob)
+def helper_configmap_name(ctx: dict) -> str:
+    """The app's helper ConfigMap: `<app>-ckpt-helper`, in the WorkflowTemplate's namespace."""
+    app = ctx.get("app")
+    if not app:
+        raise ValueError("context is missing 'app' - cannot name the checkpoint helper ConfigMap")
+    return f"{app}{HELPER_CONFIGMAP_SUFFIX}"
+
+
+def helper_configmap(ctx: dict) -> dict:
+    """The ConfigMap manifest that carries the helper source once for every helper container of the app."""
+    return {
+        "apiVersion": "v1", "kind": "ConfigMap",
+        "metadata": {
+            "name": helper_configmap_name(ctx), "namespace": ctx["namespace"],
+            "labels": {"platform.kubecore.io/project": ctx["project"], "platform.kubecore.io/app": ctx["app"],
+                       "platform.kubecore.io/managed-by": "kubecore-ci"},
+        },
+        "data": {HELPER_FILE: HELPER_PATH.read_text()},
+    }
+
+
+def uses_helper_configmap(wft: dict, ctx: dict) -> bool:
+    """True when a template of the enhanced WorkflowTemplate mounts the helper ConfigMap."""
+    name = helper_configmap_name(ctx)
+    return any((v.get("configMap") or {}).get("name") == name
+               for t in wft["spec"].get("templates", []) for v in t.get("volumes", []))
+
+
+def write_helper_configmap(wft: dict, ctx: dict, path: Path) -> bool:
+    """Write the helper ConfigMap to `path` when the WorkflowTemplate needs it, else remove a stale file.
+    Returns whether the file was written. The CI commits it next to workflow-template.yaml."""
+    if not uses_helper_configmap(wft, ctx):
+        path.unlink(missing_ok=True)
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(helper_configmap(ctx), sort_keys=False, default_flow_style=False))
+    return True
 
 
 def every_minutes(annots: dict) -> str:
@@ -144,17 +184,18 @@ def helper_container(name: str, mode: str, step: dict, ctx: dict, every: str) ->
     """One helper container (init or sidecar): small requests, locked down, never the step's GPU."""
     return {
         "name": name, "image": helper_image(ctx),
-        "command": ["python3", "-c", helper_boot(), mode],
+        "command": ["python3", "%s/%s" % (HELPER_MOUNT, HELPER_FILE), mode],
         "env": helper_env(step, ctx, every),
         "resources": {"requests": {"cpu": "10m", "memory": "64Mi"}, "limits": {"memory": "512Mi"}},
         "securityContext": {"runAsUser": 65532, "runAsGroup": 65532, "allowPrivilegeEscalation": False,
                             "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}},
         "volumeMounts": [{"name": CHECKPOINT_VOLUME, "mountPath": CHECKPOINT_MOUNT},
-                         {"name": STAGE_VOLUME, "mountPath": STAGE_MOUNT}],
+                         {"name": STAGE_VOLUME, "mountPath": STAGE_MOUNT},
+                         {"name": HELPER_VOLUME, "mountPath": HELPER_MOUNT, "readOnly": True}],
     }
 
 
-def inject_folder(step: dict, helper: bool) -> bool:
+def inject_folder(step: dict, helper: bool, ctx: dict) -> bool:
     """Env var + emptyDir for the folder. Returns False when the developer chose their own folder."""
     container = step["container"]
     env = container.setdefault("env", [])
@@ -167,6 +208,8 @@ def inject_folder(step: dict, helper: bool) -> bool:
     _add_named(step.setdefault("volumes", []), {"name": CHECKPOINT_VOLUME, "emptyDir": {}})
     if helper:
         _add_named(step["volumes"], {"name": STAGE_VOLUME, "emptyDir": {}})
+        _add_named(step["volumes"], {"name": HELPER_VOLUME,
+                                     "configMap": {"name": helper_configmap_name(ctx), "defaultMode": 0o444}})
     return True
 
 
@@ -176,7 +219,7 @@ def enhance_resilience(spec: dict, step: dict, ctx: dict, annots: dict, gpu: boo
     step.setdefault("retryStrategy", retry_strategy())
     every = every_minutes(annots)
     helper = wants_helper(step, gpu, every, ctx, inject_off, shared)
-    if not inject_folder(step, helper) or not helper:
+    if not inject_folder(step, helper, ctx) or not helper:
         return
     step.setdefault("initContainers", [])
     step.setdefault("sidecars", [])
