@@ -25,6 +25,8 @@ HERE = Path(__file__).parent
 with pipeline("ml-pipeline") as p:
     load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
     hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    # A GPU step: copy examples/gpu_check to steps/gpu_check, then uncomment (docs/gpu-steps.md).
+    # gpu_check = step("gpu-check", reads=["experiment"], needs=[load], gpu=True)
 
 if __name__ == "__main__":
     p.write(HERE / "out" / "raw-workflow-template.yaml")
