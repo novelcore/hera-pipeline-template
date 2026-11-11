@@ -4,7 +4,7 @@
 your own step is added, checked and live.
 
 **Who can do it:** `dev`, `ops` or `admin`. You push branches and merge pull requests on GitHub,
-and you submit runs in Argo.
+and you submit runs from the run form.
 
 ## How it is put together
 
@@ -32,8 +32,8 @@ the small results it hands to later steps. [How it works](../how-it-works.md) ex
 
 ## Run the shipped pipeline on `dataset-default`
 
-Before you change anything, prove the pipeline works. Argo → **Workflow Templates** →
-`<app>-pipeline` → **Submit**. Leave every field as it is and press **Submit**
+Before you change anything, prove the pipeline works. Console → **Pipelines** →
+your app → **Run**. Leave every field as it is and press **Submit**
 ([chapter 7](7-run-it.md)).
 
 **You should see** the step go green. `dataset-default` is still empty, so the `hello-world` log
@@ -95,7 +95,7 @@ Open a pull request **into `dev`**. Then:
 1. **`wft-render`** runs on the pull request. It renders your pipeline the way KAOS will
    build it: the steps are wired, every `reads=` names a config section that exists, and every step
    has a `steps/<dir>/Dockerfile`. It reports as a status check on the pull request. **Details**
-   opens the Argo run with the error, or with the rendered pipeline when it passes
+   opens the run with the error, or with the rendered pipeline when it passes
    ("pipeline rendered: N steps, M form params").
 2. **Merge** when it is green.
 3. **`kubecore-ml-ci`** runs on the merge. It builds the step images whose folders changed and

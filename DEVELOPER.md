@@ -336,7 +336,7 @@ Optional step settings: `checkpoint_every="20m"` (or `False` for none; a CPU ste
 limit the step is told to save; default 10 minutes, shorter than the limit, `gpu=True` steps only).
 The platform also treats a step as resumable on its own once an earlier continuation loaded its checkpoint and got
 further; `resumable=False` opts a step out of being continued on HPC. Exit code 85 means "saved, continue me".
-See [docs/resilience.md](docs/resilience.md) for what you see.
+See [Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html) for what you see.
 
 ### 8.3 What the platform sets for you
 

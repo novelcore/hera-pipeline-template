@@ -3,7 +3,7 @@
 **Goal:** a run on `dataset-cats@v1`, its result found in lakeFS and on your computer, and the same
 data used again later.
 
-**You need:** a released version ([guide 2](guide-upload-yolo.md) or [guide 1](first-run.md)).
+**You need:** a released version ([First dataset and run](first-run.md)).
 Role `dev`, `ops` or `admin`.
 
 ## 1. Submit on the version
@@ -13,7 +13,7 @@ Console → **Pipelines** → your app → **Run**. Set:
 - `experiment-name`: `cats-baseline`
 - `dataset`: `dataset-cats@v1`
 
-and **Submit**. Note the run name Argo shows, for example `my-app-pipeline-x7k2p`.
+and **Submit**. Note the run name the run page shows, for example `my-app-pipeline-x7k2p`.
 
 ## 2. Find the result
 

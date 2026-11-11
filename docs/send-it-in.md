@@ -27,15 +27,15 @@ Set the **base** to `dev`, add a title and a sentence, and click **Create pull r
 The platform renders your pipeline the way the merge build will, from your project's real
 settings, and reports a status check called **`wft-render`**:
 
-- yellow while it runs ("Rendering WorkflowTemplate in Argo Workflows"), a couple of minutes;
+- yellow while it runs, a couple of minutes;
 - green: "WorkflowTemplate rendered: N steps, M form params";
-- red: "WorkflowTemplate render FAILED"; **Details** opens the Argo run with the error.
+- red: "WorkflowTemplate render FAILED"; **Details** opens the run with the error.
 
 ![The wft-render check passed, green, with the Merge button below](img/wft-render-green.png)
 
 It checks that the steps are wired, that every step reads settings that exist, and that every step
 has a Dockerfile. Nothing is built or released yet. A second check, **`kaos-lib/support`**, reports
-whether your kaos-lib version is still supported ([kaos-lib versions](kaos-lib-versions.md)). It
+whether your kaos-lib version is still supported ([kaos-lib versions](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html)). It
 never blocks the render.
 
 **Details** opens the run that checked your pipeline. Green means the check finished.

@@ -93,35 +93,29 @@ nav:
       - 10. When things go wrong: cookbook/10-when-things-go-wrong.md
   - Guides:
       - First dataset and run: first-run.md
-      - Upload images and labels for yolo: guide-upload-yolo.md
       - Add a step that reads the dataset: guide-step-with-data.md
       - Run on a released version: guide-run-on-a-version.md
-  - Datasets:
-      - What a dataset is: datasets.md
-      - Create a dataset: dataset-create.md
-      - Add or change data: dataset-upload.md
-      - Check a dataset: dataset-validate.md
-      - Release a version: dataset-release.md
-      - Download a dataset: dataset-pull.md
-      - Share a dataset: dataset-share.md
-      - Use a dataset in a step: dataset-in-a-step.md
   - Pipelines:
       - How it works: how-it-works.md
       - Add a step: add-a-step.md
       - Write results from a step: write-a-step.md
       - Remove a step: remove-a-step.md
       - Change a setting: change-a-setting.md
-      - Check and try a step on your computer: check-and-try-locally.md
       - Send your change in and go live: send-it-in.md
       - Run your pipeline: run-it.md
       - GPU steps: gpu-steps.md
   - Results: results.md
   - Run on HPC (Slurm): hpc.md
   - Settings the platform owns: platform-owned-settings.md
-  - When a machine is lost: resilience.md
-  - kaos-lib:
-      - Versions and upgrades: kaos-lib-versions.md
-      - kaos-lib reference: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html
+  - kaos-lib guide:   # what is true for every pipeline is explained once, there
+      - Datasets: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html
+      - Datasets shared with your project: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/shared-datasets.html
+      - How steps use datasets: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html
+      - Check your pipeline: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/lint.html
+      - Run a step locally: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html
+      - Long runs and checkpoints: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html
+      - Versions and upgrades: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html
+      - Everything else: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html
   - Word list: glossary.md
 
 copyright: "Copyright &copy; 2026 Novelcore"

@@ -44,7 +44,7 @@ form**: every plain value in `config/` becomes a field.
 A step on a reclaimed machine, a failed node or an HPC time limit is run again by the platform, and a training that
 keeps its checkpoints in `KAOS_CHECKPOINT_DIR` (Ultralytics, Lightning and Hugging Face are picked up automatically
 by `kaos_lib`) continues from the last one. You write nothing for this: see
-[When a machine is lost or a time limit hits](docs/resilience.md).
+[Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html).
 
 Your app is `pipeline.py`, `config/` and `steps/`. It holds no copy of the platform's pipeline engine:
 the platform runs its own, and `kaosctl render`, `kaosctl step run` and `kaosctl dev` fetch the same one on your machine.
@@ -89,7 +89,17 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 
 ## Checking the docs
 
-`make docs-check` (or `scripts/check-docs.sh`) builds the site with `mkdocs build --strict` and checks every internal link and anchor. Add `--external` to also check external links. Install the tools first: `pip install -r docs/requirements.txt`. No GitHub Actions needed.
+This is for the maintainers of the template. `make docs-check` (or `scripts/check-docs.sh`) runs three checks, then builds the site with `mkdocs build --strict`:
+
+| check | fails on |
+|---|---|
+| words | a page that names what the platform is built from: the guide is for people who use the platform |
+| removed names | a step or a folder that no longer exists |
+| links | a link that does not resolve in this guide, in the kaos-lib guide or in the yolo guide, and a link from those two into this guide that does not resolve |
+
+The checks are kaos-lib's `docs_check.py`; this repository holds no copy. The script downloads kaos-lib and the yolo template at their trunk, and stops with a message when a download fails. `DOCS_CHECK_KAOS_LIB=<folder>` and `DOCS_CHECK_YOLO=<folder>` read your own checkouts; `DOCS_CHECK_OFFLINE=1` checks this repository alone and prints what it skipped. Add `--external` to also check external links. Install the tools first: `pip install -r docs/requirements.txt`. No GitHub Actions needed. In an app created from this template the script checks nothing: it says so and ends.
+
+One topic has one page. What is true for every pipeline (datasets, checkpoints, checking a step on your computer, kaos-lib versions) is in the [kaos-lib guide](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html); this guide holds what is specific to the template and links there.
 
 ## License
 

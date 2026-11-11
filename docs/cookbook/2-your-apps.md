@@ -24,7 +24,7 @@ one pipeline, and it starts empty. All the pipelines of a project share its data
 ## If your project already has apps
 
 1. Console → **Pipelines**. Each row is one ML app. It shows the project, the status of its first
-   build, and a **Run** button with links: **Runs in Argo**, **CI builds**, **MLflow**, **Outputs**,
+   build, and a **Run** button and a **⋯** menu of links: the runs link (the first entry), **CI builds**, **MLflow**, **Outputs**,
    **Models**, **Datasets** and **App settings**.
 2. Open your app. Its page links the GitHub repository.
 3. Clone it. You need `git`, an editor, and access to the repository, which your project team
@@ -57,7 +57,7 @@ pipeline build runs. Your app's row and its **First pipeline build** card go thr
 | status | what it means |
 |---|---|
 | **Awaiting first build** | the repository exists and the build has not started |
-| **Building** | `kubecore-ml-ci` is building the step images and the pipeline; **View run** opens it in Argo |
+| **Building** | `kubecore-ml-ci` is building the step images and the pipeline; **View run** opens it |
 | **Ready** ("Pipeline ready") | the pipeline exists and you can submit it |
 | **Build failed** | open **View run** and read the failing step ([chapter 10](10-when-things-go-wrong.md)) |
 

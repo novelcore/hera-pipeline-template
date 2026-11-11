@@ -41,7 +41,7 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
     `kaos-cli`, which still works as a hidden alias and prints a note. The `kubecore` command and
     package are the deprecated names from before kaos-lib. If you get `kaosctl: command not found`,
     run the `pip install` line above again with `-U`. `kaosctl lint`, `kaosctl dev`, `kaosctl step run` and
-    `kaosctl build` need **0.4.0rc22** or newer ([Check and try a step on your computer](../check-and-try-locally.md)).
+    `kaosctl build` need **0.4.0rc22** or newer ([Check your pipeline](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/lint.html)).
 
 !!! tip "Why the virtual environment?"
     Many computers no longer let `pip install` change the system's own Python. You then see a

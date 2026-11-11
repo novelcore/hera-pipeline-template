@@ -6,8 +6,7 @@
 
 ## Open the form
 
-Console → **Pipelines** → your app → **Run**. This opens the submit form of `<app>-pipeline` in
-Argo. From Argo itself: **Workflow Templates** → `<app>-pipeline` → **Submit**.
+Console → **Pipelines** → your app → **Run**. This opens the submit form of `<app>-pipeline`.
 
 ## The fields
 
@@ -27,26 +26,26 @@ its first seconds and lists the allowed values.
 
 ## Watch it
 
-After **Submit**, Argo shows the run as a graph of steps:
+After **Submit**, the run page shows the run as a graph of steps:
 
 - blue and spinning: running; green: done; red: failed;
 - grey and *skipped*: the step's `when=` condition was false. That is normal.
 
 Click a step, then **Logs**, to read what it printed. The first line of the template's steps is the kaos-lib
 version they run (`kaos-lib 0.4.0rc20`). You can close the tab: the run keeps going. Find it again
-under Argo → **Workflows**, or console → **Pipelines** → your app → **Runs in Argo**.
+from the console: **Pipelines** → the **⋯** menu on your app's row → the first entry, the runs link.
 
 **You should see** every step green and, for the shipped pipeline, `[hello-world] result committed
 to outputs: <commit>` at the end of the last log.
 
 ## Retry and resume
 
-- **Retry** (on a failed run in Argo) runs the failed steps again under the **same run name**. A step
+- **Retry** (on a failed run) runs the failed steps again under the **same run name**. A step
   that saves progress with kaos-lib's run writer finds what it already saved and continues from it
   ([Write results from a step](../write-a-step.md#2-save-progress-and-resume)).
 - **Resubmit** starts a new run with the same field values and a new name. It starts from scratch.
 - A step lost with its machine (a reclaimed spot node, a node failure) is run again by the platform, at most twice, and
-  continues from its checkpoint if it kept one ([When a machine is lost](../resilience.md)). A step that fails on its own
+  continues from its checkpoint if it kept one ([Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)). A step that fails on its own
   error is not repeated, on HPC or anywhere else.
 - **Stop** ends a run. Results a step had already finished stay in `outputs-<app>`.
 

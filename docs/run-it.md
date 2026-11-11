@@ -5,8 +5,7 @@
 
 ## 1. Open the form
 
-Console → **Pipelines** → your app → **Run**. Or in Argo: **Workflow Templates** →
-`<app>-pipeline` → **Submit**.
+Console → **Pipelines** → your app → **Run**.
 
 ![The submit panel for the pipeline, with the Submit button](img/submit-form.png)
 
@@ -18,7 +17,7 @@ Every field came from your `config/` folder, plus a few the platform adds:
 - `experiment-name` and every other setting in `config/`, with dots turned into dashes.
 - **`dataset`**: a dropdown of your project's datasets and versions, such as `dataset-cats@v2`, and
   of datasets shared with your project, such as `team-a/dataset-cats@v3`
-  ([Datasets](datasets.md)).
+  ([Datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html)).
 - `<step>-class` for each step: the kind of machine it runs on, including the HPC classes on a
   project with HPC (Slurm) ([Run on HPC (Slurm)](hpc.md)).
 - `<step>-cpu`, `<step>-mem` and `<step>-disk` to ask for less, for a quick test.
@@ -29,7 +28,7 @@ Every field came from your `config/` folder, plus a few the platform adds:
 
 ## 3. Submit and watch
 
-Click **Submit**. Argo shows the run as boxes, one per step: blue while running, green when done,
+Click **Submit**. The run page shows the run as boxes, one per step: blue while running, green when done,
 red when failed, and grey for *skipped* (its `when=` condition was false).
 
 ![A finished run, every step green](img/argo-running.png)

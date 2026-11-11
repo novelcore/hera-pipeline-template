@@ -74,7 +74,7 @@ ENTRYPOINT ["python", "-m", "app.entry"]
 ```
 
 Keep the name `KAOS_LIB_PACKAGE`. The platform's build passes its kaos-lib through it
-([kaos-lib versions](kaos-lib-versions.md)). Copy only `app/`.
+([who picks the version](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html#in-a-pipeline-who-picks-the-version)). Copy only `app/`.
 
 ## 4. One line in `pipeline.py`
 
@@ -95,7 +95,7 @@ kaosctl step run count-files
 
 **You should see** `out/raw-workflow-template.yaml` with a `count-files` task, then the step's own
 output. A typo in `reads=` fails the render with the same message the platform gives
-([Check and try a step on your computer](check-and-try-locally.md)).
+([Render your pipeline locally](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/render.html), [Run a step locally](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html)).
 
 ## 6. Pull request, merge, run
 

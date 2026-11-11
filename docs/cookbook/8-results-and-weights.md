@@ -17,7 +17,7 @@ Every app has its own lakeFS repository, **`outputs-<app>`**. Each step that wri
 outputs-<app>/main/checkpoints/<experiment>/<run>/
 ```
 
-`<experiment>` is the run's `experiment-name` field. `<run>` is the Argo run name, for example
+`<experiment>` is the run's `experiment-name` field. `<run>` is the run's name, for example
 `my-app-pipeline-x7k2p`. A step can choose a different top folder from `checkpoints/`, as yolo does
 with `quantization/`. The commit's details record the app, experiment, run and kind, plus what the
 step passed in (the dataset and its commit, the MLflow run id).
@@ -46,7 +46,7 @@ experiment. Each run shows:
 |---|---|
 | **Parameters** | the settings of the run, and the dataset repository, version and commit |
 | **Metrics** | the numbers, with their curves over the epochs |
-| **Tags** | `kaos_lib.version`; `kaos_lib.data.<repo>.commit` (each dataset commit it read); `kaos.outputs_repo`, `kaos.outputs_commit`, `kaos.outputs_path` (where its files are in lakeFS); `kaos.workflow` (the Argo run) |
+| **Tags** | `kaos_lib.version`; `kaos_lib.data.<repo>.commit` (each dataset commit it read); `kaos.outputs_repo`, `kaos.outputs_commit`, `kaos.outputs_path` (where its files are in lakeFS); `kaos.workflow` (the run's name) |
 | **Artifacts** | plots, sample predictions, and `data.lock.json` (the data lock) |
 
 ## The model is linked both ways
