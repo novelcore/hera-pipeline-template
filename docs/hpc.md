@@ -124,7 +124,7 @@ class is not offered in the run form until it is topped up. When a project has s
 
 ## What you should see
 
-- The step's log shows its Slurm job, then your step's own output.
+- The step's log shows how your dataset was staged, once, as `HPC: dataset <name>@<commit> staged (first copy | delta | already cached), <size>, <seconds>s`; then its Slurm job, then your step's own output.
 - The run continues to the next step when the job ends.
 
 ## If it isn't there
