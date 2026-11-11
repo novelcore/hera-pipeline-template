@@ -6,11 +6,10 @@ upload images, train on a released version, compare two trainings in MLflow, and
 **Who can do it:** the same roles as chapters 2 to 8: `dev`, `ops` or `admin` on the project.
 
 The yolo template is built on this one. It has the same `pipeline.py`, `config/` and `steps/`
-shape, the same kaos-lib, the same datasets and the same outputs. Its pipeline has seven steps:
+shape, the same kaos-lib, the same datasets and the same outputs. Its pipeline has five steps:
 
 ```
-config-validation → dataset-loading → data-summary
-                                    → model-training → qat-finetune → model-quantization → model-registration
+config-validation → model-training → qat-finetune → model-quantization → model-registration
 ```
 
 `qat-finetune` and `model-quantization` run only when you turn quantization on.

@@ -23,7 +23,7 @@ Only these. Nothing else.
 | `steps/say_goodbye/Dockerfile` | how your step gets packed into a box |
 | `pipeline.py` | one line that adds the step to the list |
 
-You will not open anything inside `kubecore/`. That is the platform engine. Leave it alone.
+Your app holds no copy of the platform's pipeline engine, so there is nothing else to leave alone.
 
 ## Step 1. Make the folder
 
@@ -105,16 +105,14 @@ Open `pipeline.py`. You will see something like this.
 
 ```python
 with pipeline("ml-pipeline") as p:
-    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
 ```
 
-Add one line for your new step. Make it run after the first step by pointing `needs` at it.
+Add one line for your new step. Make it run after `hello-world` by pointing `needs` at it.
 
 ```python
 with pipeline("ml-pipeline") as p:
-    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
     goodbye = step("say-goodbye", reads=["experiment"], needs=[hello])
 ```
 
@@ -134,10 +132,11 @@ Here is what each part means.
 You do not need a cloud run to sanity check your work. From the project folder, run this.
 
 ```bash
-./run.sh
+kaosctl render --context pipeline-context.yaml
+kaosctl step run say-goodbye
 ```
 
-This renders your pipeline the same way the platform will. It does not run it. Running only happens later, from the web page. If your step shows up with no errors, you are in good shape. If you made a typo, this tells you in plain words.
+`kaosctl render` renders your pipeline with the same engine the platform uses, so it gives the same answer. It does not run the pipeline: that only happens later, from the web page. `kaosctl step run` runs just your step on your computer, with the composed settings ([Check and try a step on your computer](check-and-try-locally.md)). If your step shows up with no errors, you are in good shape. If you made a typo, this tells you in plain words.
 
 ## You are done editing
 

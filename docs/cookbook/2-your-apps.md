@@ -43,8 +43,7 @@ Work on the **`dev`** branch. New versions of your pipeline are built from it, a
 
 1. Console → **Pipelines** → **New pipeline**. *New pipeline* offers only the ML pipeline templates,
    and only the projects that can host an ML pipeline.
-2. Pick a template card. This template, hera, gives you an empty scaffold: `dataset-loading` and
-   one example step. The yolo template is a ready YOLO training pipeline
+2. Pick a template card. This template, hera, gives you an empty scaffold: one example step. The yolo template is a ready YOLO training pipeline
    ([chapter 9](9-the-yolo-use-case.md)). The cards carry the names you see in your console.
 3. Follow the wizard. It asks which project the app belongs to and what to call it, and offers
    sensible defaults for the rest.

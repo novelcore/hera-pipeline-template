@@ -2,6 +2,6 @@
 # A dataset is its own lakeFS repository (dataset-<name>); the version is a tag
 # (v1, v2, ...) or `latest` (= the head of main). The submit form shows this as a
 # dropdown of the datasets and versions of your project, filled in by the platform
-# when the template is released. The run resolves the choice to a commit once
-# (step dataset-loading) and every later step reads that same commit.
+# when the template is released. The platform resolves the choice to a commit once
+# when the run starts and every step reads that same commit.
 dataset: "dataset-default@latest"

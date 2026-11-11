@@ -19,7 +19,7 @@ touch steps/count_files/app/__init__.py
 ## 2. The code: `steps/count_files/app/entry.py`
 
 ```python
-"""count-files: count the files of the pinned dataset and write the count as a result."""
+"""count-files: count the files of the run's dataset and write the count as a result."""
 import argparse, json, os, tempfile
 from pathlib import Path
 
@@ -33,28 +33,27 @@ READS = ["experiment", "dataset"]          # must match reads= in pipeline.py
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--params", required=True)          # the composed config/
-    parser.add_argument("--dataset-info", default="{}")     # from dataset-loading
     args, _ = parser.parse_known_args()
     cfg = yaml.safe_load(args.params)
-    info = json.loads(args.dataset_info)
 
-    # Read exactly the commit dataset-loading pinned; never the moving pick.
-    ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(info["dataset_commit"])
+    # The platform pinned the run's dataset to one commit; materialize reads that commit, not the moving pick.
+    ref = datasets.DatasetRef.parse(cfg["dataset"])
+    commit = datasets.resolve(ref)
     try:
         entry = datasets.materialize(ref)                     # yolo: data.yaml; no layout: a folder
         root = entry.parent if entry.is_file() else entry
         count = sum(1 for p in root.rglob("*") if p.is_file())
     except EmptyDataset:
         count = 0
-    print(f"[count-files] {info['dataset']} @ {info['dataset_commit']}: {count} files")
+    print(f"[count-files] {cfg['dataset']} @ {commit}: {count} files")
 
     # Write the result: one merge commit in outputs-<app> under checkpoints/<experiment>/<run>/.
     app, run = os.environ["CHECKPOINT_BUCKET"], os.environ["KUBECORE_RUN_ID"]
     with tempfile.TemporaryDirectory() as tmp, outputs.run(app, cfg["experiment"]["name"], run) as r:
-        (Path(tmp) / "count.json").write_text(json.dumps({"dataset": info["dataset"], "files": count}))
+        (Path(tmp) / "count.json").write_text(json.dumps({"dataset": cfg["dataset"], "files": count}))
         r.save(tmp)
-        print("[count-files] committed", r.finish({"dataset_ref": info["dataset"],
-                                                    "dataset_commit": info["dataset_commit"]}))
+        print("[count-files] committed", r.finish({"dataset_ref": cfg["dataset"],
+                                                    "dataset_commit": commit}))
 
 
 if __name__ == "__main__":
@@ -75,28 +74,28 @@ ENTRYPOINT ["python", "-m", "app.entry"]
 ```
 
 Keep the name `KAOS_LIB_PACKAGE`. The platform's build passes its kaos-lib through it
-([kaos-lib versions](kaos-lib-versions.md)). Copy only `app/`, never the repository's `kubecore/`.
+([kaos-lib versions](kaos-lib-versions.md)). Copy only `app/`.
 
 ## 4. One line in `pipeline.py`
 
 ```python
 with pipeline("ml-pipeline") as p:
-    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
-    count = step("count-files", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
+    count = step("count-files", reads=["experiment", "dataset"])
 ```
 
-`needs=[load]` runs it after `dataset-loading` and hands it `--dataset-info`. It runs alongside
-`hello-world`.
+It runs alongside `hello-world`.
 
 ## 5. Check it locally
 
 ```bash
-./run.sh
+kaosctl render --context pipeline-context.yaml
+kaosctl step run count-files
 ```
 
-**You should see** `done:` and `out/workflow-template.yaml` with a `count-files` task. A typo in
-`reads=` or a missing Dockerfile fails here with the same message the platform gives.
+**You should see** `out/raw-workflow-template.yaml` with a `count-files` task, then the step's own
+output. A typo in `reads=` fails the render with the same message the platform gives
+([Check and try a step on your computer](check-and-try-locally.md)).
 
 ## 6. Pull request, merge, run
 

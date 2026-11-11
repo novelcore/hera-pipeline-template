@@ -3,18 +3,17 @@
 **Goal:** a step that reads exactly the dataset version the run picked. The template's
 `steps/hello_world/` does this; copy it.
 
-## 1. Let the run pin the dataset
+## 1. Let the step read the run's dataset
 
-In `pipeline.py`, the template's first step turns the run's `dataset` pick into one commit:
+In `pipeline.py`, a step that reads the dataset lists the `dataset` section:
 
 ```python
-load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-mine = step("my-step", reads=["experiment", "dataset"], needs=[load])
+mine = step("my-step", reads=["experiment", "dataset"])
 ```
 
-`dataset-loading` outputs `dataset-info`: `{dataset, dataset_repo, dataset_version, dataset_commit}`.
-A step that `needs=[load]` receives it as `--dataset-info`. Always read the **commit** from there:
-`latest` can move during a run.
+You write no pinning code. Before the first step starts, the platform pins every dataset of the run to one
+commit and gives each step that choice; kaos-lib's `datasets.materialize` reads that commit, so a `latest` that
+moves during the run changes nothing. `datasets.resolve(ref)` returns the same commit, if you want to record it.
 
 ## 2. Install kaos-lib in the step image
 
@@ -35,17 +34,16 @@ so your step moves with the others ([kaos-lib versions](kaos-lib-versions.md)).
 ## 3. Read the dataset
 
 ```python
-import argparse, json
+import argparse, yaml
 from kaos_lib import datasets
 from kaos_lib.errors import EmptyDataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--params", required=True)
-parser.add_argument("--dataset-info", default="{}")
 args, _ = parser.parse_known_args()
-info = json.loads(args.dataset_info)
+cfg = yaml.safe_load(args.params)
 
-ref = datasets.DatasetRef.parse(info["dataset"]).with_commit(info["dataset_commit"])
+ref = datasets.DatasetRef.parse(cfg["dataset"])
 try:
     entry = datasets.materialize(ref)    # yolo: the path of data.yaml; no layout: the folder
 except EmptyDataset:

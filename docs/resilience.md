@@ -61,7 +61,7 @@ A step whose time limit is longer than the longest run the HPC site allows needs
 Set them on the step in `pipeline.py`:
 
 ```python
-train = step("model-training", gpu=True, needs=[load],
+train = step("model-training", gpu=True,
              hpc_time_limit="12h",      # HPC time limit for this step (default 4 hours)
              checkpoint_every="20m",     # copy the checkpoint folder every 20 minutes (default: 10, adapts to size)
              idle_timeout="40m")         # raise the 20-minute idle rule; 0 turns it off

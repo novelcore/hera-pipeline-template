@@ -10,8 +10,7 @@ Open `pipeline.py`. Delete the line for the step.
 
 ```python
 with pipeline("ml-pipeline") as p:
-    load = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
     goodbye = step("say-goodbye", reads=["experiment"], needs=[hello])   # delete this line
 ```
 

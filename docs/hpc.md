@@ -47,7 +47,7 @@ Slurm stops a job at its wall-clock limit. The default is 4 hours. Give long ste
 in `pipeline.py` with `hpc_time_limit` (only on `gpu=True` steps):
 
 ```python
-train = step("model-training", gpu=True, needs=[load], hpc_time_limit="12h",
+train = step("model-training", gpu=True, hpc_time_limit="12h",
              reads=["experiment", "dataset", "train"])
 ```
 

@@ -18,10 +18,8 @@ your-repo/
 │   ├── experiment.yaml      #   a section of scalar leaves (add your own)
 │   ├── dataset.yaml         #   the `dataset` field: <dataset-repo>@<version>
 │   └── train/optimizer/{sgd,adam,adamw}.yaml     # a config GROUP (example)
-├── kubecore/                # platform-owned engine (seeded — do not edit)
-├── tests/, step_tests/      # engine tests, step-code tests (two commands: §15)
+├── step_tests/              # tests of your step code (§15)
 └── steps/
-    ├── dataset_loading/     # pins the run's dataset to one commit
     ├── hello_world/         # reads the dataset, writes a result (your code)
     └── ...
 ```
@@ -138,14 +136,13 @@ Push. The `train-optimizer` dropdown now offers `lion`.
 ## 4. Anatomy of pipeline.py (the whole file)
 
 `pipeline.py` declares structure and nothing else. This is the real,
-complete file from this repo — two example steps:
+complete file from this repo — one example step:
 
 ```python
-from kubecore.authoring import pipeline, step  # platform-owned, do not edit
+from kubecore.authoring import pipeline, step  # the platform's engine provides this
 
 with pipeline("ml-pipeline") as p:  # platform renames to {app}-pipeline at release
-    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
 ```
 
 As your pipeline grows you add steps and wire them with `needs=`. An
@@ -380,48 +377,21 @@ the cluster, submitted from Argo Workflows** (§12) — there is no local execut
 and no local submit. No cluster needed for the preview:
 
 ```bash
-./run.sh                                  # or the commands below
-python pipeline.py                        # -> out/raw-workflow-template.yaml (your DAG)
-python -m kubecore.compose --output out/params.yaml         # composed defaults
-python -m kubecore.compose experiment.name=demo train/optimizer=adamw   # try overrides
+kaosctl render --context pipeline-context.yaml     # -> out/raw-workflow-template.yaml (your DAG), with the platform's engine
+kaosctl dev                                        # one Python environment per step, from its Dockerfile
+kaosctl step run hello-world --set experiment.name=demo   # one step, with the composed params (--set = an override)
 ```
 
-`out/params.yaml` is exactly what your steps will receive at run time. Errors you
-can hit, verbatim:
+`kaosctl render` fetches the pipeline engine the platform released for your app, so a render that passes
+here passes in the platform's CI. `kaosctl step run` composes the same params the platform composes
+and hands them to the step on `--params`, exactly what the step receives at run time (`--params-file`
+uses a params file you already have). Your app holds no copy of the engine.
+`--context` is the platform's pipeline-context file of your app; without one, name an engine release
+with `--engine-wheel` (see the kaos-lib `render` reference).
 
-**A step reads a section that doesn't exist** (typo, or you renamed a
-tree section) — fails at render, names both sides:
-
-```
-platform.derive_tree.DeriveError: step 'report' reads config section 'reporting' which does not exist in the config tree (top-level sections: experiment, data, train)
-```
-
-**Unknown/typo'd override key** — fails in the compose step, in
-seconds, before any compute:
-
-```
-compose-and-validate FAILED: Could not override 'train.epochz'.
-To append to your config use +train.epochz=5
-```
-
-**Invalid value for a platform-declared dropdown**:
-
-```
-compose-and-validate FAILED: Error merging override data.source=banana
-  cause: Invalid value 'banana', expected one of [lakefs, s3]
-```
-
-**Unknown key inside the ADVANCED override YAML**:
-
-```
-compose-and-validate FAILED: Key 'epochz' is not in struct
-```
-
-**ADVANCED override touching the platform section** (not allowed):
-
-```
-compose-and-validate FAILED: ADVANCED override may not modify platform.*
-```
+What a mistake looks like: a step that reads a config section that does not exist, an override of a key
+that is not in the tree, or a value outside a dropdown's options each fail at render or at compose time,
+in seconds, with a message that names the key.
 
 The same checks run in the cluster: a bad submission kills the run at
 the first step, pre-GPU.
@@ -462,21 +432,18 @@ with mlflow.start_run():
 **Datasets and results use kaos-lib** (`kaos_lib`, the platform library from
 [kaos-io/kaos-lib](https://github.com/kaos-io/kaos-lib), installed in your step image at the pinned
 `KAOS_LIB_PACKAGE`; see `docs/write-a-step.md`). A run's
-`dataset` is `<dataset-repo>@<version>`; `dataset-loading` resolves it to a
-commit once and every step reads that commit (`datasets.materialize`, the staged
-copy on HPC). Results go to `outputs-<app>` with the run writer `outputs.run(...)`.
-Step images install kaos-lib and copy only `app/`; the vendored `kubecore/` engine
-never goes into a step image.
+`dataset` is `<dataset-repo>@<version>`; the platform resolves it to a
+commit once per run and gives every step that lock, so `datasets.materialize` reads that commit
+(the staged copy on HPC) with no pinning code in your step. Results go to `outputs-<app>` with the run writer `outputs.run(...)`.
+Step images install kaos-lib and copy only `app/`.
 
 Anything else in lakeFS (a file in a repository, a folder of a dataset) is reached with the
 same package: `datasets.materialize("<repo>@<ref>", prefix="folder/")` downloads a folder of any
 repository at a pinned ref, and `kaos_lib.lakefs.LakeFS.connect()` is the client both use. You
 write no endpoint and no credential: the step's environment has them.
 
-When you run locally, the same `platform` section is filled from a
-local fallback file, so `python -m app.entry --params
-"$(cat out/params.yaml)"` (run from `steps/hello_world/`) behaves like
-the real thing.
+When you run locally, `kaosctl step run <step>` composes the params the way the platform does
+and starts the step in its own environment (§10).
 
 ---
 
@@ -605,21 +572,16 @@ Config is for knobs; bulk data goes through lakeFS/checkpoints (§9).
 
 ## 15. Running the tests
 
-There are two test commands, on purpose:
+One command tests your step code (`step_tests/`):
 
 ```bash
-python -m pytest                                   # the engine: tests/ (the vendored kubecore/)
 pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
-pytest step_tests                                  # step code that imports kaos_lib
+python -m pytest
 ```
 
 That installs exactly the requirement in `KAOS_LIB_PACKAGE` in `steps/*/Dockerfile` (run it from the repo root).
-
-**Why two.** The platform's engine in `kubecore/` (render, compose, enhance; it runs in CI and is
-never in a step image) is imported as `kubecore`; the step code imports kaos-lib as `kaos_lib`. For
-one release kaos-lib also ships a deprecated `kubecore` import shim, so the engine tests keep their
-own command with the repository root first on the path (`python -m pytest`). A step image copies
-only its `app/` folder and installs kaos-lib at the pinned spec.
+A step image copies only its `app/` folder and installs kaos-lib at the pinned spec. `step_tests/test_repo_layout.py`
+fails if a `kubecore/` folder or a `steps/compose_and_validate/` folder comes back: the platform runs its own engine.
 
 The step tests use kaos-lib's in-memory lakeFS (`step_tests/fake_lakefs.py`, vendored at the same
 pin), so no network or cluster is needed.

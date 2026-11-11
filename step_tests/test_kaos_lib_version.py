@@ -4,7 +4,6 @@ The platform picks the version: CI passes --build-arg KAOS_LIB_PACKAGE=<spec> to
 image that declares the ARG, only inside the range in .kaos/compat.yaml. Each step logs
 `kaos-lib <version>` first, so a run's log names what it ran.
 """
-import json
 import re
 from importlib.metadata import version
 from pathlib import Path
@@ -13,7 +12,7 @@ import pytest
 import yaml
 from conftest import ROOT, load_step
 
-PACKAGE_STEPS = ["dataset_loading", "hello_world"]  # compose_and_validate runs the vendored engine
+PACKAGE_STEPS = ["hello_world"]
 # The ARG holds the whole requirement: name[extras] then ==X.Y.Z or " @ <url>".
 SPEC_RE = re.compile(r'^ARG KAOS_LIB_PACKAGE="([A-Za-z0-9._-]+(?:\[[A-Za-z0-9,._-]+\])?(?: ?==\S+| @ https://\S+))"$', re.M)
 PARAMS = yaml.safe_dump({"experiment": {"name": "exp1"}, "dataset": "dataset-default@v1"})
@@ -40,21 +39,12 @@ def test_the_template_declares_the_range_of_its_package():
     assert INSTALLED.startswith("0.4."), "the pinned package is inside the declared range"
 
 
-def test_dataset_loading_logs_the_kaos_lib_version_first(monkeypatch, tmp_path, capsys):
-    step = load_step("dataset_loading")
-    monkeypatch.setattr(step, "OUTPUT_DIR", tmp_path)
-    monkeypatch.setattr(step, "pin", lambda dataset, client=None: {"dataset": dataset, "dataset_commit": "c1"})
-    monkeypatch.setattr("sys.argv", ["entry", "--params", PARAMS])
-    step.main()
-    assert capsys.readouterr().out.splitlines()[0] == f"kaos-lib {INSTALLED}"
-
-
 def test_hello_world_logs_the_kaos_lib_version_first(monkeypatch, capsys):
     step = load_step("hello_world")
-    monkeypatch.setattr(step, "read_dataset", lambda info: Path("."))
-    monkeypatch.setattr(step, "write_result", lambda cfg, info, entry: "c2")
-    info = json.dumps({"dataset": "dataset-default@v1", "dataset_commit": "c1"})
-    monkeypatch.setattr("sys.argv", ["entry", "--params", PARAMS, "--dataset-info", info])
+    monkeypatch.setattr(step.datasets, "resolve", lambda ref, client=None: "abc123" * 6)
+    monkeypatch.setattr(step, "read_dataset", lambda ref, client=None: Path("."))
+    monkeypatch.setattr(step, "write_result", lambda cfg, info, entry, client=None: "c2")
+    monkeypatch.setattr("sys.argv", ["entry", "--params", PARAMS])
     step.main()
     assert capsys.readouterr().out.splitlines()[0] == f"kaos-lib {INSTALLED}"
 

@@ -1,7 +1,7 @@
 # Guide: your first dataset and run
 
 **Goal:** from nothing to a finished run on your own data, and its result on your computer. It uses
-the pipeline this template ships with (`dataset-loading`, then `hello-world`), so you can do it
+the pipeline this template ships with (the one step, `hello-world`), so you can do it
 before you write any code.
 
 **You need:** your app cloned and `kaosctl` signed in ([chapters 2 to 4](cookbook/2-your-apps.md)).
@@ -11,7 +11,7 @@ Your role is `dev`, `ops` or `admin`.
 
 Console → **Pipelines** → your app → **Run** → **Submit**, with every field left as it is.
 
-**You should see** both steps go green. The `hello-world` log says
+**You should see** the step go green. The `hello-world` log says
 `dataset-default@latest @ <commit> holds no files yet`. An empty dataset is not an error.
 
 ## 2. Create a dataset and put files in
@@ -40,7 +40,7 @@ Submit again. In the **`dataset`** dropdown pick `dataset-notes@v1`. If it is no
 few minutes and reopen the form.
 
 **You should see** the `hello-world` log name `dataset-notes@v1`, its commit, and the folder it
-read. `dataset-loading` pinned that commit at the start, so a merge during the run changes nothing.
+read. The platform pinned that commit when the run started, so a merge during the run changes nothing.
 
 ## 5. Get the result
 

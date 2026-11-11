@@ -32,12 +32,11 @@ repository are relative and work on any branch.
 from kubecore.authoring import pipeline, step
 
 with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
-    load  = step("dataset-loading", reads=["dataset"], outputs=["dataset-info"])
-    hello = step("hello-world", reads=["experiment", "dataset"], needs=[load])
+    hello = step("hello-world", reads=["experiment", "dataset"])
 ```
 
-`dataset-loading` pins the dataset version the run picked to one commit. `hello-world` reads it and
-writes a result to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
+`hello-world` reads the dataset version the run picked (the platform pins it to one commit before the
+first step starts) and writes a result to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
 form**: every plain value in `config/` becomes a field.
 
 ### Long runs are not lost
@@ -47,25 +46,29 @@ keeps its checkpoints in `KAOS_CHECKPOINT_DIR` (Ultralytics, Lightning and Huggi
 by `kaos_lib`) continues from the last one. You write nothing for this: see
 [When a machine is lost or a time limit hits](docs/resilience.md).
 
+Your app is `pipeline.py`, `config/` and `steps/`. It holds no copy of the platform's pipeline engine:
+the platform runs its own, and `kaosctl render`, `kaosctl step run` and `kaosctl dev` fetch the same one on your machine.
+
 ## Layout
 
 ```
 pipeline.py            the steps and their order (reads=, gpu=, needs=, outputs=, when=)
 config/                every setting; each one is a field on the run form
 steps/<name>/          one folder per step: app/entry.py and a Dockerfile
-kubecore/              helper code that ships with the template: do not edit
-tests/, step_tests/    engine tests; step-code tests (DEVELOPER.md §15)
+step_tests/            tests of your step code (DEVELOPER.md §15)
 docs/                  the guide (mkdocs)
 ```
 
 ## Quick start
 
 ```bash
-./run.sh                                         # render the pipeline locally, no cluster
 python3 -m venv ~/.venvs/kaos && . ~/.venvs/kaos/bin/activate
 pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib-rc/simple/ \
     --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc5"
 kaosctl login                                    # inside the app folder
+kaosctl render --context pipeline-context.yaml   # render the pipeline locally with the platform's engine
+kaosctl dev                                      # one Python environment per step
+kaosctl step run hello-world                     # run one step on your machine
 kaosctl dataset push ./my-data dataset-my-data -m "first data"
 ```
 
