@@ -136,7 +136,7 @@ kaosctl render --context pipeline-context.yaml
 kaosctl step run say-goodbye
 ```
 
-`kaosctl render` renders your pipeline with the same engine the platform uses, so it gives the same answer. It does not run the pipeline: that only happens later, from the web page. `kaosctl step run` runs just your step on your computer, with the composed settings ([Check and try a step on your computer](check-and-try-locally.md)). If your step shows up with no errors, you are in good shape. If you made a typo, this tells you in plain words.
+`kaosctl render` renders your pipeline with the same engine the platform uses, so it gives the same answer. It does not run the pipeline: that only happens later, from the web page. `kaosctl step run` runs just your step on your computer, with the composed settings ([Run a step locally](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html)). If your step shows up with no errors, you are in good shape. If you made a typo, this tells you in plain words.
 
 ## You are done editing
 

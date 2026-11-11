@@ -75,7 +75,7 @@ limit, so it is never stopped where your limit would have passed. Long steps kee
 
 A step that keeps its checkpoints in the folder `KAOS_CHECKPOINT_DIR` (or uses `kaos_lib`'s framework hooks for
 Ultralytics, Lightning or Hugging Face) continues in a new job from its last checkpoint when the time limit, a node
-failure or maintenance ends a job. See [When a machine is lost or a time limit hits](resilience.md).
+failure or maintenance ends a job. See [Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html).
 
 There are two ways a step counts as *resumable*:
 
@@ -133,7 +133,7 @@ class is not offered in the run form until it is topped up. When a project has s
 |---|---|
 | no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet, or that class's allocation is used up this month; ask your KAOS contact |
 | the step waits for hours | the queue is busy; this is the HPC queue, not your run |
-| the step stops at its time limit | raise `hpc_time_limit`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](resilience.md)) |
+| the step stops at its time limit | raise `hpc_time_limit`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)) |
 | the step ends with `Idle` | it showed no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
 | the step ends with `NoProgress` | the continuation did not get past its checkpoint: check that loading restores your epoch counter |
 | a large checkpoint is not saved in time before the limit | `resumable="30m"` signals the step earlier, or save less (weights only) |

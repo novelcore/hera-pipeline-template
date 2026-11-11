@@ -23,7 +23,7 @@ kaosctl dataset push ./notes dataset-notes -m "first files"
 ```
 
 `push` opens a pull request and prints its link. For images and labels, follow
-[Upload images and labels for yolo](guide-upload-yolo.md) instead.
+[Prepare and upload a yolo dataset](https://github.com/novelcore/yolo-pipelines-template/blob/dev/docs/prepare-dataset.md), in the yolo guide, instead.
 
 ## 3. Merge and release
 
@@ -49,7 +49,7 @@ kaosctl dataset pull outputs-<app>@main ./results --prefix checkpoints/my-experi
 cat ./results/hello.json
 ```
 
-`<run>` is the run's name in Argo. `hello.json` names the dataset, the commit it read, and the
+`<run>` is the run's name, shown on the run page. `hello.json` names the dataset, the commit it read, and the
 number of files.
 
 ## If it isn't there

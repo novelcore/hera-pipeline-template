@@ -3,8 +3,8 @@
 **Goal:** a step that writes its results to your app's outputs repository, saves progress as it
 goes, and continues where it stopped when it is retried.
 
-**You need:** a step that installs kaos-lib ([Use a dataset in a step](dataset-in-a-step.md),
-part 2). The template's `steps/hello_world/` writes a result this way; copy it.
+**You need:** a step that installs kaos-lib ([Add a step that reads the dataset](guide-step-with-data.md),
+part 3). The template's `steps/hello_world/` writes a result this way; copy it.
 
 ## 1. Write results
 
@@ -57,7 +57,7 @@ names the other ([Results](results.md#log-to-mlflow-from-a-step)).
 
 Nothing changes in your code. When a person picks an HPC class for the step, the step
 writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([Run on HPC (Slurm)](hpc.md)). A long step continues from its checkpoints after a time limit or a lost machine,
-with nothing to call ([When a machine is lost or a time limit hits](resilience.md)).
+with nothing to call ([Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)).
 
 ## 5. Test it on your laptop
 

@@ -8,8 +8,8 @@ that project needs it.
 the owning project** only.
 
 A dataset is a lakeFS repository named `dataset-<name>`. Versions are tags `v1`, `v2`, … on `main`,
-and every change reaches `main` through a pull request. [What a dataset is](../datasets.md) covers
-this in more detail.
+and every change reaches `main` through a pull request. [Datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html), in the kaos-lib
+guide, covers this in more detail.
 
 ## 1. Create it
 
@@ -23,7 +23,7 @@ A new dataset has no layout unless you pick one: `--layout yolo` (or any layout 
 
 Or in the browser: lakeFS → **Datasets** → **New dataset** (name, description, layout, classes).
 **No layout** is chosen until you pick one.
-Details: [Create a dataset](../dataset-create.md).
+Details: [Datasets, in the browser](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html#in-the-browser).
 
 **You should see** `dataset-cats` with `data.yaml`, `images/{train,val,test}/` and
 `labels/{train,val,test}/` on `main`.
@@ -42,7 +42,7 @@ Details: [Create a dataset](../dataset-create.md).
     ```
 
     The step by step version, with the label format, is in
-    [Upload images and labels for yolo](../guide-upload-yolo.md).
+    [Prepare and upload a yolo dataset](https://github.com/novelcore/yolo-pipelines-template/blob/dev/docs/prepare-dataset.md), in the yolo guide.
 
 === "any files (raw)"
 
@@ -54,7 +54,7 @@ Details: [Create a dataset](../dataset-create.md).
 
 `push` makes the dataset look exactly like your folder. It checks the folder first, uploads to a
 draft branch, and **opens a pull request**. It prints the link. In the browser you can do the same
-on a branch: **Branches** → upload → pull request ([Add or change data](../dataset-upload.md)).
+on a branch: **Branches** → upload → pull request ([in the browser](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html#in-the-browser)).
 
 ## 3. Validate
 
@@ -65,7 +65,7 @@ kaosctl dataset validate ./dataset-cats            # exit code 0 ok, 2 the datas
 ```
 
 Every problem is listed: a label without an image, a class id outside `names`, and so on
-([Check a dataset](../dataset-validate.md)).
+([layouts and what they check](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html#layouts)).
 
 ## 4. Merge the pull request
 
@@ -82,13 +82,13 @@ kaosctl dataset versions dataset-cats
 ```
 
 **You should see**, a few minutes later, `dataset-cats@v1` in your pipeline's `dataset` dropdown
-([Release a version](../dataset-release.md)).
+([Quickstart: release a version](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/quickstart.html#4-release-a-version)).
 
 ## 6. Share it with another project
 
 The owner project's admin does this in the console: **Datasets** → the dataset → **Sharing** tab →
 *Share with project* → **Add a project…** → **Save sharing**. The other project can then read it,
-but never write it ([Share a dataset](../dataset-share.md)).
+but never write it ([Share a dataset](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/shared-datasets.html#share-a-dataset-the-owning-project)).
 
 ## 7. Use a dataset another project shared with you
 
@@ -103,7 +103,7 @@ On your run form it appears as `team-a/dataset-cats@v3`. The owner project's nam
 
 | symptom | fix |
 |---|---|
-| `push` stops with a list of problems | fix each one; it lists them all at once ([Check a dataset](../dataset-validate.md)) |
+| `push` stops with a list of problems | fix each one; it lists them all at once ([layouts](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html#layouts)) |
 | `push` says the folder is not a yolo dataset, but you meant raw files | create the dataset with `--layout none`, or push with `--no-validate` |
 | the new version is not in the run form's dropdown | wait a few minutes and reopen the form; the list is refreshed after each release |
 | a shared dataset is not in your dropdown | the owner has not saved the sharing yet, or your pipeline has not been refreshed; a release of any dataset in your project refreshes it |

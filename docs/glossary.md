@@ -2,8 +2,6 @@
 
 Plain meanings for the words in this guide. One sentence each. Come back here any time.
 
-**Argo Workflows.** The tool that runs your pipeline on real machines. It gives you the web page with the Submit button and shows each step as it runs. The console's **Pipelines** page links to it.
-
 **Branch.** A safe copy of the project where you make changes before they are accepted.
 
 **Clone.** To copy the project from GitHub onto your computer, one time.
@@ -67,6 +65,8 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 **Results.** What your steps write: one commit per step per run in your app's `outputs-<app>` repository.
 
 **Role.** What a team gives its members on a project: `admin`, `ops`, `dev` or `business` ([You're in](cookbook/1-youre-in.md)).
+
+**Run page.** The web page of your pipeline's runs. It has the form with the Submit button and shows each step as it runs. The console's **Pipelines** page links to it.
 
 **Step.** One job in your pipeline, like preparing data or training a model.
 

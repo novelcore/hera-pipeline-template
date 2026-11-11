@@ -12,7 +12,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 |---|---|
 | the console shows no project | you are not on a team with access to it. An organisation admin adds you ([chapter 1](1-youre-in.md)) |
 | added to a team, still no access | the team links your sign-in e-mail; check it is the exact address. Wait a few minutes, then sign out and in again |
-| `403` in Argo, lakeFS or MLflow | your role does not cover that project or that action ([chapter 1](1-youre-in.md)) |
+| `403` on the run page, in lakeFS or in MLflow | your role does not cover that project or that action ([chapter 1](1-youre-in.md)) |
 | no **Identity & Access** in the sidebar | only organisation admins see it |
 
 ## The app and its first build
@@ -21,7 +21,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 |---|---|
 | no **New pipeline**, or the project is not offered | the project cannot host an ML pipeline yet; ask a project admin |
 | stuck on **Awaiting first build** | the build was not triggered; check the repository and its `dev` branch exist, then ask your KAOS contact |
-| **Build failed** | **View run** opens the build in Argo; read the failing step |
+| **Build failed** | **View run** opens the build; read the failing step |
 
 ## kaosctl
 
@@ -37,7 +37,7 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 
 | symptom | cause and fix |
 |---|---|
-| `push` stops and lists problems (exit code 2) | fix each one; for yolo, every label needs its image, and every class id must be below the number of `names` ([Check a dataset](../dataset-validate.md)) |
+| `push` stops and lists problems (exit code 2) | fix each one; for yolo, every label needs its image, and every class id must be below the number of `names` ([layouts and what they check](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html#layouts)) |
 | `push` opened a pull request but `main` is unchanged | merge the pull request in lakeFS |
 | the new version is not in the run form's dropdown | the list is refreshed after a release; wait a few minutes and reopen the form |
 | a shared dataset is not in the dropdown | the owner has not saved the sharing, or your pipeline has not been refreshed since |
@@ -82,11 +82,11 @@ a red step has a log. Read the last lines first. KAOS errors name the one thing 
 |---|---|
 | no `meluxina-*` in the class dropdown | your project has no HPC (Slurm) environment yet ([Run on HPC (Slurm)](../hpc.md)) |
 | an HPC step waits for hours | the Slurm queue is busy; the waiting time is real |
-| it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](../resilience.md)) |
+| it ends at its time limit | raise `hpc_time_limit` for the step in `pipeline.py`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)) |
 | it is refused with `TooLongNotResumable` | its time limit is longer than one HPC job may run and the step is not resumable: make it resumable or shorten it ([details](../hpc.md#long-runs-continue-after-the-time-limit)) |
 | it fails with `SubmitLimit` | the site allows only so many queued and running jobs; run it again when some have finished |
 | it waits with `SiteLimit` or `BudgetBlocked` | the allocation for that kind of machine (GPU, CPU, ...) is used up; ask your KAOS contact ([details](../hpc.md#why-a-step-is-waiting-or-refused)) |
-| a step ran twice after a machine was reclaimed | by design: it is repeated at most twice, from its last checkpoint if it wrote one ([details](../resilience.md)) |
+| a step ran twice after a machine was reclaimed | by design: it is repeated at most twice, from its last checkpoint if it wrote one ([details](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)) |
 | the render fails: "sets a service account", "sets podSpecPatch" or "reserves" a name | `pipeline.py` set something the platform owns ([Settings the platform owns](../platform-owned-settings.md)) |
 | it ends with `Idle` | no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
 

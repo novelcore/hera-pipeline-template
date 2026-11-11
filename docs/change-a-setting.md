@@ -65,6 +65,6 @@ If you need one of those, use a dropdown of preset choices instead (below).
 
 ## A quick word on dropdowns
 
-Sometimes you want a person to pick from a fixed set of choices rather than type free text. That is a dropdown. You make one with a folder of choice files instead of a single value: every file in `config/<group>/` is one option, and `config/config.yaml` names the default in its `defaults` list (for example `- model: yolov8n` in the yolo template). The form then shows one dropdown, `<group>`, with one option per file. See `config/README.md` and DEVELOPER.md for the details.
+Sometimes you want a person to pick from a fixed set of choices rather than type free text. That is a dropdown. You make one with a folder of choice files instead of a single value: every file in `config/<group>/` is one option, and `config/config.yaml` names the default in its `defaults` list (for example `- model: yolov8n` in the yolo template). The form then shows one dropdown, `<group>`, with one option per file. See DEVELOPER.md for the details.
 
 Next, send your change in. Go to [Send your change in](send-it-in.md).

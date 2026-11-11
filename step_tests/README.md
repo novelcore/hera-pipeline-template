@@ -11,5 +11,5 @@ python -m pytest
 
 `fake_lakefs.py` is kaos-lib's in-memory lakeFS (`tests/fake_lakefs.py` there), vendored at the same pin.
 
-`test_repo_layout.py` fails if `kubecore/` or `steps/compose_and_validate/` comes back: the platform
-runs its own pipeline engine, so an app holds only `pipeline.py`, `config/` and `steps/`.
+`test_repo_layout.py` fails if a copy of the pipeline engine or a step that composes the parameters comes
+back: the platform runs its own pipeline engine, so an app holds only `pipeline.py`, `config/` and `steps/`.

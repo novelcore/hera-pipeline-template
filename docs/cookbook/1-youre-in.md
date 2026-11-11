@@ -9,7 +9,7 @@ what your role lets you do.
 
 1. Open your organisation's console. The link is in the invitation e-mail your organisation admin sent.
 2. Sign in with the account the invitation was sent to. KAOS has a single sign-in, and the same
-   account later opens the run page (Argo), lakeFS, MLflow and `kaosctl`.
+   account later opens the run page, lakeFS, MLflow and `kaosctl`.
 3. In the sidebar, open **Projects**. This lists the projects of your organisation. Open yours.
 
 ## What you should see
@@ -26,7 +26,7 @@ You get a role by being a member of a **team**. A *project team* gives its role 
 *organisation team* gives its role on every project of the organisation. Each team has one role,
 and every member of the team has that role.
 
-| role | Argo Workflows (runs) | GitHub (app repositories) | MLflow |
+| role | Runs | GitHub (app repositories) | MLflow |
 |---|---|---|---|
 | `admin` | full control | admin | manage: create experiments, register and promote models |
 | `ops` | submit, retry, stop runs | admin | signed in (verify the per-experiment rights) |
@@ -37,7 +37,7 @@ Pipelines record their results in MLflow under your project's own account, so a 
 records do not depend on who submitted it. In lakeFS, everyone who can sign in to your project's
 lakeFS has the same rights there. Two rules apply to everyone: changes to a dataset's `main` go only
 through a pull request (a proposed change that must be accepted), and only the owning project can
-write a dataset ([Datasets](../datasets.md)).
+write a dataset ([Datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html)).
 
 The console's **Identity & Access** page, under its **Roles** tab, shows "what each role can do". If your role and the table above disagree, the
 console page is right.

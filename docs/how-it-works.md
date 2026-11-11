@@ -42,7 +42,7 @@ When you send your files in, the platform takes over. You do not set any of this
 
 - **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
   picks one in the `dataset` field. The platform pins it to one commit when the run starts, and
-  every step reads that commit ([Datasets](datasets.md)).
+  every step reads that commit ([How steps use datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html#the-pin)).
 - **Results** go to your app's `outputs-<app>` repository, one commit per step per run, written with
   kaos-lib ([Results](results.md)).
 - A step never writes to a dataset.
@@ -54,7 +54,7 @@ You describe what you want. The platform figures out how to run it.
 ```mermaid
 graph TD
     E["📝 You edit: pipeline.py, config/, steps/"] -->|"PR into dev: wft-render, then merge"| P["🏗️ kubecore-ml-ci builds and releases"]
-    P -->|a few minutes| R["🖥️ Argo run page: your settings as a form"]
+    P -->|a few minutes| R["🖥️ Run page: your settings as a form"]
     R -->|Submit| RUN["▶️ Your pipeline runs on real machines"]
 
     style E fill:#4a148c,stroke:#7b1fa2,color:#fff

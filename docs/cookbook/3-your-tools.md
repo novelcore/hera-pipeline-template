@@ -11,7 +11,7 @@ You never need to type an address. Console → **Pipelines** → your app's row 
 
 | tool | console link | what you do there |
 |---|---|---|
-| **Argo Workflows** | **Run** (the form), **Runs in Argo**, **CI builds** | submit runs, watch them, read logs, retry; see the builds of your pipeline |
+| **The run page** | **Run** (the form), the link to the runs, **CI builds** | submit runs, watch them, read logs, retry; see the builds of your pipeline |
 | **lakeFS** (your project's data store) | **Datasets**, then *Create in project (opens its lakeFS)*; **Outputs** | datasets: create, upload, pull requests, **Release version**; your runs' outputs in `outputs-<app>` |
 | **MLflow** | **MLflow**, **Models** | metrics, parameters and artifacts of runs; compare runs; registered models |
 | **Console Datasets page** | sidebar → **Datasets** | every dataset of the organisation, its versions and location; **sharing** with other projects |
@@ -24,7 +24,7 @@ Copy the address from the console link when you want a bookmark; the console lin
 
 ## What you should see
 
-- **Argo:** the **Workflow Templates** list (Argo's list of runnable pipelines) has `<app>-pipeline` once the first build is done.
+- **The run page:** the **Workflow Templates** list (the runnable pipelines) has `<app>-pipeline` once the first build is done.
   **Workflows** lists runs and builds.
 - **lakeFS:** the **Datasets** page lists `dataset-default` and any datasets of your project, with
   a **New dataset** button. The repository list also has `outputs-<app>`.
@@ -35,8 +35,8 @@ Copy the address from the console link when you want a bookmark; the console lin
 
 - **A link is missing from the app's row:** that part of your project is not set up yet. For
   example, no **MLflow** link means the project has no MLflow. Ask your KAOS contact.
-- **"403" or "access denied" in Argo:** your role does not include this project. Check your team
+- **"403" or "access denied" on the run page:** your role does not include this project. Check your team
   ([chapter 1](1-youre-in.md)).
-- **No `<app>-pipeline` in Argo:** the first build has not finished ([chapter 2](2-your-apps.md)).
+- **No `<app>-pipeline` on the run page:** the first build has not finished ([chapter 2](2-your-apps.md)).
 
 **Next:** [4. Install kaosctl and sign in](4-install-kaosctl.md).

@@ -22,7 +22,7 @@ The yolo guide walks it through with every click and command:
 1. **Create the app**: console → **Pipelines** → **New pipeline** → the yolo card
    ([chapter 2](2-your-apps.md)).
 2. **Label and upload**: one `.txt` label per image, then `kaosctl dataset push`, merge the pull
-   request, and **Release version** ([Upload images and labels for yolo](../guide-upload-yolo.md)).
+   request, and **Release version** ([Prepare and upload a yolo dataset](https://github.com/novelcore/yolo-pipelines-template/blob/dev/docs/prepare-dataset.md)).
 3. **Train twice on `v1`**: submit once with `train-epochs` = 50 and once with 100, or with two
    class sets released as `v1` and `v2`. Give each run a different `experiment-name` or keep one name
    and compare the runs inside it.
