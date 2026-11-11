@@ -41,6 +41,17 @@ account the run uses.
 Nothing in your code changes. While the job waits, the step's log shows its state and the
 queue's reason for holding it. If you stop or delete the run, the platform cancels the HPC job.
 
+### Several steps on one node
+
+An HPC node has several GPUs (for example 4). Steps that run at the same time, in the same project and on the same
+HPC class, share nodes: each step gets its own GPU and its own share of the node's CPUs and memory, so four 1-GPU
+steps use one node instead of four. This also holds for resumable steps: each one is told to save its progress at
+its own time. Your code needs nothing for this: compute only on the GPU the step is given (`CUDA_VISIBLE_DEVICES`).
+A shared node is counted once against your allocation, not once per step.
+
+If a job waits in the queue longer than its credentials last, the platform submits it again with fresh ones. It
+then waits in the queue anew; the step's status records each time this happened.
+
 ## Set a time limit
 
 Slurm stops a job at its wall-clock limit. The default is 4 hours. Give long steps their own limit
@@ -103,10 +114,13 @@ While a step waits, its log shows its state and the reason. These are the ones y
 | `SiteLimit` | the site's monthly limit on the account has run out (also shown while a submitted job queues behind that limit) | ask your KAOS contact |
 | `SubmitLimit` | the site allows only so many queued and running jobs per user, and the project already has that many. The step **fails** at once instead of waiting | run it again when some jobs have finished |
 | `TooLongNotResumable`, `TooLongBeyondContinuations` | the time limit is longer than the site allows (see above) | make it resumable, or shorten it |
+| `InvalidImage` | the step's image reference is incomplete (no registry or repository), so it cannot be pulled. The step fails before anything is submitted, and nothing is charged | run it again after the app's next build; if it repeats, ask your KAOS contact |
 | `GPUViolation` | on a node shared by several steps, this step used a GPU that was not its own. Only that step is stopped | compute only on the GPU the step is given: do not override the GPU selection or hard-code a device number |
 
 A project has a separate allocation for each kind of machine: GPU, CPU, FPGA and large memory. One that is used up
-blocks only the steps that use it: a project out of CPU hours can still run its GPU steps.
+blocks only the steps that use it: a project out of CPU hours can still run its GPU steps. A used-up allocation's
+class is not offered in the run form until it is topped up. When a project has spent most of its monthly allocation
+(80% by default), the platform raises a budget warning for the project before steps start being refused.
 
 ## What you should see
 
@@ -117,7 +131,7 @@ blocks only the steps that use it: a project out of CPU hours can still run its 
 
 | symptom | fix |
 |---|---|
-| no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet; ask your KAOS contact |
+| no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet, or that class's allocation is used up this month; ask your KAOS contact |
 | the step waits for hours | the queue is busy; this is the HPC queue, not your run |
 | the step stops at its time limit | raise `hpc_time_limit`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](resilience.md)) |
 | the step ends with `Idle` | it showed no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
