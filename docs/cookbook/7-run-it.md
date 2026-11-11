@@ -33,7 +33,7 @@ After **Submit**, the run page shows the run as a graph of steps:
 
 Click a step, then **Logs**, to read what it printed. The first line of the template's steps is the kaos-lib
 version they run (`kaos-lib 0.4.0rc20`). You can close the tab: the run keeps going. Find it again
-from the console: **Pipelines** → your app → the link to its runs.
+from the console: **Pipelines** → the **⋯** menu on your app's row → the first entry, the runs link.
 
 **You should see** every step green and, for the shipped pipeline, `[hello-world] result committed
 to outputs: <commit>` at the end of the last log.

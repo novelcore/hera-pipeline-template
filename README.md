@@ -89,7 +89,7 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 
 ## Checking the docs
 
-`make docs-check` (or `scripts/check-docs.sh`) builds the site with `mkdocs build --strict`. The build first runs three checks (`scripts/docs_check.py`), and a finding fails it:
+This is for the maintainers of the template. `make docs-check` (or `scripts/check-docs.sh`) runs three checks, then builds the site with `mkdocs build --strict`:
 
 | check | fails on |
 |---|---|
@@ -97,9 +97,9 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 | removed names | a step or a folder that no longer exists |
 | links | a link that does not resolve in this guide, in the kaos-lib guide or in the yolo guide, and a link from those two into this guide that does not resolve |
 
-The link check downloads the other two repositories; `DOCS_CHECK_OFFLINE=1` checks this one alone and says what it skipped, and `DOCS_CHECK_KAOS_LIB=<folder>` / `DOCS_CHECK_YOLO=<folder>` read your own checkouts. Add `--external` to also check external links. Install the tools first: `pip install -r docs/requirements.txt`. No GitHub Actions needed.
+The checks are kaos-lib's `docs_check.py`; this repository holds no copy. The script downloads kaos-lib and the yolo template at their trunk, and stops with a message when a download fails. `DOCS_CHECK_KAOS_LIB=<folder>` and `DOCS_CHECK_YOLO=<folder>` read your own checkouts; `DOCS_CHECK_OFFLINE=1` checks this repository alone and prints what it skipped. Add `--external` to also check external links. Install the tools first: `pip install -r docs/requirements.txt`. No GitHub Actions needed. In an app created from this template the script checks nothing: it says so and ends.
 
-One topic has one page. What is true for every pipeline (datasets, checkpoints, checking a step on your computer, kaos-lib versions) is in the [kaos-lib guide](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html); this guide holds what is specific to the template and links there. `scripts/docs_check.py` is the same file in kaos-lib and in the yolo template: change it in all three.
+One topic has one page. What is true for every pipeline (datasets, checkpoints, checking a step on your computer, kaos-lib versions) is in the [kaos-lib guide](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html); this guide holds what is specific to the template and links there.
 
 ## License
 

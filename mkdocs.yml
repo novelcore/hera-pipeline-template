@@ -69,9 +69,6 @@ markdown_extensions:
 plugins:
   - search
 
-hooks:
-  - scripts/docs_check.py   # words, removed names, links: a finding fails the build
-
 extra_css:
   - assets/extra.css
 

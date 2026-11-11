@@ -24,7 +24,7 @@ one pipeline, and it starts empty. All the pipelines of a project share its data
 ## If your project already has apps
 
 1. Console → **Pipelines**. Each row is one ML app. It shows the project, the status of its first
-   build, and a **Run** button with links: its runs, **CI builds**, **MLflow**, **Outputs**,
+   build, and a **Run** button and a **⋯** menu of links: the runs link (the first entry), **CI builds**, **MLflow**, **Outputs**,
    **Models**, **Datasets** and **App settings**.
 2. Open your app. Its page links the GitHub repository.
 3. Clone it. You need `git`, an editor, and access to the repository, which your project team

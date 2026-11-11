@@ -11,7 +11,7 @@ You never need to type an address. Console → **Pipelines** → your app's row 
 
 | tool | console link | what you do there |
 |---|---|---|
-| **The run page** | **Run** (the form), the link to the runs, **CI builds** | submit runs, watch them, read logs, retry; see the builds of your pipeline |
+| **The run page** | **Run** (the form); in the **⋯** menu next to it, the runs link (the first entry) and **CI builds** | submit runs, watch them, read logs, retry; see the builds of your pipeline |
 | **lakeFS** (your project's data store) | **Datasets**, then *Create in project (opens its lakeFS)*; **Outputs** | datasets: create, upload, pull requests, **Release version**; your runs' outputs in `outputs-<app>` |
 | **MLflow** | **MLflow**, **Models** | metrics, parameters and artifacts of runs; compare runs; registered models |
 | **Console Datasets page** | sidebar → **Datasets** | every dataset of the organisation, its versions and location; **sharing** with other projects |
