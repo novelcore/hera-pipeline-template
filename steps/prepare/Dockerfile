@@ -5,7 +5,7 @@ WORKDIR /app
 # kaos-lib, the platform library (github.com/kaos-io/kaos-lib). The platform's build passes KAOS_LIB_PACKAGE,
 # the WHOLE pip requirement of the version it chose; the default below is what a local build installs
 # (kaos-lib 0.5.0). Add your own dependencies with a RUN pip install line of their own.
-ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/f422375c291f99bce326de3c606b957ec6cb228d.zip"
+ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/94115aed01aff9a7c702a7510ae6cbda804e875c.zip"
 RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ENTRYPOINT ["python", "-m", "app.entry"]
