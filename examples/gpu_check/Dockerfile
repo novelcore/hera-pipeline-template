@@ -1,7 +1,9 @@
 # Known-good GPU step image: a plain python base plus a pip torch (the wheel brings its own CUDA runtime
 # libraries; the NVIDIA DRIVER comes from the GPU machine).
 #
-# Copy this folder to steps/gpu_check/ (see docs/gpu-steps.md). The platform builds it on push, like any step.
+# Copy this folder to steps/gpu_check/
+# (https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
+# The platform builds it on push, like any step.
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -14,6 +16,9 @@ ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/nvidia/lib
 ENV PATH=/usr/local/nvidia/bin:${PATH}
 
 # Pin torch: a floating version changes the CUDA runtime under you between two builds.
-RUN pip install --no-cache-dir "torch==2.5.1" "PyYAML>=6,<7"
+RUN pip install --no-cache-dir "torch==2.5.1"
+# kaos-lib, as in every step (see steps/hello_world/Dockerfile).
+ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/94115aed01aff9a7c702a7510ae6cbda804e875c.zip"
+RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ENTRYPOINT ["python", "-m", "app.entry"]
