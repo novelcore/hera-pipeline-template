@@ -19,7 +19,7 @@ report = step("report", kind="evaluate", needs=[train], produces=[artifact("repo
 
 | you declare | use it for | it is saved as |
 |---|---|---|
-| `dataset("clean")` | data that later steps and later runs read | a new version of the dataset `dataset-clean` |
+| `dataset("clean")` | data that later steps and later runs read | a new version of the dataset `dataset-<your app>-clean` |
 | `model("model")` | trained weights | files in `outputs-<app>` under `model/<experiment>/<run>/` |
 | `artifact("report")` | everything else: reports, plots, tables | files in `outputs-<app>` under `report/<experiment>/<run>/` |
 
@@ -31,7 +31,7 @@ A name uses lowercase letters, digits and hyphens.
 from kaos_lib import step
 
 ctx = step.start()
-folder = step.output("report")                  # an empty folder on the step's own disk
+folder = step.output("report")                  # an empty folder; what it holds is saved
 (folder / "summary.txt").write_text("42 rows\n")
 step.result(rows=42)                            # saves every output, then hands rows=42 on
 ```
@@ -53,14 +53,15 @@ when another run writes the same dataset at the same time.
 
 ## 4. A dataset your step produces
 
-A step that declares `dataset("clean")` makes one new version of `dataset-clean` in every run. The platform
-creates the dataset for your pipeline, and only your pipeline can write it.
+A step that declares `dataset("clean")` makes one new version of `dataset-<your app>-clean` in every run (`<your app>` is
+the name of your app; your code only ever uses the short name `clean`). The platform creates the dataset for your
+pipeline, and only your pipeline can write it.
 
 - Write every file under the same path in every run. Then a run that changes one file uploads one file.
 - The newest version (`latest`) moves to a run's version only when the run asks for it: the run form has that
   choice for each dataset the pipeline produces. A run that does not ask still writes its version, and its own
   later steps read it.
-- Another pipeline reads the dataset like any other: a setting such as `clean: "dataset-clean"` named in
+- Another pipeline reads the dataset like any other: a setting such as `clean: "dataset-<your app>-clean"` named in
   `inputs=`.
 
 The whole story is in [A dataset a step produces](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html#a-dataset-a-step-produces).

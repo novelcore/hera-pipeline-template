@@ -20,11 +20,8 @@ Every field came from your `config/` folder, plus a few the platform adds:
   ([Datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html)).
 - `<step>-class` for each step: the kind of machine it runs on, including the HPC classes on a
   project with HPC (Slurm) ([Run on HPC (Slurm)](hpc.md)).
-- `<step>-cpu`, `<step>-mem` and `<step>-disk` to ask for less, for a quick test.
 
 ![The experiment fields on the submit form](img/form-experiment-fields.png)
-
-![Per step sizing fields for each step](img/per-step-sizing.png)
 
 ## 3. Submit and watch
 

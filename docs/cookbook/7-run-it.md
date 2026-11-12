@@ -17,9 +17,8 @@ Every field has a default, so you can press **Submit** straight away.
 | `pipeline-info` | a read-only note: the classes this pipeline can use and, on an HPC (Slurm) project, the HPC account. Leave it. |
 | `experiment-name`, `experiment-description` | from `config/experiment.yaml`; the name groups your runs in MLflow and in `outputs-<app>` |
 | `dataset` | a dropdown of `<dataset>@<version>`, newest first, including datasets shared with your project as `<owner>/<dataset>@<version>` |
-| `config` | advanced: settings as YAML, applied last. It also holds the run's own choices: `plan: {promote: {clean: true}}` makes this run's version the newest one (`latest`) of the dataset `dataset-clean` that `prepare` writes; without it the run still writes its version and `latest` stays where it is |
+| `config` | advanced: settings as YAML, applied last. It also holds the run's own choices: `plan: {promote: {clean: true}}` makes this run's version the newest one (`latest`) of the dataset `dataset-<your app>-clean` that `prepare` writes; without it the run still writes its version and `latest` stays where it is |
 | `<step>-class` | the kind of machine each step runs on: your project's classes, plus the HPC classes (`meluxina-*`) on a project with HPC (Slurm) ([Run on HPC (Slurm)](../hpc.md)) |
-| `<step>-cpu`, `<step>-mem`, `<step>-disk` | ask for less than the whole machine, for a quick test |
 | everything else | one field per setting in `config/`, named by its path with dashes (`train.epochs` → `train-epochs`) |
 
 Fields that accept only some values are dropdowns. A value outside the allowed set stops the run in

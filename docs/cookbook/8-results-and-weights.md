@@ -28,7 +28,7 @@ kaosctl dataset pull outputs-<app>@main ./results --prefix report/<experiment>/<
 ```
 
 For the shipped pipeline you find `hello.txt`, with the number of files `hello-world` counted. The shipped
-pipeline also writes a dataset, `dataset-clean`: one version per run
+pipeline also writes a dataset, `dataset-<your app>-clean`: one version per run
 ([Results](../results.md#the-dataset-the-pipeline-produces)).
 
 ## MLflow runs

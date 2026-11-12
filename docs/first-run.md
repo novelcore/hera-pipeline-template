@@ -48,7 +48,7 @@ cat ./results/hello.txt
 
 `<run>` is the run's name, shown on the run page. `hello.txt` names the experiment and the number of files.
 
-The run also wrote a version of the dataset `dataset-clean`: the files `prepare` kept
+The run also wrote a version of the dataset `dataset-<your app>-clean`: the files `prepare` kept
 ([Results](results.md#the-dataset-the-pipeline-produces)).
 
 ## If it isn't there

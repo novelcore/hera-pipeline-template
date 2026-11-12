@@ -8,7 +8,7 @@ def main() -> None:
     ctx = step.start()
     least = ctx.params["prepare"]["min_bytes"]  # a setting: config/prepare.yaml, a field on the run form
     data, clean = step.input("dataset"), step.output("clean")
-    files = [f for f in sorted(data.rglob("*")) if f.is_file() and not f.name.startswith(".")]
+    files = [f for f in sorted(data.rglob("*")) if f.is_file()]
     kept = [f for f in files if f.stat().st_size >= least]
     for file in kept:
         target = clean / file.relative_to(data)

@@ -10,7 +10,7 @@ step sets any of these:
 |---|---|---|
 | `serviceAccountName` on the pipeline | "pipeline.py sets a service account for the whole pipeline" | remove it |
 | `serviceAccountName` (or `executor.serviceAccountName`) on a step | "step '<name>' sets a service account" | remove it |
-| `podSpecPatch` on the pipeline or a step | "sets podSpecPatch ... The platform sizes and places pods itself" | use `step(..., gpu=True, disk="30Gi")`; per run, the `<step>-class`, `<step>-cpu`, `<step>-mem` fields on the form |
+| `podSpecPatch` on the pipeline or a step | "sets podSpecPatch ... The platform sizes and places pods itself" | use `step(..., gpu=True)`; per run, the `<step>-class` field on the form |
 | a step named `hpc-follower` (or `meluxina-run`) | "uses a name the platform reserves for its HPC follower" | rename the step |
 
 Nothing is released while the check is red. The message names the step, so the fix is one edit. You do not need

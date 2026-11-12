@@ -38,8 +38,7 @@ with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
 
 !!! warning "Version 0.5 or newer"
     This template needs kaos-lib **0.5** or newer, on your machine and in the step images. If you get
-    `kaosctl: command not found`, run the `pip install` line above again with `-U`. An app written for
-    kaos-lib 0.4 is moved with [Move to kaos-lib 0.5](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/migrate-to-0.5.html).
+    `kaosctl: command not found`, run the `pip install` line above again with `-U`.
 
 !!! tip "Why the virtual environment?"
     Many computers no longer let `pip install` change the system's own Python. You then see a

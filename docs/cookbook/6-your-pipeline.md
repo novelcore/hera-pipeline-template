@@ -29,7 +29,7 @@ with pipeline("ml-pipeline") as p:   # KAOS names it <app>-pipeline
 
 - **`prepare`** reads the run's dataset, at the one version the platform fixed when the run
   started, and writes the files of at least `prepare.min_bytes` bytes as a new version of the dataset
-  `dataset-clean`.
+  `dataset-<your app>-clean`.
 - **`hello-world`** reads exactly the version `prepare` wrote in this run, counts its files and
   writes a small `hello.txt` to `outputs-<app>`.
 

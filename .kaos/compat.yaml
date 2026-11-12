@@ -5,4 +5,4 @@
 # range. A version outside it arrives as a pull request on the branch
 # kaos-lib/bump-<version> that changes this line: merge it to take the new version.
 # See https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html
-kaos-lib: ">=0.5,<0.6"
+kaos-lib: ">=0.5.0rc1,<0.6"

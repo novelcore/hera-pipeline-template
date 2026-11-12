@@ -16,7 +16,7 @@ ENV PATH=/usr/local/nvidia/bin:${PATH}
 # Pin torch: a floating version changes the CUDA runtime under you between two builds.
 RUN pip install --no-cache-dir "torch==2.5.1"
 # kaos-lib, as in every step (see steps/hello_world/Dockerfile).
-ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/036b6f401fdc7830cdbceaabb899d8512f85f040.zip"
+ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/f422375c291f99bce326de3c606b957ec6cb228d.zip"
 RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
 COPY app/ ./app/
 ENTRYPOINT ["python", "-m", "app.entry"]

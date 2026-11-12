@@ -8,7 +8,7 @@ data it read and wrote, is explained once for every pipeline in [Results](https:
 
 | step | declares | where it lands |
 |---|---|---|
-| `prepare` | `produces=[dataset("clean")]` | a new version of the dataset `dataset-clean` |
+| `prepare` | `produces=[dataset("clean")]` | a new version of the dataset `dataset-<your app>-clean` |
 | `hello-world` | `produces=[artifact("report")]` | `outputs-<app>`, under `report/<experiment>/<run>/hello.txt` |
 
 Each step also hands on a few small values with `step.result(...)`: `prepare` hands on `files` and `dropped`,
@@ -38,8 +38,8 @@ or console → **Pipelines** → your app → **Outputs**.
 
 ## The dataset the pipeline produces
 
-`dataset-clean` is a dataset like any other: it is listed with your project's datasets and you pull it with
-`kaosctl dataset pull dataset-clean ./clean`. Every run of the pipeline writes one version of it. `latest` moves
+`dataset-<your app>-clean` is a dataset like any other: it is listed with your project's datasets and you pull it with
+`kaosctl dataset pull dataset-<your app>-clean ./clean`. Every run of the pipeline writes one version of it. `latest` moves
 to a run's version only when the run asks for it on the run form
 ([A dataset a step produces](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html#a-dataset-a-step-produces)).
 

@@ -26,7 +26,7 @@ from kaos_lib import step
 def main() -> None:
     ctx = step.start()
     data = step.input("dataset")  # a folder: the dataset version the run picked
-    count = sum(1 for f in data.rglob("*") if f.is_file() and not f.name.startswith("."))
+    count = sum(1 for f in data.rglob("*") if f.is_file())
     print(f"[count-files] {count} files", flush=True)
     report = step.output("file-count")  # a folder to write into; saved by step.result()
     (report / "count.txt").write_text(f"{ctx.experiment}: {count} files\n")

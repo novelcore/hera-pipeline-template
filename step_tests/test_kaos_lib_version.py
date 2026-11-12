@@ -26,5 +26,5 @@ def test_every_step_image_takes_the_platform_requirement_and_has_the_same_defaul
 
 def test_the_template_declares_the_range_of_its_package():
     compat = yaml.safe_load((ROOT / ".kaos" / "compat.yaml").read_text())
-    assert compat == {"kaos-lib": ">=0.5,<0.6"}
+    assert compat == {"kaos-lib": ">=0.5.0rc1,<0.6"}
     assert version("kaos-lib").startswith("0.5."), "the installed package is inside the declared range"

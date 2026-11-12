@@ -36,7 +36,17 @@ touch steps/say_goodbye/app/__init__.py
 
 The first line makes the folders. The second makes an empty file called `__init__.py`. Leave that file empty. It just tells Python this is a package.
 
-![The new say_goodbye folder in the sidebar, with entry.py open](img/new-step-folder.png)
+After Step 2 the folder looks like this:
+
+```text
+steps/
+  hello_world/
+  prepare/
+  say_goodbye/
+    app/
+      __init__.py
+      entry.py
+```
 
 ## Step 2. Write the code
 
@@ -92,7 +102,16 @@ ENTRYPOINT ["python", "-m", "app.entry"]
 
 Keep the name `KAOS_LIB_PACKAGE`: the platform's build passes the kaos-lib version through it ([who picks the version](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html#in-a-pipeline-who-picks-the-version)). Add the Python packages your own code needs with a `RUN pip install` line of their own.
 
-![The say_goodbye Dockerfile open in the editor](img/dockerfile.png)
+With the value filled in, the file reads:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+ARG KAOS_LIB_PACKAGE="kaos-lib[zitadel] @ https://github.com/kaos-io/kaos-lib/archive/f422375c291f99bce326de3c606b957ec6cb228d.zip"
+RUN pip install --no-cache-dir "${KAOS_LIB_PACKAGE}"
+COPY app/ ./app/
+ENTRYPOINT ["python", "-m", "app.entry"]
+```
 
 That is the whole Dockerfile. The platform uses it to build your step into an image. You never write an image name. You never write a registry address. The platform does that part.
 
@@ -117,7 +136,15 @@ Add one line for your new step. Make it run after `hello-world` by pointing `nee
     goodbye = step("say-goodbye", kind="control", needs=[hello])
 ```
 
-![pipeline.py with the new say-goodbye line added](img/pipeline-line.png)
+`pipeline.py` now reads:
+
+```python
+with pipeline("ml-pipeline") as p:
+    prepare = step("prepare", kind="transform", reads=["prepare"], inputs=["dataset"],
+                   produces=[dataset("clean")])
+    hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
+    goodbye = step("say-goodbye", kind="control", needs=[hello])
+```
 
 Here is what each part means.
 

@@ -1,5 +1,6 @@
-"""The step tests run the steps the way the platform runs them, on this machine: `kaosctl step run`."""
+"""Shared pieces of the step tests: the run's settings and `kaosctl step run`, which runs a step as the platform does."""
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,4 +32,4 @@ def run_step(params_file):
     """run_step("prepare", "--input", "dataset=<folder>") runs one step and returns its exit code."""
     for kept in ("results", "staged"):  # start clean: no result or output of an earlier run
         shutil.rmtree(LOCAL / kept, ignore_errors=True)
-    return lambda step, *args: cli.main(["step", "run", step, str(ROOT), "--params-file", str(params_file), *args])
+    return lambda step, *args: cli.main(["step", "run", step, str(ROOT), "--params-file", str(params_file), "--python", sys.executable, *args])

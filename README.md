@@ -38,7 +38,7 @@ with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
 ```
 
 `prepare` reads the dataset version the run picked (the platform fixes it to one exact version before the
-first step starts) and writes a new version of the dataset `dataset-clean`. `hello-world` reads exactly that
+first step starts) and writes a new version of the dataset `dataset-<your app>-clean` (`<your app>` is the name of your app). `hello-world` reads exactly that
 version and writes a report to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
 form**: every plain value in `config/` becomes a field.
 
