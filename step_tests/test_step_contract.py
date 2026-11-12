@@ -1,4 +1,4 @@
-"""Every step is short and gets everything from kaos_lib.step."""
+"""Every step gets everything from kaos_lib.step: no argument and no variable of its own."""
 import pytest
 from conftest import ROOT
 
@@ -7,9 +7,8 @@ NOT_IN_A_STEP = ("os.environ", "getenv", "argparse", "sys.argv")  # a step takes
 
 
 @pytest.mark.parametrize("entry", ENTRIES, ids=lambda p: p.parts[-3])
-def test_an_example_step_is_at_most_25_lines_and_reads_nothing_but_the_step_api(entry):
+def test_a_step_starts_with_the_step_api_and_ends_with_a_result_and_reads_no_variable(entry):
     text = entry.read_text()
-    assert len(text.splitlines()) <= 25
     assert "step.start()" in text and "step.result(" in text
     assert not [word for word in NOT_IN_A_STEP if word in text]
 

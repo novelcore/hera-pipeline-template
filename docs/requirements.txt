@@ -1,3 +1,0 @@
-# Dependencies to build the documentation site.
-# Used by .github/workflows/docs.yml. Pinned so the build stays stable.
-mkdocs-material>=9.5,<10

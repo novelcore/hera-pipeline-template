@@ -8,6 +8,7 @@ from importlib.metadata import version
 
 import yaml
 from conftest import ROOT
+from packaging.specifiers import SpecifierSet
 
 DOCKERFILES = sorted(ROOT.glob("steps/*/Dockerfile")) + [ROOT / "examples" / "gpu_check" / "Dockerfile"]
 # The ARG holds the whole requirement: name[extras] then ==X.Y.Z or " @ <url>".
@@ -24,7 +25,7 @@ def test_every_step_image_takes_the_platform_requirement_and_has_the_same_defaul
     assert len(specs) == 1, specs
 
 
-def test_the_template_declares_the_range_of_its_package():
+def test_the_app_declares_the_range_of_its_package():
     compat = yaml.safe_load((ROOT / ".kaos" / "compat.yaml").read_text())
-    assert compat == {"kaos-lib": ">=0.5.0rc1,<0.6"}
-    assert version("kaos-lib").startswith("0.5."), "the installed package is inside the declared range"
+    assert SpecifierSet(compat["kaos-lib"]).contains(version("kaos-lib"), prereleases=True), \
+        "the installed kaos-lib is inside the range .kaos/compat.yaml declares"

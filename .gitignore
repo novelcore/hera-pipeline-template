@@ -3,6 +3,3 @@ out/
 __pycache__/
 *.egg-info/
 *.pyc
-
-# MkDocs build output
-site/
