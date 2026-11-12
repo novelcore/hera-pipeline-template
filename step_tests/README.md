@@ -17,8 +17,6 @@ What the steps write through `kaosctl step run` stays in `.kaos/local/`, which i
 | file | what it checks |
 | --- | --- |
 | `test_example_steps.py` | `prepare` writes the dataset `clean`; `hello-world` reads it; both again through `kaosctl step run` |
-| `test_step_contract.py` | every step is at most 25 lines and gets everything from `kaos_lib.step` |
-| `test_kaos_lib_version.py` | every step image installs kaos-lib the way the platform expects |
-| `test_repo_layout.py` | the app holds `pipeline.py`, `config/` and `steps/`, and no copy of platform code |
+| `test_step_contract.py` | every step starts with `step.start()`, ends with `step.result(` and reads no variable and no argument |
+| `test_kaos_lib_version.py` | every step image installs kaos-lib the way the platform expects, and the installed version is inside `.kaos/compat.yaml` |
 | `test_gpu_example.py` | the example GPU step fails loudly without a GPU |
-| `test_docs_example.py` | the files the guide of kaos-lib shows equal this template (needs `DOCS_CHECK_KAOS_LIB`; skipped without it) |
