@@ -21,7 +21,7 @@ with pipeline("ml-pipeline") as p:
     hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
     # A GPU step: copy examples/gpu_check to steps/gpu_check, then uncomment
     # (https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
-    # gpu_check = step("gpu-check", kind="train", reads=["experiment"], gpu=True)
+    # gpu_check = step("gpu-check", kind="evaluate", reads=["experiment"], gpu=True)
 
 if __name__ == "__main__":
     p.write(Path(__file__).parent / "out" / "raw-workflow-template.yaml")
