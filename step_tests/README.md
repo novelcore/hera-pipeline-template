@@ -1,9 +1,9 @@
 # step_tests/ - tests of your step code
 
 Most tests call a step in this process with
-[`kaos_lib.testing.running`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step.html#test-a-step-in-your-own-tests);
+[`kaos_lib.testing.running`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/try-it-locally.html);
 one runs the steps one after the other with
-[`kaosctl step run`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html), as the platform
+[`kaosctl step run`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/try-it-locally.html#run-steps-the-way-the-platform-does), as the platform
 runs them. No cluster, no login, nothing uploaded. Install kaos-lib at the version the step images install
 (`KAOS_LIB_PACKAGE` in `steps/*/Dockerfile`), then run:
 
@@ -21,3 +21,4 @@ What the steps write through `kaosctl step run` stays in `.kaos/local/`, which i
 | `test_kaos_lib_version.py` | every step image installs kaos-lib the way the platform expects |
 | `test_repo_layout.py` | the app holds `pipeline.py`, `config/` and `steps/`, and no copy of platform code |
 | `test_gpu_example.py` | the example GPU step fails loudly without a GPU |
+| `test_docs_example.py` | the files the guide of kaos-lib shows equal this template (needs `DOCS_CHECK_KAOS_LIB`; skipped without it) |

@@ -1,5 +1,5 @@
-site_name: Hera Pipeline Guide
-site_description: The engineer's cookbook for KAOS ML pipelines - from your first sign-in to comparing trained weights
+site_name: hera pipeline template
+site_description: "The starter template for ML pipelines: what it holds, and where the guide is"
 site_author: Novelcore
 site_url: https://novelcore.github.io/hera-pipeline-template/
 
@@ -79,43 +79,8 @@ extra:
       link: https://github.com/novelcore/hera-pipeline-template
 
 nav:
-  - Cookbook:
-      - Your first day: index.md
-      - 1. You're in: cookbook/1-youre-in.md
-      - 2. Your project's apps: cookbook/2-your-apps.md
-      - 3. Your tools: cookbook/3-your-tools.md
-      - 4. Install kaosctl and sign in: cookbook/4-install-kaosctl.md
-      - 5. Your data: cookbook/5-your-data.md
-      - 6. Your pipeline: cookbook/6-your-pipeline.md
-      - 7. Run it: cookbook/7-run-it.md
-      - 8. Results and weights: cookbook/8-results-and-weights.md
-      - 9. The yolo use case: cookbook/9-the-yolo-use-case.md
-      - 10. When things go wrong: cookbook/10-when-things-go-wrong.md
-  - Guides:
-      - First dataset and run: first-run.md
-      - Add a step that reads a dataset: guide-step-with-data.md
-      - Run on a released version: guide-run-on-a-version.md
-  - Pipelines:
-      - How it works: how-it-works.md
-      - Add a step: add-a-step.md
-      - Write results from a step: write-a-step.md
-      - Remove a step: remove-a-step.md
-      - Change a setting: change-a-setting.md
-      - Send your change in and go live: send-it-in.md
-      - Run your pipeline: run-it.md
-      - GPU steps: gpu-steps.md
-  - Results: results.md
-  - Run on HPC (Slurm): hpc.md
-  - Settings the platform owns: platform-owned-settings.md
-  - kaos-lib guide:   # what is true for every pipeline is explained once, there
-      - Datasets: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html
-      - Datasets shared with your project: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/shared-datasets.html
-      - How steps use datasets: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html
-      - Check your pipeline: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/lint.html
-      - Run a step locally: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html
-      - Long runs and checkpoints: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html
-      - Versions and upgrades: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/support-window.html
-      - Everything else: https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html
-  - Word list: glossary.md
+  - The template: index.md
+  - "The guide, from Run it": https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/run-it.html
+  - The yolo pipeline: https://novelcore.github.io/yolo-pipelines-template/
 
 copyright: "Copyright &copy; 2026 Novelcore"

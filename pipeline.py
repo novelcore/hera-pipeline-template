@@ -7,7 +7,8 @@ This template ships two example steps:
   hello-world  reads exactly the version `prepare` wrote in this run and writes a small report.
 
 Every setting lives in config/ and reaches the run form by itself. The version of each dataset is chosen on
-the run form, never here. Add your own steps under steps/<name>/ and declare them below (docs/add-a-step.md).
+the run form, never here. Add your own steps under steps/<name>/ and declare them below
+(https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/first-step.html).
 """
 
 from pathlib import Path
@@ -18,7 +19,8 @@ with pipeline("ml-pipeline") as p:
     prepare = step("prepare", kind="transform", reads=["prepare"], inputs=["dataset"],
                    produces=[dataset("clean")])
     hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
-    # A GPU step: copy examples/gpu_check to steps/gpu_check, then uncomment (docs/gpu-steps.md).
+    # A GPU step: copy examples/gpu_check to steps/gpu_check, then uncomment
+    # (https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
     # gpu_check = step("gpu-check", kind="train", reads=["experiment"], gpu=True)
 
 if __name__ == "__main__":

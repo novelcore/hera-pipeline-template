@@ -1,7 +1,9 @@
 # Known-good GPU step image: a plain python base plus a pip torch (the wheel brings its own CUDA runtime
 # libraries; the NVIDIA DRIVER comes from the GPU machine).
 #
-# Copy this folder to steps/gpu_check/ (see docs/gpu-steps.md). The platform builds it on push, like any step.
+# Copy this folder to steps/gpu_check/
+# (https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
+# The platform builds it on push, like any step.
 FROM python:3.11-slim
 WORKDIR /app
 
