@@ -10,7 +10,7 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **Config.** Your settings. They live in the `config/` folder, and each one becomes a field on the run page.
 
-**Data lock.** The record of every dataset commit a step read (`data.lock.json` on the MLflow run). `kaosctl run --lock` replays it.
+**Data lock.** The record of every dataset version a step read, kept on its MLflow run. `kaosctl run --lock` replays it.
 
 **Dataset.** A lakeFS repository called `dataset-<name>`. Its versions are tags (`v1`, `v2`, ...); a run picks one in the `dataset` field. Changes reach its `main` through pull requests.
 
@@ -32,7 +32,7 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **kaosctl.** The command-line tool that comes with kaos-lib: create, push, validate, release and pull datasets, and replay a run's data ([Install it](cookbook/4-install-kaosctl.md)).
 
-**kaos-lib.** The platform's Python package (`import kaos_lib`) for datasets, results and MLflow, with the `kaosctl` command (0.4.0rc5 or newer). Formerly the `kubecore` package. Reference: [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
+**kaos-lib.** The platform's Python package (`import kaos_lib`) for datasets, results and MLflow, with the `kaosctl` command. This template needs 0.5 or newer. Reference: [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
 **kubecore-ml-ci.** The name of the build that runs after a merge into `dev`: it builds the changed step images and releases a new version of the pipeline.
 
@@ -56,7 +56,7 @@ Plain meanings for the words in this guide. One sentence each. Come back here an
 
 **Push.** To send your saved changes from your computer up to GitHub.
 
-**Reads.** The setting that lists which settings a step looks at.
+**Reads.** `reads=` in `pipeline.py`: the sections of `config/` a step gets.
 
 **Release.** Tagging the head of a dataset's `main` as the next version, with **Release version** or `kaosctl dataset release`.
 

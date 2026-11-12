@@ -29,13 +29,13 @@ account the run uses.
 
 1. The step waits in the HPC Slurm queue. The run shows it as running while it waits, for
    minutes to hours depending on how busy the partition is.
-2. Before the job starts, the platform **stages the dataset commit** on the HPC cluster's Lustre storage.
-   It does this once per version, and a new version copies only what changed. The step's
-   `datasets.materialize(...)` uses the staged copy.
+2. Before the job starts, the platform **copies every dataset the step declares in `inputs=`**, at the
+   version the run fixed, to the HPC cluster's Lustre storage. It does this once per version, and a new version
+   copies only what changed. The step's `step.input(...)` returns that copy.
 3. The job runs **your step image**, converted to an Apptainer image (cached), with the same command
    it runs on your project's own machines.
-4. The step writes its results with the same run writer, so its commit appears in `outputs-<app>`
-   exactly as for a step on your project's own machines. Its declared outputs reach the next step as usual. MLflow and
+4. The step ends with `step.result()` as everywhere, so what it declares in `produces=` is saved
+   exactly as for a step on your project's own machines, and its result reaches the next step as usual. MLflow and
    lakeFS are reached for you: the step needs no credentials.
 
 Nothing in your code changes. While the job waits, the step's log shows its state and the
@@ -55,11 +55,11 @@ then waits in the queue anew; the step's status records each time this happened.
 ## Set a time limit
 
 Slurm stops a job at its wall-clock limit. The default is 4 hours. Give long steps their own limit
-in `pipeline.py` with `hpc_time_limit` (only on `gpu=True` steps):
+in `pipeline.py` with `walltime` (only on `gpu=True` steps):
 
 ```python
-train = step("model-training", gpu=True, hpc_time_limit="12h",
-             reads=["experiment", "dataset", "train"])
+train = step("model-training", kind="train", gpu=True, walltime="12h",
+             reads=["experiment", "train"], inputs=["dataset"], produces=[model("model")])
 ```
 
 The value is a string of minutes or hours: `"90m"`, `"12h"`, or `"720"` (minutes). The platform adds a
@@ -93,7 +93,7 @@ checkpoint ends at its limit with a message that names the limit; if the node fa
 most twice. A step that hangs (no GPU use and no new log lines for 20 minutes) ends with the reason `Idle`
 (`idle_timeout="40m"` changes the window, `idle_timeout=0` turns it off; the same setting applies on your project's own machines).
 
-**A step longer than the longest run the site allows** (for example `hpc_time_limit="5d"` where one job may run
+**A step longer than the longest run the site allows** (for example `walltime="5d"` where one job may run
 2 days):
 
 - if it is resumable, it runs as a series of capped attempts, each up to the longest run, each continuing from the
@@ -133,12 +133,10 @@ class is not offered in the run form until it is topped up. When a project has s
 |---|---|
 | no `meluxina-*` in the dropdown | the project has no HPC (Slurm) environment yet, or that class's allocation is used up this month; ask your KAOS contact |
 | the step waits for hours | the queue is busy; this is the HPC queue, not your run |
-| the step stops at its time limit | raise `hpc_time_limit`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)) |
+| the step stops at its time limit | raise `walltime`, or write its checkpoints into `KAOS_CHECKPOINT_DIR` so it continues ([details](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)) |
 | the step ends with `Idle` | it showed no GPU use and no new log lines for 20 minutes; raise `idle_timeout` if it was working |
 | the step ends with `NoProgress` | the continuation did not get past its checkpoint: check that loading restores your epoch counter |
 | a large checkpoint is not saved in time before the limit | `resumable="30m"` signals the step earlier, or save less (weights only) |
-| the step is refused with `TooLongNotResumable` | make it resumable (see above) or shorten `hpc_time_limit` |
+| the step is refused with `TooLongNotResumable` | make it resumable (see above) or shorten `walltime` |
 | the job is refused or never starts | read the reason in the step's log: [Why a step is waiting or refused](#why-a-step-is-waiting-or-refused) |
 | the step's own log goes quiet while it waits | the run keeps following the same Slurm job; a job that failed on HPC is not retried |
-
-The [Pipeline Developer Guide](https://github.com/novelcore/hera-pipeline-template/blob/dev/DEVELOPER.md) (§8) has the short version.

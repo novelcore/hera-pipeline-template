@@ -93,7 +93,7 @@ nav:
       - 10. When things go wrong: cookbook/10-when-things-go-wrong.md
   - Guides:
       - First dataset and run: first-run.md
-      - Add a step that reads the dataset: guide-step-with-data.md
+      - Add a step that reads a dataset: guide-step-with-data.md
       - Run on a released version: guide-run-on-a-version.md
   - Pipelines:
       - How it works: how-it-works.md

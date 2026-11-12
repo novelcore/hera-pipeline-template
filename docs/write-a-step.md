@@ -1,68 +1,81 @@
 # Write results from a step
 
-**Goal:** a step that writes its results to your app's outputs repository, saves progress as it
-goes, and continues where it stopped when it is retried.
+**Goal:** a step that saves files, so that the next step, a later run and you can read them.
 
-**You need:** a step that installs kaos-lib ([Add a step that reads the dataset](guide-step-with-data.md),
-part 3). The template's `steps/hello_world/` writes a result this way; copy it.
+**You need:** a step that installs kaos-lib ([Add a step](add-a-step.md)). Both steps of the template
+write this way: `steps/prepare/` writes a dataset and `steps/hello_world/` writes a report. Copy them.
 
-## 1. Write results
+## 1. Declare what the step writes
 
-```python
-import os
-from kaos_lib import outputs
-
-app = os.environ["CHECKPOINT_BUCKET"]        # outputs-<app>, set by the platform
-run = os.environ["KUBECORE_RUN_ID"]          # the Argo run name
-
-with outputs.run(app, experiment, run) as r:
-    r.save("./results")                      # a folder or files
-    commit = r.finish({"dataset_ref": info["dataset"], "dataset_commit": info["dataset_commit"]})
-```
-
-The files land in `outputs-<app>` under `checkpoints/<experiment>/<run>/`, in **one merge commit
-on `main`**. The commit's details carry what you passed to `finish`. For another top folder, pass
-the kind: `outputs.run(app, experiment, run, "reports")` writes under `reports/<experiment>/<run>/`.
-
-A step never writes to a dataset. Results always go to `outputs-<app>`.
-
-## 2. Save progress and resume
-
-For a long step, save as you go. Every `save` is committed on the run's own branch,
-`run-<run>-<kind>`, so it survives a lost pod. `finish` merges once, at the end.
+In `pipeline.py`, name each output in `produces=`:
 
 ```python
-with outputs.run(app, experiment, run) as r:
-    resume = r.latest("last.pt")             # a local path, or None on a first attempt
-    state = load(resume) if resume else fresh_state()
-    for epoch in range(state.epoch, epochs):
-        train_one_epoch(state)
-        if epoch % 10 == 0:
-            torch.save(state, "last.pt")
-            r.save("last.pt")                # durable now
-    r.finish({"dataset_ref": info["dataset"]})
+from kubecore.authoring import artifact, dataset, model, pipeline, step
+
+prepare = step("prepare", kind="transform", inputs=["dataset"], produces=[dataset("clean")])
+train = step("train", kind="train", needs=[prepare], gpu=True, produces=[model("model")])
+report = step("report", kind="evaluate", needs=[train], produces=[artifact("report")])
 ```
 
-- An exception inside the `with` block neither merges nor deletes the branch. **Retry** in Argo
-  reruns the step under the same run name, and `latest` finds what it saved.
-- **Resubmit** is a new run with a new name, so it starts fresh.
-- Saving identical content again, and finishing twice, are not errors.
+| you declare | use it for | it is saved as |
+|---|---|---|
+| `dataset("clean")` | data that later steps and later runs read | a new version of the dataset `dataset-clean` |
+| `model("model")` | trained weights | files in `outputs-<app>` under `model/<experiment>/<run>/` |
+| `artifact("report")` | everything else: reports, plots, tables | files in `outputs-<app>` under `report/<experiment>/<run>/` |
 
-## 3. Link the result to MLflow
+A name uses lowercase letters, digits and hyphens.
 
-Pass the MLflow run id to `finish`, and tag the MLflow run with where the files are. Then each side
-names the other ([Results](results.md#log-to-mlflow-from-a-step)).
+## 2. Write the files
 
-## 4. On HPC (Slurm)
+```python
+from kaos_lib import step
 
-Nothing changes in your code. When a person picks an HPC class for the step, the step
-writes with the same run writer, and the commit appears in `outputs-<app>` as for a step on your project's own machines ([Run on HPC (Slurm)](hpc.md)). A long step continues from its checkpoints after a time limit or a lost machine,
-with nothing to call ([Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)).
+ctx = step.start()
+folder = step.output("report")                  # an empty folder on the step's own disk
+(folder / "summary.txt").write_text("42 rows\n")
+step.result(rows=42)                            # saves every output, then hands rows=42 on
+```
 
-## 5. Test it on your laptop
+- `step.output("<name>")` gives a folder. Write into it with any library.
+- Nothing is saved before `step.result()`. A step that fails saves nothing, so nobody reads half a result.
+- Every output you declared must hold at least one file, or the step fails and says which one is empty.
+- You never name a repository, a path or a commit. The platform knows them from `produces=`.
 
-Step code that imports `kaos_lib` is tested with `python -m pytest` (the tests are in `step_tests/`): see
-`step_tests/README.md` and DEVELOPER.md §15. The step tests use kaos-lib's in-memory lakeFS, vendored
-as `step_tests/fake_lakefs.py`.
+## 3. Read them in the next step
 
-**Next:** [Results](results.md).
+```python
+data = step.input("clean")                      # what the step you need wrote in this run: a folder
+rows = step.upstream("prepare").values["rows"]  # the small values it handed on
+```
+
+The step that reads names the step that wrote in `needs=`. It gets exactly what was written in this run, also
+when another run writes the same dataset at the same time.
+
+## 4. A dataset your step produces
+
+A step that declares `dataset("clean")` makes one new version of `dataset-clean` in every run. The platform
+creates the dataset for your pipeline, and only your pipeline can write it.
+
+- Write every file under the same path in every run. Then a run that changes one file uploads one file.
+- The newest version (`latest`) moves to a run's version only when the run asks for it: the run form has that
+  choice for each dataset the pipeline produces. A run that does not ask still writes its version, and its own
+  later steps read it.
+- Another pipeline reads the dataset like any other: a setting such as `clean: "dataset-clean"` named in
+  `inputs=`.
+
+The whole story is in [A dataset a step produces](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html#a-dataset-a-step-produces).
+
+## 5. Long steps
+
+A training step that runs for hours keeps its checkpoints in the folder the platform gives it and continues from
+the last one after a lost machine or a time limit, with nothing to call
+([Long runs: checkpoints](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/checkpoint.html)). It writes its final weights into `step.output("model")` like any
+other output.
+
+## 6. Test it on your laptop
+
+`kaosctl step run <step>` runs the step on your machine and keeps what it wrote in `.kaos/local/`
+([Run a step locally](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html)). `python -m pytest` runs the template's own step tests the same way: see
+`step_tests/README.md`.
+
+**Next:** [Results](results.md). The full list of calls and messages: [The step API](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step.html).

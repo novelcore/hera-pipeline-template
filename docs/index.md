@@ -37,7 +37,7 @@ graph LR
 The cookbook links into these pages for the details:
 
 - **Guides** walk one task from start to finish: [first dataset and run](first-run.md),
-  [add a step that reads the dataset and writes a result](guide-step-with-data.md), and
+  [add a step that reads a dataset and writes a result](guide-step-with-data.md), and
   [run on a released version and find the result](guide-run-on-a-version.md).
 - **Datasets** are explained once, in the kaos-lib guide: [Datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/datasets.html) (versions, layouts,
   the commands, the browser), [datasets shared with your project](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/shared-datasets.html) and

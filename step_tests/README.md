@@ -1,15 +1,22 @@
-# step_tests/ - tests of the app's own code (uses kaos-lib)
+# step_tests/ - tests of your step code
 
-The steps import **kaos-lib** (`kaos_lib`: datasets, run outputs), the platform library from
-[kaos-io/kaos-lib](https://github.com/kaos-io/kaos-lib). Install the version the step images pin
-(`KAOS_LIB_PACKAGE` in `steps/*/Dockerfile`), then run:
+The tests run each step the way the platform runs it, on your machine, with
+[`kaosctl step run`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step-run.html): no cluster,
+no login, nothing uploaded. Install kaos-lib at the version the step images install (`KAOS_LIB_PACKAGE` in
+`steps/*/Dockerfile`), then run:
 
 ```bash
 pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
 python -m pytest
 ```
 
-`fake_lakefs.py` is kaos-lib's in-memory lakeFS (`tests/fake_lakefs.py` there), vendored at the same pin.
+The first run makes one Python environment per step (`steps/<name>/.venv`), so it takes a minute; later runs
+take seconds. What the steps write stays in `.kaos/local/`, which is never committed.
 
-`test_repo_layout.py` fails if a copy of the pipeline engine or a step that composes the parameters comes
-back: the platform runs its own pipeline engine, so an app holds only `pipeline.py`, `config/` and `steps/`.
+| file | what it checks |
+| --- | --- |
+| `test_example_steps.py` | `prepare` writes the dataset `clean`; `hello-world` reads exactly that version |
+| `test_step_contract.py` | every step is at most 25 lines and gets everything from `kaos_lib.step` |
+| `test_kaos_lib_version.py` | every step image installs kaos-lib the way the platform expects |
+| `test_repo_layout.py` | the app holds `pipeline.py`, `config/` and `steps/`, and no copy of platform code |
+| `test_gpu_example.py` | the example GPU step fails loudly without a GPU |

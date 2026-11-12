@@ -17,7 +17,7 @@ environment of its own:
     python3 -m venv ~/.venvs/kaos
     . ~/.venvs/kaos/bin/activate          # Windows: %USERPROFILE%\.venvs\kaos\Scripts\activate
     pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib-rc/simple/ \
-        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc22"
+        --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.5"
     ```
 
 === "Production projects (stable)"
@@ -36,12 +36,10 @@ kaos-lib's own dependencies from PyPI. The `zitadel` extra is for datasets that 
 with yours. The `mlflow` extra is for MLflow and for `kaosctl run --lock`
 ([chapter 8](8-results-and-weights.md)).
 
-!!! warning "Version 0.4.0rc5 or newer"
-    The command is called `kaosctl` from kaos-lib **0.4.0rc5** on. Older versions only have
-    `kaos-cli`, which still works as a hidden alias and prints a note. The `kubecore` command and
-    package are the deprecated names from before kaos-lib. If you get `kaosctl: command not found`,
-    run the `pip install` line above again with `-U`. `kaosctl lint`, `kaosctl dev`, `kaosctl step run` and
-    `kaosctl build` need **0.4.0rc22** or newer ([Check your pipeline](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/lint.html)).
+!!! warning "Version 0.5 or newer"
+    This template needs kaos-lib **0.5** or newer, on your machine and in the step images. If you get
+    `kaosctl: command not found`, run the `pip install` line above again with `-U`. An app written for
+    kaos-lib 0.4 is moved with [Move to kaos-lib 0.5](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/migrate-to-0.5.html).
 
 !!! tip "Why the virtual environment?"
     Many computers no longer let `pip install` change the system's own Python. You then see a
@@ -86,7 +84,7 @@ This lists the datasets of your project, starting with `dataset-default`.
 
 | symptom | fix |
 |---|---|
-| `kaosctl: command not found` | the virtual environment is not active (`. ~/.venvs/kaos/bin/activate`), or the version is older than 0.4.0rc5 |
+| `kaosctl: command not found` | the virtual environment is not active (`. ~/.venvs/kaos/bin/activate`), or kaos-lib is not installed in it |
 | `ERROR: cannot determine the lakeFS URL. Run inside your app clone ...` | you are not in your app folder; `cd` into the clone |
 | the browser does not open | copy the link `kaosctl login` prints into your browser; the tool waits about three minutes |
 | `403` from lakeFS | your account is not on a team of this project ([chapter 1](1-youre-in.md)) |

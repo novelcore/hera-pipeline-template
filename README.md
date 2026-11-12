@@ -29,15 +29,40 @@ repository are relative and work on any branch.
 
 ```python
 # pipeline.py
-from kubecore.authoring import pipeline, step
+from kubecore.authoring import artifact, dataset, pipeline, step
 
 with pipeline("ml-pipeline") as p:  # KAOS names it after your pipeline
-    hello = step("hello-world", reads=["experiment", "dataset"])
+    prepare = step("prepare", kind="transform", reads=["prepare"], inputs=["dataset"],
+                   produces=[dataset("clean")])
+    hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
 ```
 
-`hello-world` reads the dataset version the run picked (the platform pins it to one commit before the
-first step starts) and writes a result to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
+`prepare` reads the dataset version the run picked (the platform fixes it to one exact version before the
+first step starts) and writes a new version of the dataset `dataset-clean`. `hello-world` reads exactly that
+version and writes a report to your pipeline's `outputs-<app>` repository. **The `config/` tree is the run
 form**: every plain value in `config/` becomes a field.
+
+## A step in twenty lines
+
+```python
+# steps/hello_world/app/entry.py
+from kaos_lib import step
+
+
+def main() -> None:
+    ctx = step.start()
+    clean = step.input("clean")  # the version of the dataset `clean` that `prepare` wrote in this run
+    files = sum(1 for f in clean.rglob("*") if f.is_file() and not f.name.startswith("."))
+    dropped = step.upstream("prepare").values["dropped"]  # a value `prepare` handed on
+    line = f"{ctx.experiment}: {files} files in clean, {dropped} dropped by prepare"
+    (step.output("report") / "hello.txt").write_text(line + "\n")
+    print(f"[hello-world] {line}", flush=True)
+    step.result(files=files)
+```
+
+A step takes no arguments and reads no environment variables. It names its inputs and outputs; the platform
+chooses the versions, saves the files and hands the result to the next step
+([The step API](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step.html)).
 
 ### Long runs are not lost
 
@@ -52,10 +77,10 @@ the platform runs its own, and `kaosctl render`, `kaosctl step run` and `kaosctl
 ## Layout
 
 ```
-pipeline.py            the steps and their order (reads=, gpu=, needs=, outputs=, when=)
+pipeline.py            the steps and their order (kind=, reads=, inputs=, needs=, produces=, gpu=, when=)
 config/                every setting; each one is a field on the run form
 steps/<name>/          one folder per step: app/entry.py and a Dockerfile
-step_tests/            tests of your step code (DEVELOPER.md §15)
+step_tests/            tests of your step code (step_tests/README.md)
 docs/                  the guide (mkdocs)
 ```
 
@@ -64,15 +89,17 @@ docs/                  the guide (mkdocs)
 ```bash
 python3 -m venv ~/.venvs/kaos && . ~/.venvs/kaos/bin/activate
 pip install --index-url https://europe-west1-python.pkg.dev/kaos-dev-511509/kaos-lib-rc/simple/ \
-    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.4.0rc5"
+    --extra-index-url https://pypi.org/simple/ "kaos-lib[zitadel,mlflow]>=0.5"
 kaosctl login                                    # inside the app folder
 kaosctl render --context pipeline-context.yaml   # render the pipeline locally with the platform's engine
 kaosctl dev                                      # one Python environment per step
-kaosctl step run hello-world                     # run one step on your machine
+kaosctl lint                                     # check pipeline.py, config/ and steps/
+kaosctl step run prepare --input dataset=./my-data   # run one step on your machine
+kaosctl step run hello-world                     # the next one reads what prepare wrote
 kaosctl dataset push ./my-data dataset-my-data -m "first data"
 ```
 
-`kaosctl` needs kaos-lib **0.4.0rc5** or newer
+`kaosctl` and the steps need kaos-lib **0.5** or newer
 ([install](docs/cookbook/4-install-kaosctl.md)).
 The library is documented at [the kaos-lib reference](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/index.html).
 
@@ -82,9 +109,10 @@ The library is documented at [the kaos-lib reference](https://storage.googleapis
 |---|---|
 | start from zero: access, apps, tools, data, pipeline, results | [the cookbook](docs/index.md) |
 | make a dataset, run on it, find the result | [guide: first dataset and run](docs/first-run.md) |
-| add a step that reads the dataset | [guide: add a step](docs/guide-step-with-data.md) |
+| add a step that reads a dataset and writes a result | [guide: add a step](docs/guide-step-with-data.md) |
+| save files from a step, or produce a dataset | [Write results from a step](docs/write-a-step.md) |
+| change or add a setting | [Change a setting](docs/change-a-setting.md) |
 | run a step on HPC (Slurm) | [Run on HPC (Slurm)](docs/hpc.md) |
-| the operating manual: config, tests, HPC | [DEVELOPER.md](DEVELOPER.md) |
 | why the render refuses a service account or `podSpecPatch` | [Settings the platform owns](docs/platform-owned-settings.md) |
 
 ## Checking the docs

@@ -1,0 +1,2 @@
+prepare:
+  min_bytes: 1 # the step `prepare` keeps the files of at least this size; smaller ones are dropped

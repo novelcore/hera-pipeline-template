@@ -9,60 +9,70 @@ and you submit runs from the run form.
 ## How it is put together
 
 ```
-pipeline.py            the steps and their order: nothing else
+pipeline.py            the steps, what each one reads and writes, and their order: nothing else
 config/                every setting; each one becomes a field on the run form
   config.yaml            which files and groups make up the settings
   experiment.yaml        experiment.name, experiment.description
-  dataset.yaml           dataset: "dataset-default@latest"  (the dropdown)
+  dataset.yaml           dataset: "dataset-default"  (the dataset field of the form)
+  prepare.yaml           prepare.min_bytes
 steps/<step_name>/     one folder per step: app/entry.py and a Dockerfile
 ```
 
-The shipped `pipeline.py` has one step:
+The shipped `pipeline.py` has two steps:
 
 ```python
 with pipeline("ml-pipeline") as p:   # KAOS names it <app>-pipeline
-    hello = step("hello-world", reads=["experiment", "dataset"])
+    prepare = step("prepare", kind="transform", reads=["prepare"], inputs=["dataset"],
+                   produces=[dataset("clean")])
+    hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
 ```
 
-- **`hello-world`** reads the run's dataset, at the one commit the platform pinned when the run
-  started, and writes a small `hello.json` to `outputs-<app>`.
+- **`prepare`** reads the run's dataset, at the one version the platform fixed when the run
+  started, and writes the files of at least `prepare.min_bytes` bytes as a new version of the dataset
+  `dataset-clean`.
+- **`hello-world`** reads exactly the version `prepare` wrote in this run, counts its files and
+  writes a small `hello.txt` to `outputs-<app>`.
 
-`reads=` lists the config sections a step receives, `needs=` sets the order, and `outputs=` names
-the small results it hands to later steps. [How it works](../how-it-works.md) explains the rest.
+| in `step(...)` | means |
+|---|---|
+| `kind=` | what the step is: `ingest`, `transform`, `train`, `evaluate`, `publish` or `control` |
+| `reads=` | the sections of `config/` the step gets |
+| `inputs=` | the settings that hold a dataset the step reads |
+| `needs=` | the steps that run before it; it can read what they wrote |
+| `produces=` | what the step writes: `dataset("...")`, `model("...")` or `artifact("...")` |
 
-## Run the shipped pipeline on `dataset-default`
+Each step's code is about twenty lines. Open `steps/prepare/app/entry.py` and
+`steps/hello_world/app/entry.py`: everything they get from the platform comes from `kaos_lib.step`
+([The step API](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/step.html)). [How it works](../how-it-works.md) explains the rest.
+
+## Run the shipped pipeline on your dataset
 
 Before you change anything, prove the pipeline works. Console → **Pipelines** →
-your app → **Run**. Leave every field as it is and press **Submit**
-([chapter 7](7-run-it.md)).
+your app → **Run**. In the **`dataset`** field pick `dataset-cats@v1` (from
+[chapter 5](5-your-data.md)) and press **Submit** ([chapter 7](7-run-it.md)).
 
-**You should see** the step go green. `dataset-default` is still empty, so the `hello-world` log
-says:
+**You should see** both steps go green, and in their logs:
 
 ```
-[hello-world] dataset-default@latest @ <commit> holds no files yet. Add yours with `kaosctl dataset push <folder> <dataset>` ...
-[hello-world] result committed to outputs: <commit>
+[prepare] kept 120 of 120 files
+[hello-world] my-experiment-v1: 120 files in clean, 0 dropped by prepare
 ```
 
-An empty dataset is reported, not an error, so the run still succeeds.
+and a new `hello.txt` in `outputs-<app>` ([chapter 8](8-results-and-weights.md)).
 
-## Run it on your dataset
-
-Submit again, and in the **`dataset`** dropdown pick `dataset-cats@v1` (from
-[chapter 5](5-your-data.md)). **You should see** the log name your dataset, its commit and its
-classes, and a new `hello.json` in `outputs-<app>`
-([chapter 8](8-results-and-weights.md)).
+The form's default, `dataset-default`, is empty until you put files in it. On an empty dataset `prepare`
+stops and its log ends with `dataset-default@latest holds no files`: pick a dataset that has files.
 
 ## Add a step
 
 Make the folder, write the entry point and the Dockerfile, and add one line to `pipeline.py`:
 
 ```python
-    mine = step("my-step", reads=["experiment", "dataset"])
+    mine = step("my-step", kind="evaluate", inputs=["dataset"])
 ```
 
 The step name uses dashes (`my-step`); its folder uses underscores (`steps/my_step/`). Follow
-[Add a step that reads the dataset and writes a result](../guide-step-with-data.md) for the whole
+[Add a step that reads a dataset and writes a result](../guide-step-with-data.md) for the whole
 thing, or [Add a step](../add-a-step.md) for a step with no data. To take one out, see
 [Remove a step](../remove-a-step.md).
 
@@ -110,7 +120,7 @@ When `kubecore-ml-ci` is green, the form has your step and your new field
 | symptom | fix |
 |---|---|
 | `wft-render` red: a step has no Dockerfile | add `steps/<step_name>/Dockerfile`; the folder uses underscores |
-| `wft-render` red: a section in `reads=` does not exist | fix the name in `reads=` and in the step's `READS`, or add the section to `config/` |
+| `wft-render` red: a section in `reads=` does not exist | fix the name in `reads=`, or add the section to `config/` |
 | `wft-render` never appears | the pull request is not into `dev` |
 | your new field is not on the form | only plain values become fields (text, numbers, true/false); reopen the form after `kubecore-ml-ci` is green |
 | a step did not rebuild | only steps whose folder changed are rebuilt; that is expected |

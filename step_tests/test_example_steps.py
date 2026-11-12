@@ -1,59 +1,35 @@
-"""The example step: read the run's dataset at the commit its data lock gives, write one commit to outputs-<app>."""
+"""The two example steps, one after the other: prepare writes the dataset `clean`, hello-world reads it."""
 import json
 
-import yaml
-from conftest import load_step
-from kaos_lib import datasets
-
-NEW = "a" * 40
-CFG = {"experiment": {"name": "exp1"}, "dataset": "dataset-default@latest"}
-PARAMS = json.dumps(CFG)
+import pytest
+from conftest import LOCAL
 
 
-def _move_latest(fake, repo="dataset-default"):
-    """Someone merges a new dataset version: `latest` now points at a commit with 1 class."""
-    r = fake.repos[repo]
-    old = r["branches"]["main"]["commit"]
-    moved = dict(r["commits"][old])
-    moved["data.yaml"] = b"path: .\ntrain: images/train\nval: images/val\nnc: 1\nnames:\n  0: z\n"
-    r["commits"][NEW] = moved
-    r["branches"]["main"]["commit"] = NEW
-    return old
+def result(step: str) -> dict:
+    return json.loads((LOCAL / "results" / f"{step}.json").read_text())
 
 
-def _run(hello, client, monkeypatch, run="wf-abc"):
-    monkeypatch.setenv("CHECKPOINT_BUCKET", "outputs-myapp")
-    monkeypatch.setenv("KUBECORE_RUN_ID", run)
-    monkeypatch.setattr("sys.argv", ["entry", "--params", PARAMS])
-    hello.main(client)
+@pytest.fixture(scope="module")
+def ran(tmp_path_factory, run_step):
+    data = tmp_path_factory.mktemp("dataset")
+    (data / "images").mkdir()
+    (data / "images" / "a.txt").write_text("a")
+    (data / "b.txt").write_text("b")
+    (data / "empty.txt").write_text("")
+    assert run_step("prepare", "--input", f"dataset={data}") == 0
+    assert run_step("hello-world") == 0
 
 
-def test_should_read_the_locked_commit_even_when_latest_moves(client, fake, monkeypatch):
-    hello = load_step("hello_world")
-    locked = fake.head("dataset-default")
-    lock = {"version": 1, "reads": [{"repo": "dataset-default", "ref": "latest", "commit": locked}]}
-    monkeypatch.setenv("KAOS_LIB_LOCK", json.dumps(lock))
-    assert _move_latest(fake) == locked
-    entry = hello.read_dataset(datasets.DatasetRef.parse(CFG["dataset"]), client)
-    assert yaml.safe_load(entry.read_text())["nc"] == 2, "still the commit the platform locked"
-    _run(hello, client, monkeypatch)
-    result = json.loads(fake.tree("outputs-myapp", fake.head("outputs-myapp"))["checkpoints/exp1/wf-abc/hello.json"])
-    assert result["dataset"] == "dataset-default@latest"
-    assert result["dataset_commit"] == locked, "the result records the commit the lock gave"
-    assert result["classes"] == {"0": "a", "1": "b"}
+def test_prepare_writes_the_files_that_are_not_empty_as_the_dataset_clean(ran):
+    clean = LOCAL / "staged" / "clean"
+    assert sorted(p.relative_to(clean).as_posix() for p in clean.rglob("*.txt")) == ["b.txt", "images/a.txt"]
+    assert result("prepare")["values"] == {"files": 2, "dropped": 1}
+    assert [(w["name"], w["type"], w["repo"]) for w in result("prepare")["writes"]] == [("clean", "dataset", "dataset-clean")]
 
 
-def test_should_read_the_head_when_the_run_has_no_lock(client, fake, monkeypatch):
-    hello = load_step("hello_world")
-    _move_latest(fake)
-    _run(hello, client, monkeypatch)
-    result = json.loads(fake.tree("outputs-myapp", fake.head("outputs-myapp"))["checkpoints/exp1/wf-abc/hello.json"])
-    assert result["dataset_commit"] == NEW
-    assert result["classes"] == {"0": "z"}
-
-
-def test_should_write_one_commit_to_the_apps_outputs_repository(client, fake, monkeypatch):
-    _run(load_step("hello_world"), client, monkeypatch)
-    tree = fake.tree("outputs-myapp", fake.head("outputs-myapp"))
-    assert set(tree) == {"checkpoints/exp1/wf-abc/hello.json"}
-    assert json.loads(tree["checkpoints/exp1/wf-abc/hello.json"])["dataset_commit"] == fake.head("dataset-default")
+def test_hello_world_reads_exactly_the_version_prepare_wrote(ran):
+    written = result("prepare")["writes"][0]["commit"]
+    assert [(r["name"], r["commit"]) for r in result("hello-world")["reads"]] == [("clean", written)]
+    assert result("hello-world")["values"] == {"files": 2}
+    report = (LOCAL / "staged" / "report" / "hello.txt").read_text()
+    assert report.endswith(": 2 files in clean, 1 dropped by prepare\n")

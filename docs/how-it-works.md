@@ -43,9 +43,10 @@ When you send your files in, the platform takes over. You do not set any of this
 - **Datasets** are lakeFS repositories `dataset-<name>`, versioned with tags `v1`, `v2`, … A run
   picks one in the `dataset` field. The platform pins it to one commit when the run starts, and
   every step reads that commit ([How steps use datasets](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/steps-and-datasets.html#the-pin)).
-- **Results** go to your app's `outputs-<app>` repository, one commit per step per run, written with
-  kaos-lib ([Results](results.md)).
-- A step never writes to a dataset.
+- **Results** go where the step declares them in `produces=`: models and other files to your app's
+  `outputs-<app>` repository, and a dataset a step produces to a dataset of its own, one version per run
+  ([Results](results.md)).
+- A step writes only what it declares. It never writes to a dataset it reads.
 
 You describe what you want. The platform figures out how to run it.
 
@@ -63,7 +64,7 @@ graph TD
     style RUN fill:#4a148c,stroke:#7b1fa2,color:#fff
 ```
 
-The values you set on the form get combined with your settings into one file before anything heavy runs. Every step receives that file. It is also saved, so any run can be repeated exactly.
+The values you set on the form get combined with your settings into one file before anything heavy runs. Every step receives the parts it asked for. It is also saved, so any run can be repeated exactly.
 
 ## The one rule worth remembering
 

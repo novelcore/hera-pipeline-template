@@ -5,13 +5,10 @@ CPU for hours is the failure this step exists to rule out. Replace the body with
 keep the `require_gpu()` call at the top of it.
 """
 
-import argparse
 import sys
 
-import yaml
+from kaos_lib import step
 
-# The config sections this step reads (must exist in the config/ tree).
-READS = ["experiment"]
 WORK_SECONDS = 15  # long enough to show up as GPU use to the platform's idle watchdog
 MATRIX_SIZE = 4096
 
@@ -39,18 +36,16 @@ def burn_gpu(torch, seconds: float) -> float:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--params", required=True, help="Resolved params.yaml content (composed by the platform).")
-    args, _ = parser.parse_known_args()
-    cfg = yaml.safe_load(args.params) or {}
+    ctx = step.start()
     import torch  # imported here so the tests can run the helpers with a stand-in
 
-    print(f"[gpu-check] experiment {cfg['experiment']['name']}: torch {torch.__version__}, "
+    print(f"[gpu-check] experiment {ctx.experiment}: torch {torch.__version__}, "
           f"CUDA runtime {torch.version.cuda}", flush=True)
     name = require_gpu(torch)
     print(f"[gpu-check] GPU visible: {name} ({torch.cuda.device_count()} device(s))", flush=True)
     tflops = burn_gpu(torch, WORK_SECONDS)
     print(f"[gpu-check] ran on {name}: {tflops:.1f} TFLOPS (fp16 matmul). The GPU works.", flush=True)
+    step.result(gpu=name, tflops=round(tflops, 1))
 
 
 if __name__ == "__main__":

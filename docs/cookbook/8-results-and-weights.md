@@ -10,26 +10,26 @@ register and promote models by hand. For the other roles, verify the rights on y
 
 ## Where outputs land
 
-Every app has its own lakeFS repository, **`outputs-<app>`**. Each step that writes results adds
-**one merge commit to `main` per run**, under:
+Every app has its own lakeFS repository, **`outputs-<app>`**. Each model or artifact a step declares in
+`produces=` adds **one commit to `main` per run**, under:
 
 ```
-outputs-<app>/main/checkpoints/<experiment>/<run>/
+outputs-<app>/main/<name>/<experiment>/<run>/
 ```
 
-`<experiment>` is the run's `experiment-name` field. `<run>` is the run's name, for example
-`my-app-pipeline-x7k2p`. A step can choose a different top folder from `checkpoints/`, as yolo does
-with `quantization/`. The commit's details record the app, experiment, run and kind, plus what the
-step passed in (the dataset and its commit, the MLflow run id).
+`<name>` is the name in `model("<name>")` or `artifact("<name>")` in `pipeline.py`. `<experiment>` is the
+run's `experiment-name` field. `<run>` is the run's name, for example `my-app-pipeline-x7k2p`.
 
 **Find them:** console → **Pipelines** → your app → **Outputs**, or lakeFS → `outputs-<app>` →
-branch `main` → `checkpoints/`. **Download them:**
+branch `main`. **Download them:**
 
 ```bash
-kaosctl dataset pull outputs-<app>@main ./results --prefix checkpoints/<experiment>/<run>/
+kaosctl dataset pull outputs-<app>@main ./results --prefix report/<experiment>/<run>/
 ```
 
-For the shipped pipeline you find `hello.json`, which names the dataset and the commit it read.
+For the shipped pipeline you find `hello.txt`, with the number of files `hello-world` counted. The shipped
+pipeline also writes a dataset, `dataset-clean`: one version per run
+([Results](../results.md#the-dataset-the-pipeline-produces)).
 
 ## MLflow runs
 
@@ -47,7 +47,7 @@ experiment. Each run shows:
 | **Parameters** | the settings of the run, and the dataset repository, version and commit |
 | **Metrics** | the numbers, with their curves over the epochs |
 | **Tags** | `kaos_lib.version`; `kaos_lib.data.<repo>.commit` (each dataset commit it read); `kaos.outputs_repo`, `kaos.outputs_commit`, `kaos.outputs_path` (where its files are in lakeFS); `kaos.workflow` (the run's name) |
-| **Artifacts** | plots, sample predictions, and `data.lock.json` (the data lock) |
+| **Artifacts** | plots, sample predictions, and `ledger/<step>.json` (every dataset version the step read, and what it wrote) |
 
 ## The model is linked both ways
 
@@ -67,8 +67,8 @@ The weights themselves stay in lakeFS. MLflow holds the numbers and the links.
 3. **Download two runs' weights and evaluate them yourself:**
 
     ```bash
-    kaosctl dataset pull outputs-<app>@main ./run-a --prefix checkpoints/<experiment>/<run-a>/
-    kaosctl dataset pull outputs-<app>@main ./run-b --prefix checkpoints/<experiment>/<run-b>/
+    kaosctl dataset pull outputs-<app>@main ./run-a --prefix model/<experiment>/<run-a>/
+    kaosctl dataset pull outputs-<app>@main ./run-b --prefix model/<experiment>/<run-b>/
     python evaluate.py ./run-a/best.pt ./run-b/best.pt --data ./dataset-cats/data.yaml
     ```
 
@@ -77,27 +77,25 @@ The weights themselves stay in lakeFS. MLflow holds the numbers and the links.
 
 ## Replay a run's exact data
 
-A step that calls `kaos_lib.lock.write(<mlflow run id>)` records every dataset commit it read in
-`data.lock.json` on the MLflow run. To run any command on exactly that data, for example a local
-evaluation or a re-training:
+A step that logs to MLflow has every dataset version it read recorded on its MLflow run, with nothing to
+call. To run any command on exactly that data, for example a local evaluation or a re-training:
 
 ```bash
 export MLFLOW_TRACKING_URI=<the address behind the console's MLflow link>
 kaosctl run --lock <mlflow-run-id> -- python evaluate.py ./run-a/best.pt
 ```
 
-`kaosctl` prints the locked reads (`dataset-cats@v1 -> <commit>`). Every
-`datasets.materialize`/`resolve` inside the command then returns those commits, even if `v1` was
-re-tagged or `latest` has moved on. This needs the `mlflow` extra
-([chapter 4](4-install-kaosctl.md)).
+`kaosctl` prints the recorded reads (`dataset-cats@v1 -> <commit>`), and every dataset read inside the
+command then returns those commits, even if `latest` has moved on ([Data lock](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/data-lock.html)). This needs
+the `mlflow` extra ([chapter 4](4-install-kaosctl.md)).
 
 ## If it isn't there
 
 | symptom | fix |
 |---|---|
-| nothing under `checkpoints/` | the step did not reach `finish()`; a failed step merges nothing. Its saves are on the branch `run-<run>-checkpoints` until a retry finishes |
+| nothing under `<name>/<experiment>/<run>/` | the step did not reach `step.result()`; a failed step saves nothing |
 | no MLflow run | your step does not log to MLflow; add it ([Results](../results.md#log-to-mlflow-from-a-step)) |
 | MLflow says `401` from your laptop | sign in again with `kaosctl login` **inside the app folder** |
-| `kaosctl run --lock`: no data lock on the run | that run's step never called `lock.write` |
+| `kaosctl run --lock`: nothing recorded on the run | that MLflow run was not made by a pipeline step |
 
 **Next:** [9. The yolo use case](9-the-yolo-use-case.md).

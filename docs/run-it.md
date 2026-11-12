@@ -39,7 +39,7 @@ You can close the tab: the run continues.
 ## Where results go
 
 - Files your steps write go to your app's `outputs-<app>` repository in lakeFS: one commit per step
-  per run, under `checkpoints/<experiment>/<run>/` ([Results](results.md)).
+  per run, under `<name>/<experiment>/<run>/` ([Results](results.md)).
 - Numbers a step logs go to the project's MLflow
   ([chapter 8](cookbook/8-results-and-weights.md)).
 
