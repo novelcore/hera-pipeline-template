@@ -1,3 +1,3 @@
 experiment:
-  name: "my-experiment-v1" # experiment name (used for tracking + artifact path prefixes)
+  name: "baseline" # the end of the experiment name, also the folder your results are saved in. If a step logs to MLflow, name the experiment <your app>.<this> (or just <your app>): the project accepts no other name. Letters, digits, - and _ only
   description: "" # optional free text stored with the run
