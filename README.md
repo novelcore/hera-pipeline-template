@@ -32,3 +32,6 @@ To run one step by hand, use [`kaosctl step run`](https://storage.googleapis.com
 [Run it](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/run-it.html) creates a pipeline, runs it, and changes
 it one idea at a time, from a first step to a pipeline of your own. For a larger pipeline see the
 [yolo pipeline](https://github.com/novelcore/yolo-pipelines-template).
+
+To add files to the dataset `prepare` reads, or change them, see [Add or change data](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/add-or-change-data.html). To give
+them a version and pin it, see [Release a dataset version](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/release-a-version.html).
