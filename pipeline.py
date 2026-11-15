@@ -8,7 +8,7 @@ This template ships two example steps:
 
 Every setting lives in config/ and reaches the run form by itself. The version of each dataset is chosen on
 the run form, never here. Add your own steps under steps/<name>/ and declare them below
-(https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/first-step.html).
+(guide page: first-step).
 """
 
 from pathlib import Path
@@ -20,7 +20,7 @@ with pipeline("ml-pipeline") as p:
                    produces=[dataset("clean")])
     hello = step("hello-world", kind="evaluate", needs=[prepare], produces=[artifact("report")])
     # A GPU step: copy examples/gpu_check to steps/gpu_check, then uncomment
-    # (https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
+    # (guide page: bigger-machines).
     # gpu_check = step("gpu-check", kind="evaluate", reads=["experiment"], gpu=True)
 
 if __name__ == "__main__":
