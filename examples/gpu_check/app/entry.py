@@ -18,7 +18,7 @@ def require_gpu(torch) -> str:
     if not torch.cuda.is_available():
         sys.exit("[gpu-check] torch cannot see a GPU (torch.cuda.is_available() is False). The step image or the "
                  "machine is not set up for GPU: this step would train on the CPU. See "
-                 "https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html.")
+                 "the guide page bigger-machines.")
     return torch.cuda.get_device_name(0)
 
 

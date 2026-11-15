@@ -14,24 +14,24 @@ as they are: `prepare` keeps the files of a dataset that are not empty and write
 | `step_tests/` | tests of your steps, see [`step_tests/README.md`](step_tests/README.md) |
 
 `examples/gpu_check/` is a GPU step to copy into `steps/`: see
-[Bigger machines](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/bigger-machines.html).
+guide page: bigger-machines.
 `.kaos/compat.yaml` holds the range of kaos-lib versions your code works with.
 
 ## Run it on your machine
 
-Install kaos-lib at the version the step images use, then run every step test, which runs the steps the way the platform does:
+Install `kaosctl` with pip from your platform's package index. Your platform admin, or the console of your platform, gives you the index and the version to install. To move to a newer version later, run `kaosctl upgrade`. Then run every step test, which runs the steps the way the platform does:
 
 ```bash
-pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest && python -m pytest
+pip install pytest && python -m pytest
 ```
 
-To run one step by hand, use [`kaosctl step run`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/try-it-locally.html#run-steps-the-way-the-platform-does).
+To run one step by hand, use `kaosctl step run` (guide page: try-it-locally).
 
 ## The guide
 
-[Run it](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/run-it.html) creates a pipeline, runs it, and changes
+The guide page run-it creates a pipeline, runs it, and changes
 it one idea at a time, from a first step to a pipeline of your own. For a larger pipeline see the
 [yolo pipeline](https://github.com/novelcore/yolo-pipelines-template).
 
-To add files to the dataset `prepare` reads, or change them, see [Add or change data](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/add-or-change-data.html). To give
-them a version and pin it, see [Release a dataset version](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/release-a-version.html).
+To add files to the dataset `prepare` reads, or change them, see the guide page add-or-change-data. To give
+them a version and pin it, see the guide page release-a-version.

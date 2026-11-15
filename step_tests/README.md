@@ -1,11 +1,10 @@
 # step_tests/ - tests of your step code
 
 Most tests call a step in this process with
-[`kaos_lib.testing.running`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/try-it-locally.html);
+`kaos_lib.testing.running` (guide page: try-it-locally);
 one runs the steps one after the other with
-[`kaosctl step run`](https://storage.googleapis.com/kaos-dev-511509-kaos-lib/docs/try-it-locally.html#run-steps-the-way-the-platform-does), as the platform
-runs them. No cluster, no login, nothing uploaded. Install kaos-lib at the version the step images install
-(`KAOS_LIB_PACKAGE` in `steps/*/Dockerfile`), then run:
+`kaosctl step run` (guide page: try-it-locally), as the platform
+runs them. No cluster, no login, nothing uploaded. Install `kaosctl` with pip from your platform's package index. Your platform admin, or the console of your platform, gives you the index and the version to install. To move to a newer version later, run `kaosctl upgrade`. Then run:
 
 ```bash
 pip install "$(sed -n 's/^ARG KAOS_LIB_PACKAGE="\(.*\)"$/\1/p' steps/*/Dockerfile | head -1)" pytest
