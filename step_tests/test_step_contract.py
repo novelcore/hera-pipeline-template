@@ -13,6 +13,12 @@ def test_a_step_starts_with_the_step_api_and_ends_with_a_result_and_reads_no_var
     assert not [word for word in NOT_IN_A_STEP if word in text]
 
 
+@pytest.mark.parametrize("entry", ENTRIES, ids=lambda p: p.parts[-3])
+def test_should_keep_an_example_step_to_at_most_25_lines(entry):
+    """A step of the template shows how little a step needs; it stays readable on one screen."""
+    assert len(entry.read_text().splitlines()) <= 25
+
+
 
 def test_the_experiment_setting_holds_only_the_end_of_a_name_and_no_step_writes_a_name_of_its_own():
     """The project's MLflow takes an experiment or a model named `<app>` or `<app>.<x>` only: the setting is the `<x>`,
