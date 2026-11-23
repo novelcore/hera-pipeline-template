@@ -19,7 +19,7 @@ guide page: bigger-machines.
 
 ## Run it on your machine
 
-Install `kaosctl` with pip from your platform's package index. Your platform admin, or the console of your platform, gives you the index and the version to install. To move to a newer version later, run `kaosctl upgrade`. Then run every step test, which runs the steps the way the platform does:
+Install `kaosctl` with pip from your platform's package index. Your platform admin, or the console of your platform, gives you the index and the version to install. That one install brings everything a step uses, the MLflow client included: there is nothing to add to it. To move to a newer version later, run `kaosctl upgrade`. Then run every step test, which runs the steps the way the platform does:
 
 ```bash
 pip install pytest && python -m pytest
